@@ -906,19 +906,21 @@ function deleteAsset(id) {
 // ─── ETF ──────────────────────────────────────────────
 async function fetchLive() {
   try {
-    // EUR/HUF – Frankfurter API (ingyenes, CORS-barát)
-    const fxRes = await fetch('https://api.frankfurter.app/latest?from=EUR&to=HUF');
+    // EUR/HUF – MNB nyilvános API CORS-barát proxyn keresztül
+    const fxRes = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
     if (fxRes.ok) {
       const fxData = await fxRes.json();
-      if (fxData.rates && fxData.rates.HUF) liveFx = fxData.rates.HUF;
+      if (fxData.eur && fxData.eur.huf) liveFx = fxData.eur.huf;
     }
   } catch(e) {}
 
   try {
-    // VWCE árfolyam – Yahoo Finance proxy
-    const vwceRes = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/VWCE.DE?interval=1d&range=1d');
+    // VWCE – allorigins CORS proxy + Yahoo Finance
+    const url = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/VWCE.DE?interval=1d&range=1d');
+    const vwceRes = await fetch(`https://api.allorigins.win/get?url=${url}`);
     if (vwceRes.ok) {
-      const vwceData = await vwceRes.json();
+      const wrapper = await vwceRes.json();
+      const vwceData = JSON.parse(wrapper.contents);
       const price = vwceData?.chart?.result?.[0]?.meta?.regularMarketPrice;
       if (price && price > 50) liveEur = price;
     }
