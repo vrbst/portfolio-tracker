@@ -722,16 +722,8 @@ function expireDKJ(id){
 }
 
 function sellDKJ(id){
-  const d=data.dkj.find(d=>d.id===id);
-  if(!d)return;
-  const price=parseFloat(prompt('Eladási ár (Ft):', d.faceValue));
-  if(!price)return;
-  d.active=false;
-  data.cashTx.push({id:uid(),date:today(),type:'sell',amount:price,note:'DKJ korai eladás'});
-  data.cashTx.push({id:uid(),date:today(),type:'buy',amount:d.buyPrice,note:'DKJ vétel ellentételezés – belső'});
-  renderAll(); toast('DKJ eladva');
+  openModal('sell-dkj', id);
 }
-
 // ═══════════════════════════════════════════════
 // TBSZ
 // ═══════════════════════════════════════════════
@@ -884,12 +876,24 @@ function openModal(type, param){
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFSell('${param}')">mentés</button></div>`;
   }
   else if(type==='sell-fixmap'){
+    const f=data.fixmap.find(f=>f.id===param);
     title.textContent='FixMáP eladás';
     body.innerHTML=`
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:12px">Névérték: <strong style="color:var(--text)">${f?fmt(f.faceValue):'–'}</strong></div>
       <div class="form-row"><div class="form-group"><div class="form-label">eladás dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
-      <div class="form-group"><div class="form-label">eladási ár (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="1000000"></div></div>
+      <div class="form-group"><div class="form-label">eladási ár (Ft)</div><input class="form-input" id="f-amount" type="number" value="${f?f.faceValue:''}"></div></div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmapSell('${param}')">mentés</button></div>`;
+  }
+  else if(type==='sell-dkj'){
+    const d=data.dkj.find(d=>d.id===param);
+    title.textContent='DKJ eladás';
+    body.innerHTML=`
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:12px">Névérték: <strong style="color:var(--text)">${d?fmt(d.faceValue):'–'}</strong> &nbsp;|&nbsp; Vétel ár: <strong style="color:var(--text)">${d?fmt(d.buyPrice):'–'}</strong></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">eladás dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">eladási ár (Ft)</div><input class="form-input" id="f-amount" type="number" value="${d?d.faceValue:''}"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDKJSell('${param}')">mentés</button></div>`;
   }
 }
 
@@ -922,6 +926,17 @@ function submitFixmap(){
   data.fixmap.push({id:uid(),date,faceValue,couponRate,maturity,note,active:true});
   data.cashTx.push({id:uid(),date,type:'buy',amount:faceValue,note:'FixMáP vétel'});
   closeModal(); renderAll(); toast('FixMáP pozíció rögzítve');
+}
+function submitDKJSell(id){
+  const d=data.dkj.find(d=>d.id===id);
+  if(!d)return;
+  const date=document.getElementById('f-date').value;
+  const amount=parseFloat(document.getElementById('f-amount').value);
+  const note=document.getElementById('f-note').value;
+  if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
+  d.active=false;
+  data.cashTx.push({id:uid(),date,type:'sell',amount,note:'DKJ eladás'+(note?' – '+note:'')});
+  closeModal(); renderAll(); toast('DKJ eladás rögzítve');
 }
 function submitFixmapSell(id){
   const f=data.fixmap.find(f=>f.id===id);
