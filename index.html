@@ -449,11 +449,56 @@ input[type=range] {
 
 /* RESPONSIVE */
 @media (max-width: 700px) {
-  .summary-row { grid-template-columns: 1fr 1fr; }
+  .summary-row { grid-template-columns: 1fr 1fr; gap: 8px; }
   .grid2, .grid3 { grid-template-columns: 1fr; }
-  .cal-grid { grid-template-columns: 1fr 1fr; }
+  .cal-grid { grid-template-columns: 1fr; }
   .add-form { grid-template-columns: 1fr 1fr; }
-  .content { padding: 16px; }
+  .content { padding: 12px; }
+  .panel { padding: 14px; }
+
+  /* header */
+  .header { padding: 12px 14px; }
+  .header-logo { font-size: 15px; }
+  .sync-btn span { display: none; }
+  .logout-btn { display: none; }
+
+  /* tabs – vízszintesen scrollozható */
+  .tabs { padding: 0 12px; overflow-x: auto; gap: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 10px 12px; font-size: 11px; flex-shrink: 0; }
+
+  /* stat cards kisebb */
+  .stat-value { font-size: 16px !important; }
+  .stat-label { font-size: 9px; }
+  .stat-card { padding: 10px 12px; }
+
+  /* ETF nagy ár */
+  .etf-price-big { font-size: 24px; }
+
+  /* táblázat – scrollozható */
+  .panel { overflow-x: auto; }
+  table { min-width: 480px; }
+
+  /* add form – egy oszlop */
+  .add-form { grid-template-columns: 1fr; }
+
+  /* pie chart kisebb */
+  .pie-layout { flex-direction: column; align-items: flex-start; }
+  .pie-canvas { width: 120px !important; height: 120px !important; }
+
+  /* calendar */
+  .cal-item { padding: 10px 12px; }
+
+  /* toast */
+  .toast { bottom: 16px; right: 12px; left: 12px; text-align: center; }
+
+  /* savings metrikák */
+  .grid3 .stat-card .stat-value { font-size: 15px !important; }
+}
+
+@media (max-width: 400px) {
+  .summary-row { grid-template-columns: 1fr; }
+  .metric-grid-3 { grid-template-columns: 1fr; }
 }
 </style>
 </head>
