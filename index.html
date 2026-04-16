@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfólió Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #0e0f11;
+  --bg2: #161719;
+  --bg3: #1e2023;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --text: #e8e6e0;
+  --text2: #8a8880;
+  --text3: #55534f;
+  --green: #4ade9a;
+  --green-dim: rgba(74,222,154,0.12);
+  --red: #f87171;
+  --red-dim: rgba(248,113,113,0.12);
+  --amber: #fbbf24;
+  --amber-dim: rgba(251,191,36,0.12);
+  --blue: #60a5fa;
+  --blue-dim: rgba(96,165,250,0.12);
+  --accent: #4ade9a;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-mono);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* SETUP SCREEN */
+#setup-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.setup-box {
+  max-width: 440px;
+  width: 100%;
+}
+.setup-logo {
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+.setup-logo span { color: var(--accent); }
+.setup-desc {
+  color: var(--text2);
+  font-size: 13px;
+  margin-bottom: 32px;
+  line-height: 1.7;
+}
+.setup-label {
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.setup-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color .2s;
+  letter-spacing: .05em;
+}
+.setup-input:focus { border-color: var(--accent); }
+.setup-input::placeholder { color: var(--text3); }
+.setup-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 13px;
+  background: var(--accent);
+  color: #0a0f0a;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .2s, transform .1s;
+}
+.setup-btn:hover { opacity: .9; }
+.setup-btn:active { transform: scale(.99); }
+.setup-note {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.7;
+}
+.setup-note a { color: var(--text2); }
+.setup-error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--red);
+  display: none;
+}
+
+/* MAIN APP */
+#app { display: none; min-height: 100vh; }
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: rgba(14,15,17,0.92);
+  backdrop-filter: blur(12px);
+  z-index: 100;
+}
+.header-logo {
+  font-family: var(--font-head);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.header-logo span { color: var(--accent); }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.sync-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .2s;
+  display: flex; align-items: center; gap: 6px;
+}
+.sync-btn:hover { border-color: var(--accent); color: var(--accent); }
+.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.sync-dot.saving { background: var(--amber); animation: pulse .8s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.logout-btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* TABS */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 12px 24px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: all .15s;
+  letter-spacing: .03em;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* CONTENT */
+.content { padding: 24px; max-width: 1100px; margin: 0 auto; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* SUMMARY ROW */
+.summary-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  transition: border-color .2s;
+}
+.stat-card:hover { border-color: var(--border2); }
+.stat-label {
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.stat-value {
+  font-family: var(--font-head);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+.stat-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+.neu { color: var(--text2); }
+
+/* GRID 2COL */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+
+/* PANEL */
+.panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.panel-title {
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.chart-wrap { position: relative; width: 100%; height: 220px; }
+.chart-wrap-tall { position: relative; width: 100%; height: 280px; }
+
+/* PIE */
+.pie-layout { display: flex; gap: 20px; align-items: center; }
+.pie-canvas { width: 150px !important; height: 150px !important; flex-shrink: 0; }
+.pie-legend { flex: 1; }
+.legend-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.legend-row:last-child { border-bottom: none; }
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.legend-name { flex: 1; color: var(--text2); }
+.legend-pct { color: var(--text); font-weight: 500; }
+.legend-val { color: var(--text3); font-size: 11px; }
+
+/* TABLE */
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th {
+  text-align: left; padding: 6px 10px;
+  color: var(--text3); font-weight: 400;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+}
+th:not(:first-child) { text-align: right; }
+td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+td:not(:first-child) { text-align: right; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,.02); }
+.asset-name { font-weight: 500; color: var(--text); }
+.asset-type {
+  display: inline-block; font-size: 10px;
+  padding: 2px 7px; border-radius: 4px;
+  margin-top: 2px;
+}
+
+/* BADGE */
+.badge-ap { background: var(--blue-dim); color: var(--blue); }
+.badge-etf { background: var(--green-dim); color: var(--green); }
+.badge-cash { background: rgba(255,255,255,.06); color: var(--text2); }
+.badge-crypto { background: var(--amber-dim); color: var(--amber); }
+
+/* ADD FORM */
+.add-form {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.2fr 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-label { font-size: 10px; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; }
+.form-input, .form-select {
+  padding: 8px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  transition: border-color .2s;
+  width: 100%;
+}
+.form-input:focus, .form-select:focus { border-color: var(--accent); }
+.form-select option { background: var(--bg2); }
+.add-btn {
+  padding: 8px 14px;
+  background: var(--accent);
+  color: #0a0f0a;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-head);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  align-self: end;
+  transition: opacity .2s;
+}
+.add-btn:hover { opacity: .85; }
+.del-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--text3); cursor: pointer;
+  padding: 4px 8px; border-radius: 5px;
+  font-size: 11px; font-family: var(--font-mono);
+  transition: all .15s;
+}
+.del-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* CALENDAR */
+.cal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.cal-item {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-left: 3px solid;
+  border-radius: 8px;
+  padding: 12px 14px;
+  transition: border-color .2s;
+}
+.cal-item:hover { border-color: var(--border2); }
+.cal-date { font-size: 10px; color: var(--text3); margin-bottom: 3px; letter-spacing: .04em; }
+.cal-name { font-size: 12px; font-weight: 500; margin-bottom: 4px; }
+.cal-amount { font-size: 15px; font-family: var(--font-head); font-weight: 600; color: var(--green); }
+
+/* SAVINGS */
+.slider-row { margin-bottom: 20px; }
+.slider-label { font-size: 11px; color: var(--text2); margin-bottom: 8px; display: flex; justify-content: space-between; }
+.slider-label span { color: var(--text); font-weight: 500; }
+input[type=range] {
+  width: 100%; cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* TBSZ */
+.tbsz-track {
+  background: var(--bg3);
+  border-radius: 6px; height: 6px;
+  overflow: hidden; margin-top: 8px;
+}
+.tbsz-fill {
+  height: 100%; border-radius: 6px;
+  background: var(--green);
+  transition: width .5s ease;
+}
+
+/* ETF DETAIL */
+.etf-header {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; margin-bottom: 16px;
+}
+.etf-price-big {
+  font-family: var(--font-head);
+  font-size: 32px; font-weight: 700;
+  letter-spacing: -1px;
+}
+.live-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; padding: 3px 9px;
+  border-radius: 20px; border: 1px solid;
+  letter-spacing: .05em;
+}
+.live-pill.live { border-color: var(--green); color: var(--green); }
+.live-pill.est { border-color: var(--amber); color: var(--amber); }
+.live-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+/* SPINNER */
+.spin {
+  display: inline-block; width: 10px; height: 10px;
+  border: 1.5px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  vertical-align: middle; margin-right: 4px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* TOAST */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  padding: 10px 16px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  font-size: 12px; color: var(--text2);
+  opacity: 0; transform: translateY(8px);
+  transition: all .25s;
+  z-index: 999;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* RESPONSIVE */
+@media (max-width: 700px) {
+  .summary-row { grid-template-columns: 1fr 1fr; }
+  .grid2, .grid3 { grid-template-columns: 1fr; }
+  .cal-grid { grid-template-columns: 1fr 1fr; }
+  .add-form { grid-template-columns: 1fr 1fr; }
+  .content { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setup-screen">
+  <div class="setup-box">
+    <div class="setup-logo">portfólió<span>.</span></div>
+    <div class="setup-desc">Add meg a GitHub Personal Access Tokenedet a folytatáshoz. Az adataid titkosítatlanul, privát GitHub Gist-ben lesznek tárolva.</div>
+    <div class="setup-label">GitHub Token</div>
+    <input class="setup-input" id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+    <div class="setup-error" id="setupError">Érvénytelen token vagy nincs gist jogosultság.</div>
+    <button class="setup-btn" onclick="connect()">Csatlakozás →</button>
+    <div class="setup-note">
+      A token csak a böngésződben tárolódik (localStorage). Senki máshoz nem jut el.<br><br>
+      Token létrehozása: <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> → Generate new token (classic) → csak a <strong>gist</strong> jogot pipáld be.
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="header">
+    <div class="header-logo">portfólió<span>.</span></div>
+    <div class="header-right">
+      <button class="sync-btn" onclick="saveData()">
+        <div class="sync-dot" id="syncDot"></div>
+        <span id="syncLabel">mentés</span>
+      </button>
+      <button class="logout-btn" onclick="logout()">kilépés</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('overview')">áttekintés</button>
+    <button class="tab" onclick="showTab('assets')">eszközök</button>
+    <button class="tab" onclick="showTab('etf')">etf részletek</button>
+    <button class="tab" onclick="showTab('calendar')">kifizetések</button>
+    <button class="tab" onclick="showTab('savings')">tervező</button>
+  </div>
+
+  <div class="content">
+
+    <!-- OVERVIEW -->
+    <div id="page-overview" class="page active">
+      <div class="summary-row" id="summaryCards"></div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-title">összetétel</div>
+          <div class="pie-layout">
+            <canvas id="pieChart" class="pie-canvas" role="img" aria-label="Portfólió megoszlás"></canvas>
+            <div class="pie-legend" id="pieLegend"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">éves hozam eszközönként</div>
+          <div class="chart-wrap"><canvas id="yieldChart" role="img" aria-label="Hozam chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ASSETS -->
+    <div id="page-assets" class="page">
+      <div class="panel">
+        <div class="panel-title">eszközlista</div>
+        <table>
+          <thead>
+            <tr>
+              <th>eszköz</th>
+              <th>érték (ft)</th>
+              <th>hozam %</th>
+              <th>éves hozam (ft)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="assetBody"></tbody>
+        </table>
+        <div class="add-form">
+          <div class="form-group">
+            <div class="form-label">neve</div>
+            <input class="form-input" id="newName" placeholder="pl. OTP részvény">
+          </div>
+          <div class="form-group">
+            <div class="form-label">típus</div>
+            <select class="form-select" id="newType">
+              <option value="allampapir">Állampapír</option>
+              <option value="etf">ETF / Részvény</option>
+              <option value="keszpenz">Készpénz / Betét</option>
+              <option value="kripto">Kripto</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div class="form-label">érték (ft)</div>
+            <input class="form-input" id="newValue" type="number" placeholder="5000000">
+          </div>
+          <div class="form-group">
+            <div class="form-label">hozam %</div>
+            <input class="form-input" id="newYield" type="number" placeholder="7.0" step="0.1">
+          </div>
+          <div class="form-group">
+            <div class="form-label">megjegyzés</div>
+            <input class="form-input" id="newNote" placeholder="opcionális">
+          </div>
+          <button class="add-btn" onclick="addAsset()">+ add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ETF DETAIL -->
+    <div id="page-etf" class="page">
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-title">vwce – live árfolyam</div>
+          <div class="etf-header">
+            <div>
+              <div class="etf-price-big" id="etfPriceBig">–</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:4px" id="etfPriceHuf">–</div>
+            </div>
+            <div id="livePill" class="live-pill est"><div class="live-dot"></div>betöltés...</div>
+          </div>
+          <div class="grid3" style="margin-bottom:0">
+            <div class="stat-card" style="background:var(--bg3)">
+              <div class="stat-label">darabszám</div>
+              <div class="stat-value" id="etfShares" style="font-size:18px">360,72</div>
+              <div class="stat-sub">TBSZ számlán</div>
+            </div>
+            <div class="stat-card" style="background:var(--bg3)">
+              <div class="stat-label">eur/huf</div>
+              <div class="stat-value" id="etfFx" style="font-size:18px"><span class="spin"></span></div>
+              <div class="stat-sub">live árfolyam</div>
+            </div>
+            <div class="stat-card" style="background:var(--bg3)">
+              <div class="stat-label">aktuális érték</div>
+              <div class="stat-value pos" id="etfTotalHuf" style="font-size:18px">–</div>
+              <div class="stat-sub" id="etfTotalEur">–</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">p&l – nyereség / veszteség</div>
+          <div class="grid3" style="margin-bottom:14px">
+            <div class="stat-card" style="background:var(--bg3)">
+              <div class="stat-label">átl. beszerz. ár</div>
+              <div class="stat-value" id="plCost" style="font-size:16px">–</div>
+              <div class="stat-sub" id="plCostHuf">–</div>
+            </div>
+            <div class="stat-card" style="background:var(--bg3)">
+              <div class="stat-label">befektetett tőke</div>
+              <div class="stat-value" id="plInvested" style="font-size:16px">–</div>
+              <div class="stat-sub">cost basis</div>
+            </div>
+            <div class="stat-card" style="background:var(--bg3)">
+              <div class="stat-label">nem realizált p&l</div>
+              <div class="stat-value" id="plVal" style="font-size:16px">–</div>
+              <div class="stat-sub" id="plPct">–</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:end">
+            <div class="form-group" style="flex:1">
+              <div class="form-label">átl. beszerz. ár (eur)</div>
+              <input class="form-input" id="costInput" type="number" step="0.01" value="88.50">
+            </div>
+            <div class="form-group" style="flex:1">
+              <div class="form-label">darabszám</div>
+              <input class="form-input" id="sharesInput" type="number" step="0.01" value="360.72">
+            </div>
+            <button class="add-btn" onclick="recalcPL()" style="margin-bottom:0">frissít</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-title">tbsz – adómentesség állapota</div>
+          <div id="tbszRows"></div>
+          <div class="tbsz-track"><div class="tbsz-fill" id="tbszBar" style="width:0%"></div></div>
+          <div style="display:flex;gap:8px;align-items:end;margin-top:14px">
+            <div class="form-group" style="flex:1">
+              <div class="form-label">tbsz nyitás éve</div>
+              <input class="form-input" id="tbszInput" type="number" min="2010" max="2026" value="2022">
+            </div>
+            <button class="add-btn" onclick="recalcTBSZ()">frissít</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">vwce historikus teljesítmény (éves %)</div>
+          <div class="chart-wrap"><canvas id="perfChart" role="img" aria-label="VWCE teljesítmény"></canvas></div>
+          <div style="font-size:10px;color:var(--text3);margin-top:8px">NAV alapú közelítő adatok. Múltbeli teljesítmény nem garancia.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div id="page-calendar" class="page">
+      <div class="panel">
+        <div class="panel-title">közelgő kifizetések</div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-title">2026-os cashflow hónapokra bontva</div>
+        <div class="chart-wrap"><canvas id="cashflowChart" role="img" aria-label="Havi cashflow"></canvas></div>
+      </div>
+    </div>
+
+    <!-- SAVINGS -->
+    <div id="page-savings" class="page">
+      <div class="panel">
+        <div class="panel-title">megtakarítási szimulátor</div>
+        <div class="slider-row">
+          <div class="slider-label">havi megtakarítás <span id="savLabel">150 000 Ft</span></div>
+          <input type="range" min="10000" max="500000" step="10000" value="150000" oninput="updateSavings(this.value)">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label">időtáv <span id="horizLabel">10 év</span></div>
+          <input type="range" min="1" max="30" step="1" value="10" oninput="updateHorizon(this.value)">
+        </div>
+        <div class="grid3" id="savMetrics"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">portfólió növekedése</div>
+        <div class="chart-wrap-tall"><canvas id="growthChart" role="img" aria-label="Növekedési görbe"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────
+const GIST_FILENAME = 'portfolio-tracker-data.json';
+const DEFAULT_DATA = {
+  assets: [
+    {id:1, name:'FixMáP 2031', type:'allampapir', value:35500000, yield:7.0, note:'Lejárat: 2031.01.23'},
+    {id:2, name:'VWCE ETF', type:'etf', value:7210000, yield:8.0, note:'TBSZ 2022'},
+    {id:3, name:'Készpénz / betét', type:'keszpenz', value:1000000, yield:4.5, note:''},
+  ],
+  etf: { shares: 360.72, costPerShare: 88.50, tbszYear: 2022 },
+  payments: [
+    {date:'2026-04-23', name:'FixMáP kamat', amount:734850, color:'#60a5fa'},
+    {date:'2026-07-23', name:'FixMáP kamat', amount:618750, color:'#60a5fa'},
+    {date:'2026-10-23', name:'FixMáP kamat', amount:618750, color:'#60a5fa'},
+    {date:'2027-01-23', name:'FixMáP kamat', amount:618750, color:'#60a5fa'},
+  ],
+  savings: { monthly: 150000, horizon: 10 }
+};
+
+// ─── STATE ────────────────────────────────────────────
+let token = '', gistId = '', data = null;
+let charts = {};
+let liveEur = null, liveFx = 395;
+
+// ─── UTILS ────────────────────────────────────────────
+const fmt = n => new Intl.NumberFormat('hu-HU').format(Math.round(n)) + ' Ft';
+const fmtM = n => Math.abs(n)>=1e6 ? (n/1e6).toFixed(2)+' M Ft' : fmt(n);
+const fmtSign = n => (n>=0?'+':'')+fmtM(n);
+
+function toast(msg, dur=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+// ─── AUTH ─────────────────────────────────────────────
+async function connect() {
+  const t = document.getElementById('tokenInput').value.trim();
+  if (!t) return;
+  document.querySelector('.setup-btn').textContent = 'Csatlakozás...';
+  document.getElementById('setupError').style.display = 'none';
+  try {
+    const res = await fetch('https://api.github.com/gists', {
+      headers: { Authorization: 'token '+t, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) throw new Error('invalid');
+    token = t;
+    localStorage.setItem('gh_token', t);
+    await loadOrCreateGist();
+    showApp();
+  } catch(e) {
+    document.getElementById('setupError').style.display = 'block';
+    document.querySelector('.setup-btn').textContent = 'Csatlakozás →';
+  }
+}
+
+async function loadOrCreateGist() {
+  // find existing gist
+  const res = await fetch('https://api.github.com/gists', {
+    headers: { Authorization: 'token '+token }
+  });
+  const gists = await res.json();
+  const existing = gists.find(g => g.files && g.files[GIST_FILENAME]);
+  if (existing) {
+    gistId = existing.id;
+    const detail = await fetch('https://api.github.com/gists/'+gistId, {
+      headers: { Authorization: 'token '+token }
+    });
+    const d = await detail.json();
+    data = JSON.parse(d.files[GIST_FILENAME].content);
+  } else {
+    // create new gist
+    data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    const res2 = await fetch('https://api.github.com/gists', {
+      method: 'POST',
+      headers: { Authorization: 'token '+token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: 'Portfolio Tracker Data',
+        public: false,
+        files: { [GIST_FILENAME]: { content: JSON.stringify(data, null, 2) } }
+      })
+    });
+    const g = await res2.json();
+    gistId = g.id;
+  }
+}
+
+async function saveData() {
+  if (!gistId) return;
+  document.getElementById('syncDot').classList.add('saving');
+  document.getElementById('syncLabel').textContent = 'mentés...';
+  try {
+    await fetch('https://api.github.com/gists/'+gistId, {
+      method: 'PATCH',
+      headers: { Authorization: 'token '+token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        files: { [GIST_FILENAME]: { content: JSON.stringify(data, null, 2) } }
+      })
+    });
+    toast('✓ Mentve a GitHub Gist-be');
+  } catch(e) {
+    toast('Mentés sikertelen');
+  }
+  document.getElementById('syncDot').classList.remove('saving');
+  document.getElementById('syncLabel').textContent = 'mentés';
+}
+
+function logout() {
+  localStorage.removeItem('gh_token');
+  location.reload();
+}
+
+function showApp() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  renderOverview();
+  renderAssets();
+  renderCalendar();
+  renderETF();
+  renderSavings();
+  fetchLive();
+}
+
+// ─── TABS ─────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ─── OVERVIEW ─────────────────────────────────────────
+function renderOverview() {
+  const tv = data.assets.reduce((s,a)=>s+a.value,0);
+  const ty = data.assets.reduce((s,a)=>s+a.value*a.yield/100,0);
+  const ap = data.payments.filter(p=>new Date(p.date)>=new Date('2026-04-16')).reduce((s,p)=>s+p.amount,0);
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="stat-card"><div class="stat-label">portfólió értéke</div><div class="stat-value">${fmtM(tv)}</div><div class="stat-sub">${data.assets.length} eszköz</div></div>
+    <div class="stat-card"><div class="stat-label">éves hozam (becsült)</div><div class="stat-value pos">${fmtM(ty)}</div><div class="stat-sub">${(ty/tv*100).toFixed(1)}% átlag</div></div>
+    <div class="stat-card"><div class="stat-label">havi hozam</div><div class="stat-value pos">${fmt(ty/12)}</div><div class="stat-sub">passzív jövedelem</div></div>
+    <div class="stat-card"><div class="stat-label">várható kifizetés</div><div class="stat-value">${fmtM(ap)}</div><div class="stat-sub">2026 hátralévő rész</div></div>
+  `;
+  renderPie(); renderYield();
+}
+
+const COLORS = ['#60a5fa','#4ade9a','#fbbf24','#f472b6','#a78bfa','#34d399','#fb923c','#94a3b8'];
+const TYPE_LABELS = {allampapir:'Állampapír',etf:'ETF / Részvény',keszpenz:'Készpénz / Betét',kripto:'Kripto'};
+const TYPE_BADGE = {allampapir:'badge-ap',etf:'badge-etf',keszpenz:'badge-cash',kripto:'badge-crypto'};
+
+function renderPie() {
+  destroyChart('pie');
+  const total = data.assets.reduce((s,a)=>s+a.value,0);
+  const ctx = document.getElementById('pieChart');
+  charts['pie'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: data.assets.map(a=>a.name),
+      datasets: [{ data: data.assets.map(a=>a.value), backgroundColor: COLORS, borderWidth: 0, hoverOffset: 4 }]
+    },
+    options: { responsive:false, cutout:'68%', plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => ` ${fmtM(c.parsed)} (${(c.parsed/total*100).toFixed(1)}%)` } } } }
+  });
+  document.getElementById('pieLegend').innerHTML = data.assets.map((a,i) => `
+    <div class="legend-row">
+      <div class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></div>
+      <span class="legend-name">${a.name}</span>
+      <span class="legend-pct">${(a.value/total*100).toFixed(1)}%</span>
+    </div>`).join('');
+}
+
+function renderYield() {
+  destroyChart('yield');
+  charts['yield'] = new Chart(document.getElementById('yieldChart'), {
+    type:'bar',
+    data:{ labels:data.assets.map(a=>a.name), datasets:[{ label:'Éves hozam', data:data.assets.map(a=>Math.round(a.value*a.yield/100)), backgroundColor:COLORS.map(c=>c+'88'), borderColor:COLORS, borderWidth:1, borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#55534f',font:{size:10}}}, y:{ticks:{color:'#55534f',callback:v=>fmtM(v)}} } }
+  });
+}
+
+// ─── ASSETS ───────────────────────────────────────────
+function renderAssets() {
+  document.getElementById('assetBody').innerHTML = data.assets.map((a,i) => `
+    <tr>
+      <td>
+        <div class="asset-name">${a.name}</div>
+        <div><span class="asset-type ${TYPE_BADGE[a.type]||'badge-cash'}">${TYPE_LABELS[a.type]||a.type}</span></div>
+        ${a.note?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${a.note}</div>`:''}
+      </td>
+      <td>${fmt(a.value)}</td>
+      <td class="${a.yield>=6?'pos':''}">${a.yield.toFixed(1)}%</td>
+      <td class="pos">+${fmt(a.value*a.yield/100)}</td>
+      <td><button class="del-btn" onclick="deleteAsset(${a.id})">töröl</button></td>
+    </tr>`).join('');
+}
+
+function addAsset() {
+  const name = document.getElementById('newName').value.trim();
+  const type = document.getElementById('newType').value;
+  const value = parseFloat(document.getElementById('newValue').value)||0;
+  const yld = parseFloat(document.getElementById('newYield').value)||0;
+  const note = document.getElementById('newNote').value.trim();
+  if (!name||!value) { toast('Add meg a nevet és az értéket!'); return; }
+  const id = Date.now();
+  data.assets.push({id,name,type,value,yield:yld,note});
+  ['newName','newValue','newYield','newNote'].forEach(id=>document.getElementById(id).value='');
+  renderAssets(); renderOverview();
+  toast('Eszköz hozzáadva');
+}
+
+function deleteAsset(id) {
+  data.assets = data.assets.filter(a=>a.id!==id);
+  renderAssets(); renderOverview();
+  toast('Eszköz törölve');
+}
+
+// ─── ETF ──────────────────────────────────────────────
+async function fetchLive() {
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model:"claude-sonnet-4-20250514", max_tokens:300,
+        tools:[{type:"web_search_20250305",name:"web_search"}],
+        messages:[{role:"user",content:`Keresd meg a VWCE ETF aktuális árfolyamát EUR-ban és az EUR/HUF árfolyamot ma. Válaszolj CSAK így: {"vwce_eur":123.45,"eurhuf":395.0} Semmi más szöveg.`}]
+      })
+    });
+    const d = await res.json();
+    const text = d.content.map(b=>b.text||'').join(' ');
+    const m = text.match(/\{[^}]+\}/);
+    if (m) {
+      const p = JSON.parse(m[0]);
+      if (p.vwce_eur>50) liveEur=p.vwce_eur;
+      if (p.eurhuf>300) liveFx=p.eurhuf;
+    }
+  } catch(e) {}
+  updateETFUI();
+}
+
+function renderETF() {
+  recalcTBSZ();
+  renderPerfChart();
+  recalcPL();
+}
+
+function updateETFUI() {
+  const price = liveEur;
+  const fx = liveFx;
+  const etf = data.etf;
+
+  if (price) {
+    document.getElementById('etfPriceBig').textContent = price.toFixed(2)+' EUR';
+    document.getElementById('etfPriceHuf').textContent = fmt(price*fx)+'/db';
+    document.getElementById('livePill').className = 'live-pill live';
+    document.getElementById('livePill').innerHTML = '<div class="live-dot"></div>live';
+    const totalEur = price * etf.shares;
+    document.getElementById('etfTotalHuf').textContent = fmtM(totalEur*fx);
+    document.getElementById('etfTotalEur').textContent = totalEur.toFixed(0)+' EUR';
+  } else {
+    document.getElementById('etfPriceBig').textContent = '– EUR';
+    document.getElementById('livePill').className = 'live-pill est';
+    document.getElementById('livePill').innerHTML = '<div class="live-dot"></div>nincs live adat';
+  }
+  document.getElementById('etfFx').textContent = Math.round(fx)+' Ft';
+  document.getElementById('etfShares').textContent = etf.shares.toFixed(2)+' db';
+  recalcPL();
+}
+
+function recalcPL() {
+  const price = liveEur || 100;
+  const fx = liveFx;
+  const etf = data.etf;
+  const cost = parseFloat(document.getElementById('costInput').value)||etf.costPerShare;
+  const sh = parseFloat(document.getElementById('sharesInput').value)||etf.shares;
+  data.etf.costPerShare = cost; data.etf.shares = sh;
+
+  const invested = cost*sh, current = price*sh, pl = current-invested;
+  const plPct = pl/invested*100;
+
+  document.getElementById('plCost').textContent = cost.toFixed(2)+' EUR';
+  document.getElementById('plCostHuf').textContent = fmt(cost*fx)+'/db';
+  document.getElementById('plInvested').textContent = fmtM(invested*fx);
+  document.getElementById('plVal').textContent = fmtSign(pl*fx);
+  document.getElementById('plVal').className = 'stat-value '+(pl>=0?'pos':'neg');
+  document.getElementById('plPct').textContent = (pl>=0?'+':'')+plPct.toFixed(1)+'%';
+}
+
+function recalcTBSZ() {
+  const year = parseInt(document.getElementById('tbszInput').value)||data.etf.tbszYear||2022;
+  data.etf.tbszYear = year;
+  const endYear = year+5;
+  const now = new Date('2026-04-16');
+  const open = new Date(year+'-01-01'), end = new Date(endYear+'-01-01');
+  const pct = Math.min(100,Math.max(0,(now-open)/(end-open)*100));
+  const yearsLeft = Math.max(0,(end-now)/(1000*60*60*24*365)).toFixed(1);
+  const elapsed = ((now-open)/(1000*60*60*24*365)).toFixed(1);
+
+  document.getElementById('tbszRows').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">nyitás</span><span>${year}. január 1.</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">adómentesség</span><span>${endYear}. január 1.${pct>=100?' ✓':''}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">állapot</span><span class="${pct>=100?'pos':''}">${pct>=100?'Adómentes! 🎉':`${elapsed} év eltelt, ${yearsLeft} év van hátra`}</span></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${pct.toFixed(0)}% teljesítve</div>
+  `;
+  document.getElementById('tbszBar').style.width = pct.toFixed(1)+'%';
+}
+
+function renderPerfChart() {
+  destroyChart('perf');
+  const years = ['2019','2020','2021','2022','2023','2024'];
+  const returns = [27.1, 16.3, 18.5, -18.0, 23.8, 19.2];
+  charts['perf'] = new Chart(document.getElementById('perfChart'), {
+    type:'bar',
+    data:{ labels:years, datasets:[{ data:returns, backgroundColor:returns.map(r=>r>=0?'rgba(74,222,154,0.25)':'rgba(248,113,113,0.25)'), borderColor:returns.map(r=>r>=0?'#4ade9a':'#f87171'), borderWidth:1.5, borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#55534f',font:{size:11}}}, y:{ticks:{color:'#55534f',callback:v=>v+'%'}, grid:{color:'rgba(255,255,255,0.04)'} } } }
+  });
+}
+
+// ─── CALENDAR ─────────────────────────────────────────
+function renderCalendar() {
+  const now = new Date('2026-04-16');
+  const upcoming = data.payments.filter(p=>new Date(p.date)>=now).slice(0,6);
+  document.getElementById('calGrid').innerHTML = upcoming.map(p=>`
+    <div class="cal-item" style="border-left-color:${p.color}">
+      <div class="cal-date">${p.date}</div>
+      <div class="cal-name">${p.name}</div>
+      <div class="cal-amount">+${fmt(p.amount)}</div>
+    </div>`).join('');
+  renderCashflow();
+}
+
+function renderCashflow() {
+  destroyChart('cashflow');
+  const months = ['Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Sze','Okt','Nov','Dec'];
+  const vals = new Array(12).fill(0);
+  data.payments.filter(p=>p.date.startsWith('2026')).forEach(p=>{
+    vals[parseInt(p.date.split('-')[1])-1] += p.amount;
+  });
+  charts['cashflow'] = new Chart(document.getElementById('cashflowChart'), {
+    type:'bar',
+    data:{ labels:months, datasets:[{ label:'Kifizetés', data:vals, backgroundColor:'rgba(96,165,250,0.2)', borderColor:'#60a5fa', borderWidth:1, borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#55534f',font:{size:11}}}, y:{ticks:{color:'#55534f',callback:v=>v?fmt(v):0}} } }
+  });
+}
+
+// ─── SAVINGS ──────────────────────────────────────────
+function updateSavings(v) {
+  data.savings.monthly = parseInt(v);
+  document.getElementById('savLabel').textContent = fmt(v);
+  renderSavingsCharts();
+}
+function updateHorizon(v) {
+  data.savings.horizon = parseInt(v);
+  document.getElementById('horizLabel').textContent = v+' év';
+  renderSavingsCharts();
+}
+
+function renderSavings() {
+  document.querySelector('input[oninput="updateSavings(this.value)"]').value = data.savings.monthly;
+  document.getElementById('savLabel').textContent = fmt(data.savings.monthly);
+  document.querySelector('input[oninput="updateHorizon(this.value)"]').value = data.savings.horizon;
+  document.getElementById('horizLabel').textContent = data.savings.horizon+' év';
+  renderSavingsCharts();
+}
+
+function renderSavingsCharts() {
+  const start = data.assets.reduce((s,a)=>s+a.value,0);
+  const rate = data.assets.reduce((s,a)=>s+a.value*a.yield/100,0)/start;
+  const { monthly, horizon } = data.savings;
+  const years = Array.from({length:horizon+1},(_,i)=>i);
+  const vals = years.map(y=>{ let v=start; for(let i=0;i<y;i++) v=(v+monthly*12)*(1+rate); return Math.round(v); });
+  const simple = years.map(y=>Math.round(start+monthly*12*y));
+  const final = vals[vals.length-1];
+  const invested = start + monthly*12*horizon;
+
+  document.getElementById('savMetrics').innerHTML = `
+    <div class="stat-card" style="background:var(--bg3)"><div class="stat-label">végső érték</div><div class="stat-value pos" style="font-size:17px">${fmtM(final)}</div><div class="stat-sub">${horizon} év múlva</div></div>
+    <div class="stat-card" style="background:var(--bg3)"><div class="stat-label">befizetett tőke</div><div class="stat-value" style="font-size:17px">${fmtM(invested)}</div><div class="stat-sub">összesen</div></div>
+    <div class="stat-card" style="background:var(--bg3)"><div class="stat-label">hozamból</div><div class="stat-value pos" style="font-size:17px">+${fmtM(final-invested)}</div><div class="stat-sub">kamatos kamat</div></div>
+  `;
+
+  destroyChart('growth');
+  charts['growth'] = new Chart(document.getElementById('growthChart'), {
+    type:'line',
+    data:{
+      labels: years.map(y=>y===0?'Ma':y+"'"),
+      datasets:[
+        { label:'Portfólió', data:vals, borderColor:'#4ade9a', backgroundColor:'rgba(74,222,154,0.08)', fill:true, tension:.4, pointRadius:2, pointBackgroundColor:'#4ade9a' },
+        { label:'Befizetett tőke', data:simple, borderColor:'#60a5fa', backgroundColor:'transparent', borderDash:[4,4], tension:.3, pointRadius:0 }
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false}, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>` ${fmtM(c.parsed.y)}`}} }, scales:{ x:{ticks:{color:'#55534f',font:{size:11}}}, y:{ticks:{color:'#55534f',callback:v=>fmtM(v)}, grid:{color:'rgba(255,255,255,0.04)'}} } }
+  });
+}
+
+// ─── BOOT ─────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('gh_token');
+  if (saved) {
+    token = saved;
+    document.getElementById('tokenInput').value = saved;
+    connect();
+  }
+});
+</script>
+</body>
+</html>
