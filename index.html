@@ -4,501 +4,185 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Portfólió Tracker</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 :root {
-  --bg: #0e0f11;
-  --bg2: #161719;
-  --bg3: #1e2023;
-  --border: rgba(255,255,255,0.07);
-  --border2: rgba(255,255,255,0.13);
-  --text: #e8e6e0;
-  --text2: #8a8880;
-  --text3: #55534f;
-  --green: #4ade9a;
-  --green-dim: rgba(74,222,154,0.12);
-  --red: #f87171;
-  --red-dim: rgba(248,113,113,0.12);
-  --amber: #fbbf24;
-  --amber-dim: rgba(251,191,36,0.12);
-  --blue: #60a5fa;
-  --blue-dim: rgba(96,165,250,0.12);
-  --accent: #4ade9a;
-  --font-head: 'Syne', sans-serif;
-  --font-mono: 'DM Mono', monospace;
+  --bg:#0e0f11;--bg2:#161719;--bg3:#1e2023;--bg4:#26282c;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e8e6e0;--text2:#8a8880;--text3:#55534f;
+  --green:#4ade9a;--green-dim:rgba(74,222,154,0.12);
+  --red:#f87171;--red-dim:rgba(248,113,113,0.12);
+  --amber:#fbbf24;--amber-dim:rgba(251,191,36,0.12);
+  --blue:#60a5fa;--blue-dim:rgba(96,165,250,0.12);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.12);
+  --font-head:'Syne',sans-serif;--font-mono:'DM Mono',monospace;
 }
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-body {
-  font-family: var(--font-mono);
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  font-size: 13px;
-  line-height: 1.6;
-}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;line-height:1.6}
 
-/* SETUP SCREEN */
-#setup-screen {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-.setup-box {
-  max-width: 440px;
-  width: 100%;
-}
-.setup-logo {
-  font-family: var(--font-head);
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 8px;
-  letter-spacing: -0.5px;
-}
-.setup-logo span { color: var(--accent); }
-.setup-desc {
-  color: var(--text2);
-  font-size: 13px;
-  margin-bottom: 32px;
-  line-height: 1.7;
-}
-.setup-label {
-  font-size: 11px;
-  color: var(--text2);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-}
-.setup-input {
-  width: 100%;
-  padding: 12px 14px;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  outline: none;
-  transition: border-color .2s;
-  letter-spacing: .05em;
-}
-.setup-input:focus { border-color: var(--accent); }
-.setup-input::placeholder { color: var(--text3); }
-.setup-btn {
-  width: 100%;
-  margin-top: 16px;
-  padding: 13px;
-  background: var(--accent);
-  color: #0a0f0a;
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font-head);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity .2s, transform .1s;
-}
-.setup-btn:hover { opacity: .9; }
-.setup-btn:active { transform: scale(.99); }
-.setup-note {
-  margin-top: 14px;
-  font-size: 11px;
-  color: var(--text3);
-  line-height: 1.7;
-}
-.setup-note a { color: var(--text2); }
-.setup-error {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--red);
-  display: none;
-}
+/* SETUP */
+#setup-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.setup-box{max-width:440px;width:100%}
+.setup-logo{font-family:var(--font-head);font-size:28px;font-weight:700;margin-bottom:8px;letter-spacing:-.5px}
+.setup-logo span{color:var(--green)}
+.setup-desc{color:var(--text2);font-size:13px;margin-bottom:32px;line-height:1.7}
+.setup-label{font-size:11px;color:var(--text2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
+.setup-input{width:100%;padding:12px 14px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:13px;outline:none;transition:border-color .2s}
+.setup-input:focus{border-color:var(--green)}
+.setup-btn{width:100%;margin-top:16px;padding:13px;background:var(--green);color:#0a0f0a;border:none;border-radius:8px;font-family:var(--font-head);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}
+.setup-btn:hover{opacity:.9}
+.setup-error{margin-top:10px;font-size:12px;color:var(--red);display:none}
+.setup-note{margin-top:14px;font-size:11px;color:var(--text3);line-height:1.7}
+.setup-note a{color:var(--text2)}
 
-/* MAIN APP */
-#app { display: none; min-height: 100vh; }
+/* APP */
+#app{display:none;min-height:100vh}
 
 /* HEADER */
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  background: rgba(14,15,17,0.92);
-  backdrop-filter: blur(12px);
-  z-index: 100;
-}
-.header-logo {
-  font-family: var(--font-head);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-}
-.header-logo span { color: var(--accent); }
-.header-right { display: flex; align-items: center; gap: 12px; }
-.sync-btn {
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  color: var(--text2);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all .2s;
-  display: flex; align-items: center; gap: 6px;
-}
-.sync-btn:hover { border-color: var(--accent); color: var(--accent); }
-.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
-.sync-dot.saving { background: var(--amber); animation: pulse .8s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-.logout-btn {
-  padding: 6px 10px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text3);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all .2s;
-}
-.logout-btn:hover { border-color: var(--red); color: var(--red); }
-
-.hide-btn {
-  padding: 6px 10px;
-  background: transparent;
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  color: var(--text2);
-  font-size: 15px;
-  cursor: pointer;
-  transition: all .2s;
-  line-height: 1;
-}
-.hide-btn:hover { border-color: var(--accent); color: var(--accent); }
-.hide-btn.active { border-color: var(--accent); color: var(--accent); }
-
-.blurred { filter: blur(6px); transition: filter .2s; user-select: none; }
-.blurred:hover { filter: blur(0px); }
+.header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(14,15,17,0.95);backdrop-filter:blur(12px);z-index:100}
+.header-logo{font-family:var(--font-head);font-size:17px;font-weight:700;letter-spacing:-.3px}
+.header-logo span{color:var(--green)}
+.header-right{display:flex;align-items:center;gap:8px}
+.hbtn{padding:6px 11px;background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:5px}
+.hbtn:hover{border-color:var(--green);color:var(--green)}
+.hbtn.danger:hover{border-color:var(--red);color:var(--red)}
+.hbtn.active{border-color:var(--green);color:var(--green)}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.sync-dot.saving{background:var(--amber);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* TABS */
-.tabs {
-  display: flex;
-  gap: 2px;
-  padding: 12px 24px 0;
-  border-bottom: 1px solid var(--border);
-}
-.tab {
-  padding: 8px 16px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text2);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  cursor: pointer;
-  margin-bottom: -1px;
-  transition: all .15s;
-  letter-spacing: .03em;
-}
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tabs{display:flex;padding:0 24px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:10px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);font-family:var(--font-mono);font-size:12px;cursor:pointer;margin-bottom:-1px;transition:all .15s;white-space:nowrap;letter-spacing:.03em}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--green);border-bottom-color:var(--green)}
 
 /* CONTENT */
-.content { padding: 24px; max-width: 1100px; margin: 0 auto; }
-.page { display: none; }
-.page.active { display: block; }
+.content{padding:20px 24px;max-width:1200px;margin:0 auto}
+.page{display:none}
+.page.active{display:block}
 
-/* SUMMARY ROW */
-.summary-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 24px;
-}
-.stat-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px 18px;
-  transition: border-color .2s;
-}
-.stat-card:hover { border-color: var(--border2); }
-.stat-label {
-  font-size: 10px;
-  color: var(--text3);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  margin-bottom: 6px;
-}
-.stat-value {
-  font-family: var(--font-head);
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.5px;
-}
-.stat-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
-.pos { color: var(--green); }
-.neg { color: var(--red); }
-.neu { color: var(--text2); }
-
-/* GRID 2COL */
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+/* CARDS */
+.card-row{display:grid;gap:10px;margin-bottom:16px}
+.cards-4{grid-template-columns:repeat(4,1fr)}
+.cards-3{grid-template-columns:repeat(3,1fr)}
+.cards-2{grid-template-columns:repeat(2,1fr)}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;transition:border-color .2s}
+.stat-card:hover{border-color:var(--border2)}
+.stat-label{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.stat-value{font-family:var(--font-head);font-size:20px;font-weight:600;line-height:1.1;letter-spacing:-.5px}
+.stat-sub{font-size:11px;color:var(--text2);margin-top:3px}
+.pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--text2)}
 
 /* PANEL */
-.panel {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-}
-.panel-title {
-  font-size: 10px;
-  color: var(--text3);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  margin-bottom: 16px;
-}
-.chart-wrap { position: relative; width: 100%; height: 220px; }
-.chart-wrap-tall { position: relative; width: 100%; height: 280px; }
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px}
+.panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.panel-title{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
+.panel-actions{display:flex;gap:6px}
 
-/* PIE */
-.pie-layout { display: flex; gap: 20px; align-items: center; }
-.pie-canvas { width: 150px !important; height: 150px !important; flex-shrink: 0; }
-.pie-legend { flex: 1; }
-.legend-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-}
-.legend-row:last-child { border-bottom: none; }
-.legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-.legend-name { flex: 1; color: var(--text2); }
-.legend-pct { color: var(--text); font-weight: 500; }
-.legend-val { color: var(--text3); font-size: 11px; }
+/* GRID */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
 
 /* TABLE */
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th {
-  text-align: left; padding: 6px 10px;
-  color: var(--text3); font-weight: 400;
-  border-bottom: 1px solid var(--border);
-  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
-}
-th:not(:first-child) { text-align: right; }
-td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-td:not(:first-child) { text-align: right; }
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(255,255,255,.02); }
-.asset-name { font-weight: 500; color: var(--text); }
-.asset-type {
-  display: inline-block; font-size: 10px;
-  padding: 2px 7px; border-radius: 4px;
-  margin-top: 2px;
-}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:500px}
+th{text-align:left;padding:6px 10px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:10px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+th.r{text-align:right}
+td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+td.r{text-align:right}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.015)}
+.asset-name{font-weight:500}
+.badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.b-ap{background:var(--blue-dim);color:var(--blue)}
+.b-dkj{background:var(--purple-dim);color:var(--purple)}
+.b-etf{background:var(--green-dim);color:var(--green)}
+.b-cash{background:rgba(255,255,255,.06);color:var(--text2)}
+.b-buy{background:var(--green-dim);color:var(--green)}
+.b-sell{background:var(--red-dim);color:var(--red)}
+.b-coupon{background:var(--amber-dim);color:var(--amber)}
+.b-expire{background:var(--blue-dim);color:var(--blue)}
+.b-deposit{background:rgba(255,255,255,.08);color:var(--text2)}
+.b-withdraw{background:var(--red-dim);color:var(--red)}
 
-/* BADGE */
-.badge-ap { background: var(--blue-dim); color: var(--blue); }
-.badge-etf { background: var(--green-dim); color: var(--green); }
-.badge-cash { background: rgba(255,255,255,.06); color: var(--text2); }
-.badge-crypto { background: var(--amber-dim); color: var(--amber); }
+/* FORM */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-backdrop.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal-title{font-family:var(--font-head);font-size:16px;font-weight:600;margin-bottom:20px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.form-row.full{grid-template-columns:1fr}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-label{font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase}
+.form-input,.form-select{padding:9px 11px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-family:var(--font-mono);font-size:12px;outline:none;transition:border-color .2s;width:100%}
+.form-input:focus,.form-select:focus{border-color:var(--green)}
+.form-select option{background:var(--bg2)}
+.form-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+.btn{padding:9px 18px;border-radius:7px;font-family:var(--font-head);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;border:1px solid}
+.btn-primary{background:var(--green);color:#0a0f0a;border-color:var(--green)}
+.btn-primary:hover{opacity:.85}
+.btn-ghost{background:transparent;color:var(--text2);border-color:var(--border2)}
+.btn-ghost:hover{border-color:var(--text2);color:var(--text)}
+.btn-danger{background:transparent;color:var(--red);border-color:var(--red-dim)}
+.btn-danger:hover{background:var(--red-dim)}
+.btn-sm{padding:4px 10px;font-size:11px;border-radius:5px}
 
-/* ADD FORM */
-.add-form {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1.2fr 1fr 1fr auto;
-  gap: 8px;
-  align-items: end;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-.form-group { display: flex; flex-direction: column; gap: 5px; }
-.form-label { font-size: 10px; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; }
-.form-input, .form-select {
-  padding: 8px 10px;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  outline: none;
-  transition: border-color .2s;
-  width: 100%;
-}
-.form-input:focus, .form-select:focus { border-color: var(--accent); }
-.form-select option { background: var(--bg2); }
-.add-btn {
-  padding: 8px 14px;
-  background: var(--accent);
-  color: #0a0f0a;
-  border: none;
-  border-radius: 6px;
-  font-family: var(--font-head);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  align-self: end;
-  transition: opacity .2s;
-}
-.add-btn:hover { opacity: .85; }
-.del-btn {
-  background: none; border: 1px solid var(--border);
-  color: var(--text3); cursor: pointer;
-  padding: 4px 8px; border-radius: 5px;
-  font-size: 11px; font-family: var(--font-mono);
-  transition: all .15s;
-}
-.del-btn:hover { border-color: var(--red); color: var(--red); }
+/* ACCOUNT BALANCE */
+.balance-bar{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:14px}
+.balance-label{font-size:11px;color:var(--text2);flex:1}
+.balance-value{font-family:var(--font-head);font-size:20px;font-weight:600}
+.balance-actions{display:flex;gap:6px;margin-left:12px}
 
-/* CALENDAR */
-.cal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.cal-item {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-left: 3px solid;
-  border-radius: 8px;
-  padding: 12px 14px;
-  transition: border-color .2s;
-}
-.cal-item:hover { border-color: var(--border2); }
-.cal-date { font-size: 10px; color: var(--text3); margin-bottom: 3px; letter-spacing: .04em; }
-.cal-name { font-size: 12px; font-weight: 500; margin-bottom: 4px; }
-.cal-amount { font-size: 15px; font-family: var(--font-head); font-weight: 600; color: var(--green); }
+/* PROGRESS */
+.progress-track{background:var(--bg3);border-radius:6px;height:5px;margin-top:8px;overflow:hidden}
+.progress-fill{height:100%;border-radius:6px;transition:width .5s ease}
 
-/* SAVINGS */
-.slider-row { margin-bottom: 20px; }
-.slider-label { font-size: 11px; color: var(--text2); margin-bottom: 8px; display: flex; justify-content: space-between; }
-.slider-label span { color: var(--text); font-weight: 500; }
-input[type=range] {
-  width: 100%; cursor: pointer;
-  accent-color: var(--accent);
-}
-
-/* TBSZ */
-.tbsz-track {
-  background: var(--bg3);
-  border-radius: 6px; height: 6px;
-  overflow: hidden; margin-top: 8px;
-}
-.tbsz-fill {
-  height: 100%; border-radius: 6px;
-  background: var(--green);
-  transition: width .5s ease;
-}
-
-/* ETF DETAIL */
-.etf-header {
-  display: flex; justify-content: space-between;
-  align-items: flex-start; margin-bottom: 16px;
-}
-.etf-price-big {
-  font-family: var(--font-head);
-  font-size: 32px; font-weight: 700;
-  letter-spacing: -1px;
-}
-.live-pill {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 10px; padding: 3px 9px;
-  border-radius: 20px; border: 1px solid;
-  letter-spacing: .05em;
-}
-.live-pill.live { border-color: var(--green); color: var(--green); }
-.live-pill.est { border-color: var(--amber); color: var(--amber); }
-.live-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-
-/* SPINNER */
-.spin {
-  display: inline-block; width: 10px; height: 10px;
-  border: 1.5px solid var(--border2);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin .6s linear infinite;
-  vertical-align: middle; margin-right: 4px;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+/* CHART */
+.chart-wrap{position:relative;width:100%;height:220px}
 
 /* TOAST */
-.toast {
-  position: fixed; bottom: 24px; right: 24px;
-  padding: 10px 16px;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  font-size: 12px; color: var(--text2);
-  opacity: 0; transform: translateY(8px);
-  transition: all .25s;
-  z-index: 999;
-  pointer-events: none;
-}
-.toast.show { opacity: 1; transform: translateY(0); }
+.toast{position:fixed;bottom:24px;right:24px;padding:10px 16px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;font-size:12px;color:var(--text2);opacity:0;transform:translateY(8px);transition:all .25s;z-index:999;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+
+/* BLUR */
+.blurred{filter:blur(6px);transition:filter .2s;user-select:none}
+.blurred:hover{filter:blur(0)}
+
+/* SPINNER */
+.spin{display:inline-block;width:10px;height:10px;border:1.5px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* LIVE PILL */
+.live-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 9px;border-radius:20px;border:1px solid;letter-spacing:.05em}
+.live-pill.live{border-color:var(--green);color:var(--green)}
+.live-pill.est{border-color:var(--amber);color:var(--amber)}
+.live-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:32px;color:var(--text3);font-size:12px}
+
+/* SECTION DIVIDER */
+.section-title{font-size:11px;color:var(--text2);font-weight:500;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 
 /* RESPONSIVE */
-@media (max-width: 700px) {
-  .summary-row { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .grid2, .grid3 { grid-template-columns: 1fr; }
-  .cal-grid { grid-template-columns: 1fr; }
-  .add-form { grid-template-columns: 1fr 1fr; }
-  .content { padding: 12px; }
-  .panel { padding: 14px; }
-
-  /* header */
-  .header { padding: 12px 14px; }
-  .header-logo { font-size: 15px; }
-  .sync-btn span { display: none; }
-  .logout-btn { display: none; }
-
-  /* tabs – vízszintesen scrollozható */
-  .tabs { padding: 0 12px; overflow-x: auto; gap: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab { padding: 10px 12px; font-size: 11px; flex-shrink: 0; }
-
-  /* stat cards kisebb */
-  .stat-value { font-size: 16px !important; }
-  .stat-label { font-size: 9px; }
-  .stat-card { padding: 10px 12px; }
-
-  /* ETF nagy ár */
-  .etf-price-big { font-size: 24px; }
-
-  /* táblázat – scrollozható */
-  .panel { overflow-x: auto; }
-  table { min-width: 480px; }
-
-  /* add form – egy oszlop */
-  .add-form { grid-template-columns: 1fr; }
-
-  /* pie chart kisebb */
-  .pie-layout { flex-direction: column; align-items: flex-start; }
-  .pie-canvas { width: 120px !important; height: 120px !important; }
-
-  /* calendar */
-  .cal-item { padding: 10px 12px; }
-
-  /* toast */
-  .toast { bottom: 16px; right: 12px; left: 12px; text-align: center; }
-
-  /* savings metrikák */
-  .grid3 .stat-card .stat-value { font-size: 15px !important; }
+@media(max-width:700px){
+  .cards-4,.cards-3{grid-template-columns:1fr 1fr}
+  .cards-2{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+  .content{padding:12px 14px}
+  .panel{padding:14px}
+  .header{padding:12px 14px}
+  .header-logo{font-size:15px}
+  .hbtn .lbl{display:none}
+  .stat-value{font-size:16px!important}
+  .balance-bar{flex-wrap:wrap}
+  .balance-actions{margin-left:0;width:100%}
+  .form-row{grid-template-columns:1fr}
 }
-
-@media (max-width: 400px) {
-  .summary-row { grid-template-columns: 1fr; }
-  .metric-grid-3 { grid-template-columns: 1fr; }
+@media(max-width:420px){
+  .cards-4,.cards-3,.cards-2{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -508,15 +192,12 @@ input[type=range] {
 <div id="setup-screen">
   <div class="setup-box">
     <div class="setup-logo">portfólió<span>.</span></div>
-    <div class="setup-desc">Add meg a GitHub Personal Access Tokenedet a folytatáshoz. Az adataid titkosítatlanul, privát GitHub Gist-ben lesznek tárolva.</div>
+    <div class="setup-desc">Add meg a GitHub Personal Access Tokenedet. Az adatok privát GitHub Gist-ben tárolódnak.</div>
     <div class="setup-label">GitHub Token</div>
     <input class="setup-input" id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
     <div class="setup-error" id="setupError">Érvénytelen token vagy nincs gist jogosultság.</div>
     <button class="setup-btn" onclick="connect()">Csatlakozás →</button>
-    <div class="setup-note">
-      A token csak a böngésződben tárolódik (localStorage). Senki máshoz nem jut el.<br><br>
-      Token létrehozása: <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> → Generate new token (classic) → csak a <strong>gist</strong> jogot pipáld be.
-    </div>
+    <div class="setup-note">Token: <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> → Generate new token (classic) → csak <strong>gist</strong> jogot pipáld be.</div>
   </div>
 </div>
 
@@ -525,638 +206,842 @@ input[type=range] {
   <div class="header">
     <div class="header-logo">portfólió<span>.</span></div>
     <div class="header-right">
-      <button class="hide-btn" id="hideBtn" onclick="toggleBlur()" title="Összegek elrejtése">👁</button>
-      <button class="sync-btn" onclick="saveData()">
-        <div class="sync-dot" id="syncDot"></div>
-        <span id="syncLabel">mentés</span>
-      </button>
-      <button class="logout-btn" onclick="logout()">kilépés</button>
+      <button class="hbtn" id="hideBtn" onclick="toggleBlur()" title="Összegek elrejtése">👁 <span class="lbl">elrejt</span></button>
+      <button class="hbtn" onclick="saveData()"><div class="sync-dot" id="syncDot"></div><span class="lbl" id="syncLabel">mentés</span></button>
+      <button class="hbtn danger" onclick="logout()">↪ <span class="lbl">kilépés</span></button>
     </div>
   </div>
 
   <div class="tabs">
-    <button class="tab active" onclick="showTab('overview')">áttekintés</button>
-    <button class="tab" onclick="showTab('assets')">eszközök</button>
-    <button class="tab" onclick="showTab('etf')">etf részletek</button>
-    <button class="tab" onclick="showTab('calendar')">kifizetések</button>
-    <button class="tab" onclick="showTab('savings')">tervező</button>
+    <button class="tab active" onclick="showTab('dashboard',this)">dashboard</button>
+    <button class="tab" onclick="showTab('cash',this)">pénzszámla</button>
+    <button class="tab" onclick="showTab('allampapir',this)">állampapír</button>
+    <button class="tab" onclick="showTab('tbsz',this)">tbsz</button>
+    <button class="tab" onclick="showTab('tranzakciok',this)">tranzakciók</button>
   </div>
 
   <div class="content">
 
-    <!-- OVERVIEW -->
-    <div id="page-overview" class="page active">
-      <div class="summary-row" id="summaryCards"></div>
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div class="card-row cards-4" id="dashCards"></div>
       <div class="grid2">
         <div class="panel">
-          <div class="panel-title">összetétel</div>
-          <div class="pie-layout">
-            <canvas id="pieChart" class="pie-canvas" role="img" aria-label="Portfólió megoszlás"></canvas>
-            <div class="pie-legend" id="pieLegend"></div>
+          <div class="panel-header"><div class="panel-title">portfólió megoszlás</div></div>
+          <div style="display:flex;gap:16px;align-items:center">
+            <canvas id="pieChart" style="width:130px!important;height:130px!important;flex-shrink:0" role="img" aria-label="Megoszlás"></canvas>
+            <div id="pieLegend" style="flex:1"></div>
           </div>
         </div>
         <div class="panel">
-          <div class="panel-title">éves hozam eszközönként</div>
-          <div class="chart-wrap"><canvas id="yieldChart" role="img" aria-label="Hozam chart"></canvas></div>
+          <div class="panel-header"><div class="panel-title">közelgő események</div></div>
+          <div id="upcomingEvents"></div>
         </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">havi cashflow (2026)</div></div>
+        <div class="chart-wrap"><canvas id="cashflowChart" role="img" aria-label="Cashflow"></canvas></div>
       </div>
     </div>
 
-    <!-- ASSETS -->
-    <div id="page-assets" class="page">
-      <div class="panel">
-        <div class="panel-title">eszközlista</div>
-        <table>
-          <thead>
-            <tr>
-              <th>eszköz</th>
-              <th>érték (ft)</th>
-              <th>hozam %</th>
-              <th>éves hozam (ft)</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="assetBody"></tbody>
-        </table>
-        <div class="add-form">
-          <div class="form-group">
-            <div class="form-label">neve</div>
-            <input class="form-input" id="newName" placeholder="pl. OTP részvény">
-          </div>
-          <div class="form-group">
-            <div class="form-label">típus</div>
-            <select class="form-select" id="newType">
-              <option value="allampapir">Állampapír</option>
-              <option value="etf">ETF / Részvény</option>
-              <option value="keszpenz">Készpénz / Betét</option>
-              <option value="kripto">Kripto</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <div class="form-label">érték (ft)</div>
-            <input class="form-input" id="newValue" type="number" placeholder="5000000">
-          </div>
-          <div class="form-group">
-            <div class="form-label">hozam %</div>
-            <input class="form-input" id="newYield" type="number" placeholder="7.0" step="0.1">
-          </div>
-          <div class="form-group">
-            <div class="form-label">megjegyzés</div>
-            <input class="form-input" id="newNote" placeholder="opcionális">
-          </div>
-          <button class="add-btn" onclick="addAsset()">+ add</button>
+    <!-- PÉNZSZÁMLA -->
+    <div id="page-cash" class="page">
+      <div class="balance-bar">
+        <div>
+          <div class="stat-label">pénzszámla egyenleg</div>
+          <div class="balance-value" id="cashBalance">–</div>
+          <div class="stat-sub" id="cashSubtitle">összes befizetés – kiadás</div>
         </div>
+        <div class="balance-actions">
+          <button class="btn btn-primary btn-sm" onclick="openModal('deposit')">+ befizetés</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">pénzszámla mozgások</div></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>dátum</th><th>típus</th><th>megjegyzés</th><th class="r">összeg</th><th class="r">egyenleg</th><th></th></tr></thead>
+          <tbody id="cashBody"></tbody>
+        </table></div>
+        <div class="empty" id="cashEmpty" style="display:none">Még nincs mozgás. Adj hozzá befizetést!</div>
       </div>
     </div>
 
-    <!-- ETF DETAIL -->
-    <div id="page-etf" class="page">
-      <div class="grid2">
-        <div class="panel">
-          <div class="panel-title">vwce – live árfolyam</div>
-          <div class="etf-header">
-            <div>
-              <div class="etf-price-big" id="etfPriceBig">–</div>
-              <div style="font-size:12px;color:var(--text2);margin-top:4px" id="etfPriceHuf">–</div>
-            </div>
-            <div id="livePill" class="live-pill est"><div class="live-dot"></div>betöltés...</div>
-          </div>
-          <div class="grid3" style="margin-bottom:0">
-            <div class="stat-card" style="background:var(--bg3)">
-              <div class="stat-label">darabszám</div>
-              <div class="stat-value" id="etfShares" style="font-size:18px">360,72</div>
-              <div class="stat-sub">TBSZ számlán</div>
-            </div>
-            <div class="stat-card" style="background:var(--bg3)">
-              <div class="stat-label">eur/huf</div>
-              <div class="stat-value" id="etfFx" style="font-size:18px"><span class="spin"></span></div>
-              <div class="stat-sub">live árfolyam</div>
-            </div>
-            <div class="stat-card" style="background:var(--bg3)">
-              <div class="stat-label">aktuális érték</div>
-              <div class="stat-value pos" id="etfTotalHuf" style="font-size:18px">–</div>
-              <div class="stat-sub" id="etfTotalEur">–</div>
-            </div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-title">p&l – nyereség / veszteség</div>
-          <div class="grid3" style="margin-bottom:14px">
-            <div class="stat-card" style="background:var(--bg3)">
-              <div class="stat-label">átl. beszerz. ár</div>
-              <div class="stat-value" id="plCost" style="font-size:16px">–</div>
-              <div class="stat-sub" id="plCostHuf">–</div>
-            </div>
-            <div class="stat-card" style="background:var(--bg3)">
-              <div class="stat-label">befektetett tőke</div>
-              <div class="stat-value" id="plInvested" style="font-size:16px">–</div>
-              <div class="stat-sub">cost basis</div>
-            </div>
-            <div class="stat-card" style="background:var(--bg3)">
-              <div class="stat-label">nem realizált p&l</div>
-              <div class="stat-value" id="plVal" style="font-size:16px">–</div>
-              <div class="stat-sub" id="plPct">–</div>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:end">
-            <div class="form-group" style="flex:1">
-              <div class="form-label">átl. beszerz. ár (eur)</div>
-              <input class="form-input" id="costInput" type="number" step="0.01" value="88.50">
-            </div>
-            <div class="form-group" style="flex:1">
-              <div class="form-label">darabszám</div>
-              <input class="form-input" id="sharesInput" type="number" step="0.01" value="360.72">
-            </div>
-            <button class="add-btn" onclick="recalcPL()" style="margin-bottom:0">frissít</button>
-          </div>
-        </div>
+    <!-- ÁLLAMPAPÍR -->
+    <div id="page-allampapir" class="page">
+      <div class="card-row cards-3" id="apCards"></div>
+
+      <div class="section-title">
+        FixMáP pozíciók
+        <button class="btn btn-primary btn-sm" onclick="openModal('buy-fixmap')">+ FixMáP vétel</button>
+      </div>
+      <div class="panel" style="margin-top:0">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>dátum</th><th>névérték</th><th class="r">aktuális érték</th><th class="r">kamat %</th><th class="r">következő kamat</th><th class="r">lejárat</th><th class="r">státusz</th><th></th></tr></thead>
+          <tbody id="fixmapBody"></tbody>
+        </table></div>
+        <div class="empty" id="fixmapEmpty" style="display:none">Még nincs FixMáP pozíció.</div>
       </div>
 
-      <div class="grid2">
-        <div class="panel">
-          <div class="panel-title">tbsz – adómentesség állapota</div>
-          <div id="tbszRows"></div>
-          <div class="tbsz-track"><div class="tbsz-fill" id="tbszBar" style="width:0%"></div></div>
-          <div style="display:flex;gap:8px;align-items:end;margin-top:14px">
-            <div class="form-group" style="flex:1">
-              <div class="form-label">tbsz nyitás éve</div>
-              <input class="form-input" id="tbszInput" type="number" min="2010" max="2026" value="2022">
-            </div>
-            <button class="add-btn" onclick="recalcTBSZ()">frissít</button>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-title">vwce historikus teljesítmény (éves %)</div>
-          <div class="chart-wrap"><canvas id="perfChart" role="img" aria-label="VWCE teljesítmény"></canvas></div>
-          <div style="font-size:10px;color:var(--text3);margin-top:8px">NAV alapú közelítő adatok. Múltbeli teljesítmény nem garancia.</div>
-        </div>
+      <div class="section-title">
+        DKJ pozíciók
+        <button class="btn btn-primary btn-sm" onclick="openModal('buy-dkj')">+ DKJ vétel</button>
+      </div>
+      <div class="panel" style="margin-top:0">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>vétel dátuma</th><th>névérték</th><th class="r">vétel ár</th><th class="r">hozam %</th><th class="r">lejárat</th><th class="r">várható hozam</th><th class="r">státusz</th><th></th></tr></thead>
+          <tbody id="dkjBody"></tbody>
+        </table></div>
+        <div class="empty" id="dkjEmpty" style="display:none">Még nincs DKJ pozíció.</div>
       </div>
     </div>
 
-    <!-- CALENDAR -->
-    <div id="page-calendar" class="page">
-      <div class="panel">
-        <div class="panel-title">közelgő kifizetések</div>
-        <div class="cal-grid" id="calGrid"></div>
+    <!-- TBSZ -->
+    <div id="page-tbsz" class="page">
+      <div class="card-row cards-4" id="tbszCards"></div>
+
+      <div class="section-title">
+        VWCE pozíciók
+        <div style="display:flex;gap:6px;align-items:center">
+          <span id="vwcePill" class="live-pill est"><span class="live-dot"></span><span id="vwcePriceLabel"><span class="spin"></span>betöltés</span></span>
+          <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf','VWCE')">+ vétel</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-etf','VWCE')">− eladás</button>
+        </div>
       </div>
-      <div class="panel" style="margin-top:16px">
-        <div class="panel-title">2026-os cashflow hónapokra bontva</div>
-        <div class="chart-wrap"><canvas id="cashflowChart" role="img" aria-label="Havi cashflow"></canvas></div>
+      <div class="panel" style="margin-top:0">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>vétel dátuma</th><th class="r">db</th><th class="r">vételi ár (EUR)</th><th class="r">vétel HUF/EUR</th><th class="r">befektetett</th><th class="r">aktuális érték</th><th class="r">P&L</th><th class="r">P&L %</th><th class="r">TBSZ év</th><th></th></tr></thead>
+          <tbody id="vwceBody"></tbody>
+        </table></div>
+        <div class="empty" id="vwceEmpty" style="display:none">Még nincs VWCE tétel.</div>
+      </div>
+
+      <div class="section-title">
+        WBIT pozíciók
+        <div style="display:flex;gap:6px;align-items:center">
+          <span id="wbitPill" class="live-pill est"><span class="live-dot"></span><span id="wbitPriceLabel"><span class="spin"></span>betöltés</span></span>
+          <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf','WBIT')">+ vétel</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-etf','WBIT')">− eladás</button>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:0">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>vétel dátuma</th><th class="r">db</th><th class="r">vételi ár (EUR)</th><th class="r">vétel HUF/EUR</th><th class="r">befektetett</th><th class="r">aktuális érték</th><th class="r">P&L</th><th class="r">P&L %</th><th class="r">TBSZ év</th><th></th></tr></thead>
+          <tbody id="wbitBody"></tbody>
+        </table></div>
+        <div class="empty" id="wbitEmpty" style="display:none">Még nincs WBIT tétel.</div>
       </div>
     </div>
 
-    <!-- SAVINGS -->
-    <div id="page-savings" class="page">
+    <!-- TRANZAKCIÓK -->
+    <div id="page-tranzakciok" class="page">
       <div class="panel">
-        <div class="panel-title">megtakarítási szimulátor</div>
-        <div class="slider-row">
-          <div class="slider-label">havi megtakarítás <span id="savLabel">150 000 Ft</span></div>
-          <input type="range" min="10000" max="500000" step="10000" value="150000" oninput="updateSavings(this.value)">
+        <div class="panel-header">
+          <div class="panel-title">összes tranzakció</div>
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ CSV export</button>
         </div>
-        <div class="slider-row">
-          <div class="slider-label">időtáv <span id="horizLabel">10 év</span></div>
-          <input type="range" min="1" max="30" step="1" value="10" oninput="updateHorizon(this.value)">
-        </div>
-        <div class="grid3" id="savMetrics"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-title">portfólió növekedése</div>
-        <div class="chart-wrap-tall"><canvas id="growthChart" role="img" aria-label="Növekedési görbe"></canvas></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>dátum</th><th>típus</th><th>eszköz</th><th class="r">összeg / db</th><th class="r">árfolyam</th><th class="r">megjegyzés</th></tr></thead>
+          <tbody id="txBody"></tbody>
+        </table></div>
+        <div class="empty" id="txEmpty">Még nincs tranzakció.</div>
       </div>
     </div>
 
   </div>
 </div>
 
+<!-- MODALS -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Tranzakció</div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────
-const GIST_FILENAME = 'portfolio-tracker-data.json';
+// ═══════════════════════════════════════════════
+// CONFIG & STATE
+// ═══════════════════════════════════════════════
+const GIST_FILE = 'portfolio-tracker-v2.json';
+let token='', gistId='', blurOn=false;
+let liveVwce=null, liveWbit=null, liveFx=395;
+let charts={};
+
 const DEFAULT_DATA = {
-  assets: [
-    {id:1, name:'FixMáP 2031', type:'allampapir', value:35500000, yield:7.0, note:'Lejárat: 2031.01.23'},
-    {id:2, name:'VWCE ETF', type:'etf', value:7210000, yield:8.0, note:'TBSZ 2022'},
-    {id:3, name:'Készpénz / betét', type:'keszpenz', value:1000000, yield:4.5, note:''},
-  ],
-  etf: { shares: 360.72, costPerShare: 88.50, tbszYear: 2022 },
-  payments: [
-    {date:'2026-04-23', name:'FixMáP kamat', amount:734850, color:'#60a5fa'},
-    {date:'2026-07-23', name:'FixMáP kamat', amount:618750, color:'#60a5fa'},
-    {date:'2026-10-23', name:'FixMáP kamat', amount:618750, color:'#60a5fa'},
-    {date:'2027-01-23', name:'FixMáP kamat', amount:618750, color:'#60a5fa'},
-  ],
-  savings: { monthly: 150000, horizon: 10 }
+  cashTx: [],       // {id,date,type:'deposit'|'withdraw'|'coupon'|'expire'|'buy'|'sell',amount,note}
+  fixmap: [],       // {id,date,faceValue,couponRate,maturity,note,active}
+  dkj: [],          // {id,date,faceValue,buyPrice,yieldRate,maturity,active}
+  etfTx: [],        // {id,date,ticker,type:'buy'|'sell',shares,priceEur,fxRate,note,tbszYear}
 };
 
-// ─── STATE ────────────────────────────────────────────
-let token = '', gistId = '', data = null;
-let charts = {};
-let liveEur = null, liveFx = 395;
+let data = null;
 
-// ─── UTILS ────────────────────────────────────────────
-const fmt = n => new Intl.NumberFormat('hu-HU').format(Math.round(n)) + ' Ft';
-const fmtM = n => Math.abs(n)>=1e6 ? (n/1e6).toFixed(2)+' M Ft' : fmt(n);
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+const fmt = n => new Intl.NumberFormat('hu-HU').format(Math.round(n))+' Ft';
+const fmtM = n => Math.abs(n)>=1e6?(n/1e6).toFixed(2)+' M Ft':fmt(n);
+const fmtEur = n => '€'+n.toFixed(2);
 const fmtSign = n => (n>=0?'+':'')+fmtM(n);
+const fmtSignPct = n => (n>=0?'+':'')+n.toFixed(2)+'%';
+const today = () => new Date().toISOString().split('T')[0];
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
-function toast(msg, dur=2500) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), dur);
+function toast(msg,dur=2500){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
 }
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
 
-function destroyChart(id) {
-  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
-}
-
-// ─── AUTH ─────────────────────────────────────────────
-async function connect() {
-  const t = document.getElementById('tokenInput').value.trim();
-  if (!t) return;
-  document.querySelector('.setup-btn').textContent = 'Csatlakozás...';
-  document.getElementById('setupError').style.display = 'none';
-  try {
-    const res = await fetch('https://api.github.com/gists', {
-      headers: { Authorization: 'token '+t, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (!res.ok) throw new Error('invalid');
-    token = t;
-    localStorage.setItem('gh_token', t);
+// ═══════════════════════════════════════════════
+// AUTH & GIST
+// ═══════════════════════════════════════════════
+async function connect(){
+  const t=document.getElementById('tokenInput').value.trim();
+  if(!t)return;
+  document.querySelector('.setup-btn').textContent='Csatlakozás...';
+  document.getElementById('setupError').style.display='none';
+  try{
+    const r=await fetch('https://api.github.com/gists',{headers:{Authorization:'token '+t,Accept:'application/vnd.github.v3+json'}});
+    if(!r.ok)throw new Error();
+    token=t; localStorage.setItem('gh_token',t);
     await loadOrCreateGist();
     showApp();
-  } catch(e) {
-    document.getElementById('setupError').style.display = 'block';
-    document.querySelector('.setup-btn').textContent = 'Csatlakozás →';
+  }catch(e){
+    document.getElementById('setupError').style.display='block';
+    document.querySelector('.setup-btn').textContent='Csatlakozás →';
   }
 }
 
-async function loadOrCreateGist() {
-  // find existing gist
-  const res = await fetch('https://api.github.com/gists', {
-    headers: { Authorization: 'token '+token }
-  });
-  const gists = await res.json();
-  const existing = gists.find(g => g.files && g.files[GIST_FILENAME]);
-  if (existing) {
-    gistId = existing.id;
-    const detail = await fetch('https://api.github.com/gists/'+gistId, {
-      headers: { Authorization: 'token '+token }
-    });
-    const d = await detail.json();
-    data = JSON.parse(d.files[GIST_FILENAME].content);
-  } else {
-    // create new gist
-    data = JSON.parse(JSON.stringify(DEFAULT_DATA));
-    const res2 = await fetch('https://api.github.com/gists', {
-      method: 'POST',
-      headers: { Authorization: 'token '+token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        description: 'Portfolio Tracker Data',
-        public: false,
-        files: { [GIST_FILENAME]: { content: JSON.stringify(data, null, 2) } }
-      })
-    });
-    const g = await res2.json();
-    gistId = g.id;
+async function loadOrCreateGist(){
+  const r=await fetch('https://api.github.com/gists',{headers:{Authorization:'token '+token}});
+  const gists=await r.json();
+  const ex=gists.find(g=>g.files&&g.files[GIST_FILE]);
+  if(ex){
+    gistId=ex.id;
+    const d=await fetch('https://api.github.com/gists/'+gistId,{headers:{Authorization:'token '+token}});
+    const j=await d.json();
+    data=JSON.parse(j.files[GIST_FILE].content);
+    // migrate old data if needed
+    if(!data.cashTx)data.cashTx=[];
+    if(!data.fixmap)data.fixmap=[];
+    if(!data.dkj)data.dkj=[];
+    if(!data.etfTx)data.etfTx=[];
+  }else{
+    data=JSON.parse(JSON.stringify(DEFAULT_DATA));
+    const r2=await fetch('https://api.github.com/gists',{method:'POST',headers:{Authorization:'token '+token,'Content-Type':'application/json'},body:JSON.stringify({description:'Portfolio Tracker v2',public:false,files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}})});
+    const g=await r2.json(); gistId=g.id;
   }
 }
 
-async function saveData() {
-  if (!gistId) return;
+async function saveData(){
+  if(!gistId)return;
   document.getElementById('syncDot').classList.add('saving');
-  document.getElementById('syncLabel').textContent = 'mentés...';
-  try {
-    await fetch('https://api.github.com/gists/'+gistId, {
-      method: 'PATCH',
-      headers: { Authorization: 'token '+token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        files: { [GIST_FILENAME]: { content: JSON.stringify(data, null, 2) } }
-      })
-    });
-    toast('✓ Mentve a GitHub Gist-be');
-  } catch(e) {
-    toast('Mentés sikertelen');
-  }
+  document.getElementById('syncLabel').textContent='mentés...';
+  try{
+    await fetch('https://api.github.com/gists/'+gistId,{method:'PATCH',headers:{Authorization:'token '+token,'Content-Type':'application/json'},body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}})});
+    toast('✓ Mentve');
+  }catch(e){toast('Mentés sikertelen');}
   document.getElementById('syncDot').classList.remove('saving');
-  document.getElementById('syncLabel').textContent = 'mentés';
+  document.getElementById('syncLabel').textContent='mentés';
 }
 
-function logout() {
-  localStorage.removeItem('gh_token');
-  location.reload();
-}
+function logout(){localStorage.removeItem('gh_token');location.reload();}
 
-function showApp() {
-  document.getElementById('setup-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  renderOverview();
-  renderAssets();
-  renderCalendar();
-  renderETF();
-  renderSavings();
+function showApp(){
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  renderAll();
   fetchLive();
 }
 
-// ─── TABS ─────────────────────────────────────────────
-function showTab(name) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+// ═══════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════
+function showTab(name,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  event.target.classList.add('active');
+  el.classList.add('active');
 }
 
-// ─── OVERVIEW ─────────────────────────────────────────
-function renderOverview() {
-  const tv = data.assets.reduce((s,a)=>s+a.value,0);
-  const ty = data.assets.reduce((s,a)=>s+a.value*a.yield/100,0);
-  const ap = data.payments.filter(p=>new Date(p.date)>=new Date('2026-04-16')).reduce((s,p)=>s+p.amount,0);
-  document.getElementById('summaryCards').innerHTML = `
-    <div class="stat-card"><div class="stat-label">portfólió értéke</div><div class="stat-value">${fmtM(tv)}</div><div class="stat-sub">${data.assets.length} eszköz</div></div>
-    <div class="stat-card"><div class="stat-label">éves hozam (becsült)</div><div class="stat-value pos">${fmtM(ty)}</div><div class="stat-sub">${(ty/tv*100).toFixed(1)}% átlag</div></div>
-    <div class="stat-card"><div class="stat-label">havi hozam</div><div class="stat-value pos">${fmt(ty/12)}</div><div class="stat-sub">passzív jövedelem</div></div>
-    <div class="stat-card"><div class="stat-label">várható kifizetés</div><div class="stat-value">${fmtM(ap)}</div><div class="stat-sub">2026 hátralévő rész</div></div>
+// ═══════════════════════════════════════════════
+// COMPUTED VALUES
+// ═══════════════════════════════════════════════
+function cashBalance(){
+  return data.cashTx.reduce((s,t)=>{
+    if(['deposit','coupon','expire','sell'].includes(t.type))return s+t.amount;
+    if(['withdraw','buy'].includes(t.type))return s-t.amount;
+    return s;
+  },0);
+}
+
+function etfShares(ticker){
+  return data.etfTx.filter(t=>t.ticker===ticker).reduce((s,t)=>{
+    return t.type==='buy'?s+t.shares:s-t.shares;
+  },0);
+}
+
+function etfCostBasis(ticker){
+  // FIFO: returns {totalShares, totalCost}
+  const buys = data.etfTx.filter(t=>t.ticker===ticker&&t.type==='buy').map(t=>({...t,remaining:t.shares}));
+  const sells = data.etfTx.filter(t=>t.ticker===ticker&&t.type==='sell');
+  for(const sell of sells){
+    let toSell=sell.shares;
+    for(const buy of buys){
+      if(toSell<=0)break;
+      const used=Math.min(buy.remaining,toSell);
+      buy.remaining-=used; toSell-=used;
+    }
+  }
+  return buys.filter(b=>b.remaining>0).map(b=>({
+    ...b, shares:b.remaining,
+    costHuf: b.remaining*b.priceEur*b.fxRate
+  }));
+}
+
+function fixmapAnnualCoupon(){
+  return data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue*f.couponRate/100,0);
+}
+
+function nextCouponDate(maturity){
+  // quarterly coupons, work backwards from maturity
+  const mat=new Date(maturity);
+  const now=new Date();
+  let d=new Date(mat);
+  while(d>now) d=new Date(d.getFullYear(),d.getMonth()-3,d.getDate());
+  d=new Date(d.getFullYear(),d.getMonth()+3,d.getDate());
+  return d.toISOString().split('T')[0];
+}
+
+// ═══════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════
+function renderAll(){
+  renderDashboard();
+  renderCash();
+  renderAllampapir();
+  renderTBSZ();
+  renderTranzakciok();
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+function renderDashboard(){
+  const cb=cashBalance();
+  const apValue=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
+    +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  const vwceShares=etfShares('VWCE');
+  const wbitShares=etfShares('WBIT');
+  const vwceVal=(liveVwce||0)*vwceShares*liveFx;
+  const wbitVal=(liveWbit||0)*wbitShares*liveFx;
+  const tbszVal=vwceVal+wbitVal;
+  const total=cb+apValue+tbszVal;
+  const annualYield=fixmapAnnualCoupon();
+
+  document.getElementById('dashCards').innerHTML=`
+    <div class="stat-card"><div class="stat-label">teljes portfólió</div><div class="stat-value blurable">${fmtM(total)}</div><div class="stat-sub">összes eszköz</div></div>
+    <div class="stat-card"><div class="stat-label">pénzszámla</div><div class="stat-value blurable">${fmtM(cb)}</div><div class="stat-sub">szabad tőke</div></div>
+    <div class="stat-card"><div class="stat-label">állampapír</div><div class="stat-value blurable">${fmtM(apValue)}</div><div class="stat-sub">névértéken</div></div>
+    <div class="stat-card"><div class="stat-label">tbsz (etf)</div><div class="stat-value blurable">${tbszVal>0?fmtM(tbszVal):'– (nincs live)'}</div><div class="stat-sub">live árfolyamon</div></div>
   `;
-  renderPie(); renderYield();
+  renderPie(cb,apValue,tbszVal);
+  renderUpcoming();
+  renderCashflowChart();
+  if(blurOn)applyBlur();
 }
 
-const COLORS = ['#60a5fa','#4ade9a','#fbbf24','#f472b6','#a78bfa','#34d399','#fb923c','#94a3b8'];
-const TYPE_LABELS = {allampapir:'Állampapír',etf:'ETF / Részvény',keszpenz:'Készpénz / Betét',kripto:'Kripto'};
-const TYPE_BADGE = {allampapir:'badge-ap',etf:'badge-etf',keszpenz:'badge-cash',kripto:'badge-crypto'};
-
-function renderPie() {
+function renderPie(cb,ap,tbsz){
   destroyChart('pie');
-  const total = data.assets.reduce((s,a)=>s+a.value,0);
-  const ctx = document.getElementById('pieChart');
-  charts['pie'] = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: data.assets.map(a=>a.name),
-      datasets: [{ data: data.assets.map(a=>a.value), backgroundColor: COLORS, borderWidth: 0, hoverOffset: 4 }]
-    },
-    options: { responsive:false, cutout:'68%', plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => ` ${fmtM(c.parsed)} (${(c.parsed/total*100).toFixed(1)}%)` } } } }
+  const total=cb+ap+tbsz;
+  if(total<=0)return;
+  const labels=['Pénzszámla','Állampapír','TBSZ ETF'];
+  const vals=[cb,ap,tbsz];
+  const colors=['#8a8880','#60a5fa','#4ade9a'];
+  charts['pie']=new Chart(document.getElementById('pieChart'),{
+    type:'doughnut',
+    data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:0,hoverOffset:4}]},
+    options:{responsive:false,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${fmtM(c.parsed)} (${(c.parsed/total*100).toFixed(1)}%)`}}}}
   });
-  document.getElementById('pieLegend').innerHTML = data.assets.map((a,i) => `
-    <div class="legend-row">
-      <div class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></div>
-      <span class="legend-name">${a.name}</span>
-      <span class="legend-pct">${(a.value/total*100).toFixed(1)}%</span>
+  document.getElementById('pieLegend').innerHTML=labels.map((l,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <div style="width:8px;height:8px;border-radius:2px;background:${colors[i]};flex-shrink:0"></div>
+      <span style="flex:1;color:var(--text2)">${l}</span>
+      <span class="blurable">${total>0?(vals[i]/total*100).toFixed(1)+'%':'–'}</span>
     </div>`).join('');
 }
 
-function renderYield() {
-  destroyChart('yield');
-  charts['yield'] = new Chart(document.getElementById('yieldChart'), {
+function renderUpcoming(){
+  const now=new Date('2026-04-17');
+  const events=[];
+  // FixMáP coupons
+  data.fixmap.filter(f=>f.active).forEach(f=>{
+    const nd=nextCouponDate(f.maturity);
+    if(nd) events.push({date:nd,label:'FixMáP kamat',amount:f.faceValue*f.couponRate/100/4,color:'var(--blue)'});
+  });
+  // DKJ lejáratok
+  data.dkj.filter(d=>d.active).forEach(d=>{
+    if(new Date(d.maturity)>now) events.push({date:d.maturity,label:'DKJ lejárat',amount:d.faceValue,color:'var(--purple)'});
+  });
+  events.sort((a,b)=>a.date.localeCompare(b.date));
+  const upcoming=events.slice(0,5);
+  document.getElementById('upcomingEvents').innerHTML=upcoming.length
+    ? upcoming.map(e=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div><span style="color:${e.color};margin-right:6px">●</span>${e.label}</div>
+        <div style="text-align:right"><div style="color:var(--text3);font-size:10px">${e.date}</div><div class="blurable pos">+${fmt(e.amount)}</div></div>
+      </div>`).join('')
+    : '<div class="empty">Nincs közelgő esemény.</div>';
+}
+
+function renderCashflowChart(){
+  destroyChart('cf');
+  const months=['Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Sze','Okt','Nov','Dec'];
+  const vals=new Array(12).fill(0);
+  data.cashTx.filter(t=>t.date&&t.date.startsWith('2026')&&['coupon','expire'].includes(t.type)).forEach(t=>{
+    vals[parseInt(t.date.split('-')[1])-1]+=t.amount;
+  });
+  // projected from fixmap
+  data.fixmap.filter(f=>f.active).forEach(f=>{
+    const nd=nextCouponDate(f.maturity);
+    if(nd&&nd.startsWith('2026')){
+      const m=parseInt(nd.split('-')[1])-1;
+      vals[m]+=f.faceValue*f.couponRate/100/4;
+    }
+  });
+  charts['cf']=new Chart(document.getElementById('cashflowChart'),{
     type:'bar',
-    data:{ labels:data.assets.map(a=>a.name), datasets:[{ label:'Éves hozam', data:data.assets.map(a=>Math.round(a.value*a.yield/100)), backgroundColor:COLORS.map(c=>c+'88'), borderColor:COLORS, borderWidth:1, borderRadius:4 }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#55534f',font:{size:10}}}, y:{ticks:{color:'#55534f',callback:v=>fmtM(v)}} } }
+    data:{labels:months,datasets:[{label:'Cashflow',data:vals,backgroundColor:'rgba(96,165,250,0.2)',borderColor:'#60a5fa',borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#55534f',font:{size:11}}},y:{ticks:{color:'#55534f',callback:v=>v?fmtM(v):0}}}}
   });
 }
 
-// ─── ASSETS ───────────────────────────────────────────
-function renderAssets() {
-  document.getElementById('assetBody').innerHTML = data.assets.map((a,i) => `
-    <tr>
-      <td>
-        <div class="asset-name">${a.name}</div>
-        <div><span class="asset-type ${TYPE_BADGE[a.type]||'badge-cash'}">${TYPE_LABELS[a.type]||a.type}</span></div>
-        ${a.note?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${a.note}</div>`:''}
+// ═══════════════════════════════════════════════
+// CASH
+// ═══════════════════════════════════════════════
+function renderCash(){
+  const txs=[...data.cashTx].sort((a,b)=>a.date.localeCompare(b.date));
+  let running=0;
+  const rows=txs.map(t=>{
+    const sign=['deposit','coupon','expire','sell'].includes(t.type)?1:-1;
+    running+=sign*t.amount;
+    const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell'}[t.type]||'b-deposit';
+    const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás'}[t.type]||t.type;
+    return `<tr>
+      <td>${t.date}</td>
+      <td><span class="badge ${typeBadge}">${typeLabel}</span></td>
+      <td style="color:var(--text2)">${t.note||'–'}</td>
+      <td class="r ${sign>0?'pos':'neg'} blurable">${sign>0?'+':'−'}${fmt(t.amount)}</td>
+      <td class="r blurable">${fmt(running)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteCashTx('${t.id}')">×</button></td>
+    </tr>`;
+  });
+  const body=document.getElementById('cashBody');
+  body.innerHTML=rows.reverse().join(''); // show newest first
+  document.getElementById('cashEmpty').style.display=txs.length?'none':'block';
+  const bal=cashBalance();
+  document.getElementById('cashBalance').textContent=fmt(bal);
+  document.getElementById('cashBalance').className='balance-value blurable '+(bal>=0?'pos':'neg');
+}
+
+function deleteCashTx(id){
+  data.cashTx=data.cashTx.filter(t=>t.id!==id);
+  renderCash(); renderDashboard(); renderTranzakciok();
+  toast('Törölve');
+}
+
+// ═══════════════════════════════════════════════
+// ÁLLAMPAPÍR
+// ═══════════════════════════════════════════════
+function renderAllampapir(){
+  const fmActive=data.fixmap.filter(f=>f.active);
+  const dkjActive=data.dkj.filter(d=>d.active);
+  const fmValue=fmActive.reduce((s,f)=>s+f.faceValue,0);
+  const dkjValue=dkjActive.reduce((s,d)=>s+d.faceValue,0);
+  const annualCoupon=fmActive.reduce((s,f)=>s+f.faceValue*f.couponRate/100,0);
+
+  document.getElementById('apCards').innerHTML=`
+    <div class="stat-card"><div class="stat-label">FixMáP névérték</div><div class="stat-value blurable">${fmtM(fmValue)}</div><div class="stat-sub">${fmActive.length} pozíció</div></div>
+    <div class="stat-card"><div class="stat-label">DKJ névérték</div><div class="stat-value blurable">${fmtM(dkjValue)}</div><div class="stat-sub">${dkjActive.length} aktív pozíció</div></div>
+    <div class="stat-card"><div class="stat-label">éves kamatbevétel</div><div class="stat-value pos blurable">${fmtM(annualCoupon)}</div><div class="stat-sub">${fmt(annualCoupon/12)}/hó</div></div>
+  `;
+
+  // FixMáP table
+  const fmAll=data.fixmap;
+  document.getElementById('fixmapBody').innerHTML=fmAll.map(f=>`<tr>
+    <td>${f.date}</td>
+    <td><div class="asset-name blurable">${fmt(f.faceValue)}</div><span class="badge b-ap">FixMáP</span></td>
+    <td class="r blurable">${fmt(f.faceValue*(1+f.couponRate/100*((new Date(f.maturity)-new Date(f.date))/(365*24*3600*1000))))}</td>
+    <td class="r">${f.couponRate}%</td>
+    <td class="r pos blurable">${f.active?'+'+fmt(f.faceValue*f.couponRate/100/4):'–'}</td>
+    <td class="r">${f.maturity}</td>
+    <td><span class="badge ${f.active?'b-etf':'b-cash'}">${f.active?'aktív':'lezárt'}</span></td>
+    <td style="white-space:nowrap">
+      ${f.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap','${f.id}')" style="margin-right:4px">eladás</button>`:''}
+      <button class="btn btn-danger btn-sm" onclick="deleteFixmap('${f.id}')">×</button>
+    </td>
+  </tr>`).join('');
+  document.getElementById('fixmapEmpty').style.display=fmAll.length?'none':'block';
+
+  // DKJ table
+  const dkjAll=data.dkj;
+  document.getElementById('dkjBody').innerHTML=dkjAll.map(d=>{
+    const expectedReturn=d.faceValue-d.buyPrice;
+    return `<tr>
+      <td>${d.date}</td>
+      <td class="blurable">${fmt(d.faceValue)}</td>
+      <td class="r blurable">${fmt(d.buyPrice)}</td>
+      <td class="r">${d.yieldRate?d.yieldRate+'%':'–'}</td>
+      <td class="r">${d.maturity}</td>
+      <td class="r pos blurable">+${fmt(expectedReturn)}</td>
+      <td><span class="badge ${d.active?'b-etf':'b-cash'}">${d.active?'aktív':'lezárt'}</span></td>
+      <td style="white-space:nowrap">
+        ${d.active?`<button class="btn btn-ghost btn-sm" onclick="sellDKJ('${d.id}')" style="margin-right:4px">eladás</button>
+        <button class="btn btn-ghost btn-sm" onclick="expireDKJ('${d.id}')" style="margin-right:4px">lejárt</button>`:''}
+        <button class="btn btn-danger btn-sm" onclick="deleteDKJ('${d.id}')">×</button>
       </td>
-      <td>${fmt(a.value)}</td>
-      <td class="${a.yield>=6?'pos':''}">${a.yield.toFixed(1)}%</td>
-      <td class="pos">+${fmt(a.value*a.yield/100)}</td>
-      <td><button class="del-btn" onclick="deleteAsset(${a.id})">töröl</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+  document.getElementById('dkjEmpty').style.display=dkjAll.length?'none':'block';
 }
 
-function addAsset() {
-  const name = document.getElementById('newName').value.trim();
-  const type = document.getElementById('newType').value;
-  const value = parseFloat(document.getElementById('newValue').value)||0;
-  const yld = parseFloat(document.getElementById('newYield').value)||0;
-  const note = document.getElementById('newNote').value.trim();
-  if (!name||!value) { toast('Add meg a nevet és az értéket!'); return; }
-  const id = Date.now();
-  data.assets.push({id,name,type,value,yield:yld,note});
-  ['newName','newValue','newYield','newNote'].forEach(id=>document.getElementById(id).value='');
-  renderAssets(); renderOverview();
-  toast('Eszköz hozzáadva');
+function deleteFixmap(id){data.fixmap=data.fixmap.filter(f=>f.id!==id);renderAllampapir();renderDashboard();toast('Törölve');}
+function deleteDKJ(id){data.dkj=data.dkj.filter(d=>d.id!==id);renderAllampapir();renderDashboard();toast('Törölve');}
+
+function expireDKJ(id){
+  const d=data.dkj.find(d=>d.id===id);
+  if(!d)return;
+  d.active=false;
+  data.cashTx.push({id:uid(),date:d.maturity,type:'expire',amount:d.faceValue,note:'DKJ lejárat'});
+  renderAll();
+  toast('DKJ lejárat rögzítve, összeg a pénzszámlán');
 }
 
-function deleteAsset(id) {
-  data.assets = data.assets.filter(a=>a.id!==id);
-  renderAssets(); renderOverview();
-  toast('Eszköz törölve');
+function sellDKJ(id){
+  const d=data.dkj.find(d=>d.id===id);
+  if(!d)return;
+  const price=parseFloat(prompt('Eladási ár (Ft):', d.faceValue));
+  if(!price)return;
+  d.active=false;
+  data.cashTx.push({id:uid(),date:today(),type:'sell',amount:price,note:'DKJ korai eladás'});
+  data.cashTx.push({id:uid(),date:today(),type:'buy',amount:d.buyPrice,note:'DKJ vétel ellentételezés – belső'});
+  renderAll(); toast('DKJ eladva');
 }
 
-// ─── ETF ──────────────────────────────────────────────
-async function fetchLive() {
-  try {
-    // EUR/HUF – MNB nyilvános API CORS-barát proxyn keresztül
-    const fxRes = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
-    if (fxRes.ok) {
-      const fxData = await fxRes.json();
-      if (fxData.eur && fxData.eur.huf) liveFx = fxData.eur.huf;
-    }
-  } catch(e) {}
+// ═══════════════════════════════════════════════
+// TBSZ
+// ═══════════════════════════════════════════════
+function renderTBSZ(){
+  const vwceShares=etfShares('VWCE');
+  const wbitShares=etfShares('WBIT');
+  const vwceCost=etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0);
+  const wbitCost=etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
+  const vwceVal=liveVwce?liveVwce*vwceShares*liveFx:0;
+  const wbitVal=liveWbit?liveWbit*wbitShares*liveFx:0;
 
-  try {
-    // VWCE – corsproxy.io + Yahoo Finance
-    const url = 'https://corsproxy.io/?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/VWCE.DE?interval=1d&range=1d');
-    const vwceRes = await fetch(url);
-    if (vwceRes.ok) {
-      const vwceData = await vwceRes.json();
-      const price = vwceData?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      if (price && price > 50) liveEur = price;
-    }
-  } catch(e) {}
+  document.getElementById('tbszCards').innerHTML=`
+    <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db':'nincs live adat'}</div></div>
+    <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
+    <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db':'nincs live adat'}</div></div>
+    <div class="stat-card"><div class="stat-label">WBIT aktuális érték</div><div class="stat-value blurable">${wbitVal>0?fmtM(wbitVal):'–'}</div><div class="stat-sub">${wbitCost>0?'befektetett: '+fmtM(wbitCost):'–'}</div></div>
+  `;
 
-  updateETFUI();
+  renderETFTable('VWCE','vwceBody','vwceEmpty',liveVwce);
+  renderETFTable('WBIT','wbitBody','wbitEmpty',liveWbit);
 }
 
-function renderETF() {
-  recalcTBSZ();
-  renderPerfChart();
-  recalcPL();
+function renderETFTable(ticker,bodyId,emptyId,livePrice){
+  const buys=etfCostBasis(ticker);
+  document.getElementById(bodyId).innerHTML=buys.map(b=>{
+    const currentVal=livePrice?b.shares*livePrice*liveFx:null;
+    const pl=currentVal?currentVal-b.costHuf:null;
+    const plPct=pl?pl/b.costHuf*100:null;
+    return `<tr>
+      <td>${b.date}</td>
+      <td class="r blurable">${b.shares.toFixed(4)}</td>
+      <td class="r blurable">${fmtEur(b.priceEur)}</td>
+      <td class="r">${Math.round(b.fxRate)} Ft</td>
+      <td class="r blurable">${fmtM(b.costHuf)}</td>
+      <td class="r blurable">${currentVal?fmtM(currentVal):'–'}</td>
+      <td class="r blurable ${pl===null?'':pl>=0?'pos':'neg'}">${pl!==null?fmtSign(pl):'–'}</td>
+      <td class="r ${plPct===null?'':plPct>=0?'pos':'neg'}">${plPct!==null?fmtSignPct(plPct):'–'}</td>
+      <td class="r">${b.tbszYear||'–'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteEtfTx('${b.id}')">×</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById(emptyId).style.display=buys.length?'none':'block';
 }
 
-function updateETFUI() {
-  const price = liveEur;
-  const fx = liveFx;
-  const etf = data.etf;
+function deleteEtfTx(id){
+  data.etfTx=data.etfTx.filter(t=>t.id!==id);
+  renderTBSZ(); renderDashboard(); renderTranzakciok(); toast('Törölve');
+}
 
-  if (price) {
-    document.getElementById('etfPriceBig').textContent = price.toFixed(2)+' EUR';
-    document.getElementById('etfPriceHuf').textContent = fmt(price*fx)+'/db';
-    document.getElementById('livePill').className = 'live-pill live';
-    document.getElementById('livePill').innerHTML = '<div class="live-dot"></div>live';
-    const totalEur = price * etf.shares;
-    document.getElementById('etfTotalHuf').textContent = fmtM(totalEur*fx);
-    document.getElementById('etfTotalEur').textContent = totalEur.toFixed(0)+' EUR';
-  } else {
-    document.getElementById('etfPriceBig').textContent = '– EUR';
-    document.getElementById('livePill').className = 'live-pill est';
-    document.getElementById('livePill').innerHTML = '<div class="live-dot"></div>nincs live adat';
+// ═══════════════════════════════════════════════
+// TRANZAKCIÓK
+// ═══════════════════════════════════════════════
+function renderTranzakciok(){
+  const all=[];
+  data.cashTx.forEach(t=>all.push({date:t.date,type:t.type,asset:'Pénzszámla',amount:fmt(t.amount),rate:'–',note:t.note||'–'}));
+  data.fixmap.forEach(f=>all.push({date:f.date,type:'buy',asset:'FixMáP',amount:fmt(f.faceValue),rate:'–',note:f.note||'–'}));
+  data.dkj.forEach(d=>all.push({date:d.date,type:'buy',asset:'DKJ',amount:fmt(d.faceValue),rate:'–',note:d.maturity+' lejárat'}));
+  data.etfTx.forEach(t=>all.push({date:t.date,type:t.type,asset:t.ticker,amount:t.shares.toFixed(4)+' db',rate:fmtEur(t.priceEur),note:t.note||'–'}));
+  all.sort((a,b)=>b.date.localeCompare(a.date));
+
+  const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell'};
+  const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás'};
+
+  document.getElementById('txBody').innerHTML=all.map(t=>`<tr>
+    <td>${t.date}</td>
+    <td><span class="badge ${typeBadge[t.type]||'b-deposit'}">${typeLabel[t.type]||t.type}</span></td>
+    <td>${t.asset}</td>
+    <td class="r blurable">${t.amount}</td>
+    <td class="r">${t.rate}</td>
+    <td class="r" style="color:var(--text2)">${t.note}</td>
+  </tr>`).join('');
+  document.getElementById('txEmpty').style.display=all.length?'none':'block';
+}
+
+// ═══════════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════════
+function openModal(type, param){
+  document.getElementById('modalBackdrop').classList.add('open');
+  const title=document.getElementById('modalTitle');
+  const body=document.getElementById('modalBody');
+
+  if(type==='deposit'){
+    title.textContent='Befizetés';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">összeg (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="1000000"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="pl. munkabér"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDeposit()">mentés</button></div>`;
   }
-  document.getElementById('etfFx').textContent = Math.round(fx)+' Ft';
-  document.getElementById('etfShares').textContent = etf.shares.toFixed(2)+' db';
-  recalcPL();
-}
-
-function recalcPL() {
-  const price = liveEur || 100;
-  const fx = liveFx;
-  const etf = data.etf;
-  const cost = parseFloat(document.getElementById('costInput').value)||etf.costPerShare;
-  const sh = parseFloat(document.getElementById('sharesInput').value)||etf.shares;
-  data.etf.costPerShare = cost; data.etf.shares = sh;
-
-  const invested = cost*sh, current = price*sh, pl = current-invested;
-  const plPct = pl/invested*100;
-
-  document.getElementById('plCost').textContent = cost.toFixed(2)+' EUR';
-  document.getElementById('plCostHuf').textContent = fmt(cost*fx)+'/db';
-  document.getElementById('plInvested').textContent = fmtM(invested*fx);
-  document.getElementById('plVal').textContent = fmtSign(pl*fx);
-  document.getElementById('plVal').className = 'stat-value '+(pl>=0?'pos':'neg');
-  document.getElementById('plPct').textContent = (pl>=0?'+':'')+plPct.toFixed(1)+'%';
-}
-
-function recalcTBSZ() {
-  const year = parseInt(document.getElementById('tbszInput').value)||data.etf.tbszYear||2022;
-  data.etf.tbszYear = year;
-  const endYear = year+5;
-  const now = new Date('2026-04-16');
-  const open = new Date(year+'-01-01'), end = new Date(endYear+'-01-01');
-  const pct = Math.min(100,Math.max(0,(now-open)/(end-open)*100));
-  const yearsLeft = Math.max(0,(end-now)/(1000*60*60*24*365)).toFixed(1);
-  const elapsed = ((now-open)/(1000*60*60*24*365)).toFixed(1);
-
-  document.getElementById('tbszRows').innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">nyitás</span><span>${year}. január 1.</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">adómentesség</span><span>${endYear}. január 1.${pct>=100?' ✓':''}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">állapot</span><span class="${pct>=100?'pos':''}">${pct>=100?'Adómentes! 🎉':`${elapsed} év eltelt, ${yearsLeft} év van hátra`}</span></div>
-    </div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${pct.toFixed(0)}% teljesítve</div>
-  `;
-  document.getElementById('tbszBar').style.width = pct.toFixed(1)+'%';
-}
-
-function renderPerfChart() {
-  destroyChart('perf');
-  const years = ['2019','2020','2021','2022','2023','2024'];
-  const returns = [27.1, 16.3, 18.5, -18.0, 23.8, 19.2];
-  charts['perf'] = new Chart(document.getElementById('perfChart'), {
-    type:'bar',
-    data:{ labels:years, datasets:[{ data:returns, backgroundColor:returns.map(r=>r>=0?'rgba(74,222,154,0.25)':'rgba(248,113,113,0.25)'), borderColor:returns.map(r=>r>=0?'#4ade9a':'#f87171'), borderWidth:1.5, borderRadius:4 }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#55534f',font:{size:11}}}, y:{ticks:{color:'#55534f',callback:v=>v+'%'}, grid:{color:'rgba(255,255,255,0.04)'} } } }
-  });
-}
-
-// ─── CALENDAR ─────────────────────────────────────────
-function renderCalendar() {
-  const now = new Date('2026-04-16');
-  const upcoming = data.payments.filter(p=>new Date(p.date)>=now).slice(0,6);
-  document.getElementById('calGrid').innerHTML = upcoming.map(p=>`
-    <div class="cal-item" style="border-left-color:${p.color}">
-      <div class="cal-date">${p.date}</div>
-      <div class="cal-name">${p.name}</div>
-      <div class="cal-amount">+${fmt(p.amount)}</div>
-    </div>`).join('');
-  renderCashflow();
-}
-
-function renderCashflow() {
-  destroyChart('cashflow');
-  const months = ['Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Sze','Okt','Nov','Dec'];
-  const vals = new Array(12).fill(0);
-  data.payments.filter(p=>p.date.startsWith('2026')).forEach(p=>{
-    vals[parseInt(p.date.split('-')[1])-1] += p.amount;
-  });
-  charts['cashflow'] = new Chart(document.getElementById('cashflowChart'), {
-    type:'bar',
-    data:{ labels:months, datasets:[{ label:'Kifizetés', data:vals, backgroundColor:'rgba(96,165,250,0.2)', borderColor:'#60a5fa', borderWidth:1, borderRadius:4 }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#55534f',font:{size:11}}}, y:{ticks:{color:'#55534f',callback:v=>v?fmt(v):0}} } }
-  });
-}
-
-// ─── SAVINGS ──────────────────────────────────────────
-function updateSavings(v) {
-  data.savings.monthly = parseInt(v);
-  document.getElementById('savLabel').textContent = fmt(v);
-  renderSavingsCharts();
-}
-function updateHorizon(v) {
-  data.savings.horizon = parseInt(v);
-  document.getElementById('horizLabel').textContent = v+' év';
-  renderSavingsCharts();
-}
-
-function renderSavings() {
-  document.querySelector('input[oninput="updateSavings(this.value)"]').value = data.savings.monthly;
-  document.getElementById('savLabel').textContent = fmt(data.savings.monthly);
-  document.querySelector('input[oninput="updateHorizon(this.value)"]').value = data.savings.horizon;
-  document.getElementById('horizLabel').textContent = data.savings.horizon+' év';
-  renderSavingsCharts();
-}
-
-function renderSavingsCharts() {
-  const start = data.assets.reduce((s,a)=>s+a.value,0);
-  const rate = data.assets.reduce((s,a)=>s+a.value*a.yield/100,0)/start;
-  const { monthly, horizon } = data.savings;
-  const years = Array.from({length:horizon+1},(_,i)=>i);
-  const vals = years.map(y=>{ let v=start; for(let i=0;i<y;i++) v=(v+monthly*12)*(1+rate); return Math.round(v); });
-  const simple = years.map(y=>Math.round(start+monthly*12*y));
-  const final = vals[vals.length-1];
-  const invested = start + monthly*12*horizon;
-
-  document.getElementById('savMetrics').innerHTML = `
-    <div class="stat-card" style="background:var(--bg3)"><div class="stat-label">végső érték</div><div class="stat-value pos" style="font-size:17px">${fmtM(final)}</div><div class="stat-sub">${horizon} év múlva</div></div>
-    <div class="stat-card" style="background:var(--bg3)"><div class="stat-label">befizetett tőke</div><div class="stat-value" style="font-size:17px">${fmtM(invested)}</div><div class="stat-sub">összesen</div></div>
-    <div class="stat-card" style="background:var(--bg3)"><div class="stat-label">hozamból</div><div class="stat-value pos" style="font-size:17px">+${fmtM(final-invested)}</div><div class="stat-sub">kamatos kamat</div></div>
-  `;
-
-  destroyChart('growth');
-  charts['growth'] = new Chart(document.getElementById('growthChart'), {
-    type:'line',
-    data:{
-      labels: years.map(y=>y===0?'Ma':y+"'"),
-      datasets:[
-        { label:'Portfólió', data:vals, borderColor:'#4ade9a', backgroundColor:'rgba(74,222,154,0.08)', fill:true, tension:.4, pointRadius:2, pointBackgroundColor:'#4ade9a' },
-        { label:'Befizetett tőke', data:simple, borderColor:'#60a5fa', backgroundColor:'transparent', borderDash:[4,4], tension:.3, pointRadius:0 }
-      ]
-    },
-    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false}, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>` ${fmtM(c.parsed.y)}`}} }, scales:{ x:{ticks:{color:'#55534f',font:{size:11}}}, y:{ticks:{color:'#55534f',callback:v=>fmtM(v)}, grid:{color:'rgba(255,255,255,0.04)'}} } }
-  });
-}
-
-// ─── BLUR TOGGLE ──────────────────────────────────────
-let blurOn = false;
-const BLUR_SELECTORS = [
-  '.stat-value', '.cal-amount', '.etf-price-big',
-  'td:not(:first-child):not(:last-child)'
-];
-function toggleBlur() {
-  blurOn = !blurOn;
-  const btn = document.getElementById('hideBtn');
-  btn.classList.toggle('active', blurOn);
-  btn.title = blurOn ? 'Összegek megjelenítése' : 'Összegek elrejtése';
-  btn.textContent = blurOn ? '🙈' : '👁';
-  BLUR_SELECTORS.forEach(sel => {
-    document.querySelectorAll(sel).forEach(el => {
-      el.classList.toggle('blurred', blurOn);
+  else if(type==='withdraw'){
+    title.textContent='Kiutalás';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">összeg (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="500000"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitWithdraw()">mentés</button></div>`;
+  }
+  else if(type==='buy-fixmap'){
+    title.textContent='FixMáP vétel';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">névérték (Ft)</div><input class="form-input" id="f-face" type="number" placeholder="1000000"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">kamatláb (%)</div><input class="form-input" id="f-rate" type="number" step="0.01" value="7.00"></div>
+      <div class="form-group"><div class="form-label">lejárat dátuma</div><input class="form-input" id="f-maturity" type="date" value="2031-01-23"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmap()">mentés</button></div>`;
+  }
+  else if(type==='buy-dkj'){
+    title.textContent='DKJ vétel';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">névérték (Ft)</div><input class="form-input" id="f-face" type="number" placeholder="120000"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel ár (Ft)</div><input class="form-input" id="f-buy" type="number" placeholder="115865"></div>
+      <div class="form-group"><div class="form-label">lejárat dátuma</div><input class="form-input" id="f-maturity" type="date"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">hozam % (opcionális)</div><input class="form-input" id="f-yield" type="number" step="0.01" placeholder="5.5"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDKJ()">mentés</button></div>`;
+  }
+  else if(type==='buy-etf'){
+    title.textContent=param+' vétel';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">darabszám</div><input class="form-input" id="f-shares" type="number" step="0.0001" placeholder="10.5"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vételi ár (EUR/db)</div><input class="form-input" id="f-price" type="number" step="0.01" placeholder="${liveVwce?liveVwce.toFixed(2):'148.50'}"></div>
+      <div class="form-group"><div class="form-label">EUR/HUF árfolyam</div><input class="form-input" id="f-fx" type="number" step="0.01" value="${Math.round(liveFx)}"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">TBSZ év</div><input class="form-input" id="f-tbsz" type="number" placeholder="2026" value="${new Date().getFullYear()}"></div>
+      <div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:8px">Befektetett összeg: <span id="calcHuf" style="color:var(--text);font-weight:500">–</span></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFBuy('${param}')">mentés</button></div>`;
+    ['f-shares','f-price','f-fx'].forEach(id=>{
+      document.getElementById(id)?.addEventListener('input',()=>{
+        const s=parseFloat(document.getElementById('f-shares')?.value)||0;
+        const p=parseFloat(document.getElementById('f-price')?.value)||0;
+        const fx=parseFloat(document.getElementById('f-fx')?.value)||liveFx;
+        document.getElementById('calcHuf').textContent=s&&p?fmt(s*p*fx):'–';
+      });
     });
-  });
+  }
+  else if(type==='sell-etf'){
+    const basis=etfCostBasis(param);
+    const totalShares=etfShares(param);
+    title.textContent=param+' eladás';
+    body.innerHTML=`
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:12px">Jelenleg tartott: <strong style="color:var(--text)">${totalShares.toFixed(4)} db</strong></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">eladás dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">darabszám</div><input class="form-input" id="f-shares" type="number" step="0.0001" placeholder="5.0"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">eladási ár (EUR/db)</div><input class="form-input" id="f-price" type="number" step="0.01" placeholder="${(liveVwce||liveWbit||150).toFixed(2)}"></div>
+      <div class="form-group"><div class="form-label">EUR/HUF árfolyam</div><input class="form-input" id="f-fx" type="number" step="0.01" value="${Math.round(liveFx)}"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFSell('${param}')">mentés</button></div>`;
+  }
+  else if(type==='sell-fixmap'){
+    title.textContent='FixMáP eladás';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">eladás dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">eladási ár (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="1000000"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmapSell('${param}')">mentés</button></div>`;
+  }
 }
 
-// ─── BOOT ─────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('gh_token');
-  if (saved) {
-    token = saved;
-    document.getElementById('tokenInput').value = saved;
-    connect();
-  }
+function closeModal(){document.getElementById('modalBackdrop').classList.remove('open');}
+function closeModalOutside(e){if(e.target===document.getElementById('modalBackdrop'))closeModal();}
+
+function submitDeposit(){
+  const date=document.getElementById('f-date').value;
+  const amount=parseFloat(document.getElementById('f-amount').value);
+  const note=document.getElementById('f-note').value;
+  if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
+  data.cashTx.push({id:uid(),date,type:'deposit',amount,note});
+  closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); toast('Befizetés rögzítve');
+}
+function submitWithdraw(){
+  const date=document.getElementById('f-date').value;
+  const amount=parseFloat(document.getElementById('f-amount').value);
+  const note=document.getElementById('f-note').value;
+  if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
+  data.cashTx.push({id:uid(),date,type:'withdraw',amount,note});
+  closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); toast('Kiutalás rögzítve');
+}
+function submitFixmap(){
+  const date=document.getElementById('f-date').value;
+  const faceValue=parseFloat(document.getElementById('f-face').value);
+  const couponRate=parseFloat(document.getElementById('f-rate').value);
+  const maturity=document.getElementById('f-maturity').value;
+  const note=document.getElementById('f-note').value;
+  if(!date||!faceValue||!couponRate||!maturity)return toast('Töltsd ki a kötelező mezőket!');
+  data.fixmap.push({id:uid(),date,faceValue,couponRate,maturity,note,active:true});
+  data.cashTx.push({id:uid(),date,type:'buy',amount:faceValue,note:'FixMáP vétel'});
+  closeModal(); renderAll(); toast('FixMáP pozíció rögzítve');
+}
+function submitFixmapSell(id){
+  const f=data.fixmap.find(f=>f.id===id);
+  if(!f)return;
+  const date=document.getElementById('f-date').value;
+  const amount=parseFloat(document.getElementById('f-amount').value);
+  const note=document.getElementById('f-note').value;
+  if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
+  f.active=false;
+  data.cashTx.push({id:uid(),date,type:'sell',amount,note:'FixMáP eladás'+(note?' – '+note:'')});
+  closeModal(); renderAll(); toast('FixMáP eladás rögzítve');
+}
+function submitDKJ(){
+  const date=document.getElementById('f-date').value;
+  const faceValue=parseFloat(document.getElementById('f-face').value);
+  const buyPrice=parseFloat(document.getElementById('f-buy').value)||faceValue;
+  const maturity=document.getElementById('f-maturity').value;
+  const yieldRate=parseFloat(document.getElementById('f-yield').value)||null;
+  if(!date||!faceValue||!maturity)return toast('Töltsd ki a kötelező mezőket!');
+  data.dkj.push({id:uid(),date,faceValue,buyPrice,maturity,yieldRate,active:true});
+  data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel'});
+  closeModal(); renderAll(); toast('DKJ pozíció rögzítve');
+}
+function submitETFBuy(ticker){
+  const date=document.getElementById('f-date').value;
+  const shares=parseFloat(document.getElementById('f-shares').value);
+  const priceEur=parseFloat(document.getElementById('f-price').value);
+  const fxRate=parseFloat(document.getElementById('f-fx').value)||liveFx;
+  const tbszYear=parseInt(document.getElementById('f-tbsz').value)||new Date().getFullYear();
+  const note=document.getElementById('f-note').value;
+  if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
+  const huf=shares*priceEur*fxRate;
+  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,tbszYear,note});
+  data.cashTx.push({id:uid(),date,type:'buy',amount:huf,note:ticker+' vétel'});
+  closeModal(); renderAll(); toast(ticker+' vétel rögzítve');
+}
+function submitETFSell(ticker){
+  const date=document.getElementById('f-date').value;
+  const shares=parseFloat(document.getElementById('f-shares').value);
+  const priceEur=parseFloat(document.getElementById('f-price').value);
+  const fxRate=parseFloat(document.getElementById('f-fx').value)||liveFx;
+  const note=document.getElementById('f-note').value;
+  if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
+  const huf=shares*priceEur*fxRate;
+  data.etfTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,note});
+  data.cashTx.push({id:uid(),date,type:'sell',amount:huf,note:ticker+' eladás'});
+  closeModal(); renderAll(); toast(ticker+' eladás rögzítve');
+}
+
+// ═══════════════════════════════════════════════
+// LIVE PRICES
+// ═══════════════════════════════════════════════
+async function fetchLive(){
+  try{
+    const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
+    if(r.ok){const d=await r.json();if(d.eur?.huf)liveFx=d.eur.huf;}
+  }catch(e){}
+
+  await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
+  await fetchETFPrice('WBIT.DE','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
+  renderTBSZ(); renderDashboard();
+}
+
+async function fetchETFPrice(symbol,pillId,labelId,cb){
+  try{
+    const url='https://corsproxy.io/?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
+    const r=await fetch(url);
+    if(r.ok){
+      const d=await r.json();
+      const price=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if(price&&price>1){
+        cb(price);
+        document.getElementById(pillId).className='live-pill live';
+        document.getElementById(labelId).textContent=fmtEur(price);
+        return;
+      }
+    }
+  }catch(e){}
+  document.getElementById(pillId).className='live-pill est';
+  document.getElementById(labelId).textContent='nincs live adat';
+}
+
+// ═══════════════════════════════════════════════
+// BLUR
+// ═══════════════════════════════════════════════
+function toggleBlur(){
+  blurOn=!blurOn;
+  document.getElementById('hideBtn').classList.toggle('active',blurOn);
+  document.getElementById('hideBtn').title=blurOn?'Összegek megjelenítése':'Összegek elrejtése';
+  document.getElementById('hideBtn').innerHTML=blurOn?'🙈 <span class="lbl">mutat</span>':'👁 <span class="lbl">elrejt</span>';
+  applyBlur();
+}
+function applyBlur(){
+  document.querySelectorAll('.blurable').forEach(el=>el.classList.toggle('blurred',blurOn));
+}
+
+// ═══════════════════════════════════════════════
+// CSV EXPORT
+// ═══════════════════════════════════════════════
+function exportCSV(){
+  const rows=[['Dátum','Típus','Eszköz','Összeg/Db','Árfolyam (EUR)','Megjegyzés']];
+  data.cashTx.forEach(t=>rows.push([t.date,t.type,'Pénzszámla',t.amount,'',t.note||'']));
+  data.fixmap.forEach(f=>rows.push([f.date,'buy','FixMáP',f.faceValue,'',f.note||'']));
+  data.dkj.forEach(d=>rows.push([d.date,'buy','DKJ',d.faceValue,'',d.maturity+' lejárat']));
+  data.etfTx.forEach(t=>rows.push([t.date,t.type,t.ticker,t.shares,t.priceEur,t.note||'']));
+  rows.sort((a,b)=>b[0].localeCompare(a[0]));
+  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='portfolio-export.csv';
+  a.click();
+  toast('CSV letöltve');
+}
+
+// ═══════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded',()=>{
+  const saved=localStorage.getItem('gh_token');
+  if(saved){token=saved;document.getElementById('tokenInput').value=saved;connect();}
 });
 </script>
 </body>
