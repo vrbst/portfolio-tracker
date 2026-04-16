@@ -915,12 +915,11 @@ async function fetchLive() {
   } catch(e) {}
 
   try {
-    // VWCE – allorigins CORS proxy + Yahoo Finance
-    const url = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/VWCE.DE?interval=1d&range=1d');
-    const vwceRes = await fetch(`https://api.allorigins.win/get?url=${url}`);
+    // VWCE – corsproxy.io + Yahoo Finance
+    const url = 'https://corsproxy.io/?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/VWCE.DE?interval=1d&range=1d');
+    const vwceRes = await fetch(url);
     if (vwceRes.ok) {
-      const wrapper = await vwceRes.json();
-      const vwceData = JSON.parse(wrapper.contents);
+      const vwceData = await vwceRes.json();
       const price = vwceData?.chart?.result?.[0]?.meta?.regularMarketPrice;
       if (price && price > 50) liveEur = price;
     }
