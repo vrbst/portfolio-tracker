@@ -153,6 +153,39 @@ tr:hover td{background:rgba(255,255,255,.015)}
 canvas.blurred{filter:blur(8px);transition:filter .2s}
 canvas.blurred:hover{filter:blur(0)}
 
+/* RANGE SLIDER */
+input[type=range]{
+  -webkit-appearance:none;appearance:none;
+  width:100%;height:4px;
+  background:var(--bg4);
+  border-radius:2px;
+  outline:none;cursor:pointer;
+  border:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:16px;height:16px;
+  border-radius:50%;
+  background:var(--green);
+  cursor:pointer;
+  transition:transform .15s, box-shadow .15s;
+  border:none;
+}
+input[type=range]::-moz-range-thumb{
+  width:16px;height:16px;
+  border-radius:50%;
+  background:var(--green);
+  cursor:pointer;
+  border:none;
+}
+input[type=range]::-webkit-slider-thumb:hover{
+  transform:scale(1.2);
+  box-shadow:0 0 0 4px rgba(74,222,154,0.15);
+}
+input[type=range]::-webkit-slider-runnable-track{
+  height:4px;border-radius:2px;
+}
+
 /* EXPAND ROWS */
 .detail-row{display:none;background:var(--bg3)}
 .detail-row.open{display:table-row}
@@ -295,8 +328,9 @@ canvas.blurred:hover{filter:blur(0)}
       <div class="section-title">
         DKJ pozíciók
         <div style="display:flex;gap:6px">
-          <button class="btn btn-primary btn-sm" onclick="openModal('buy-dkj')">+ DKJ vétel</button>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-dkj-series')">− DKJ eladás</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('new-dkj-series')">+ új sorozat</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('buy-dkj')">+ vétel</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-dkj-series')">− eladás</button>
         </div>
       </div>
       <div class="panel" style="margin-top:0">
@@ -399,7 +433,8 @@ const DEFAULT_DATA = {
   cashTx: [],         // {id,date,type,amount,note}
   fixmapSeries: [],   // {id,name,couponRate,issueDate,nextCoupon,maturity} – sorozat definíciók
   fixmap: [],         // {id,seriesId,date,faceValue,buyPrice,active} – vételek
-  dkj: [],            // {id,date,faceValue,buyPrice,yieldRate,maturity,active}
+  dkjSeries: [],      // {id,name,maturity} – sorozat definíciók
+  dkj: [],            // {id,seriesId,date,faceValue,buyPrice,active}
   etfTx: [],          // {id,date,ticker,type,shares,priceEur,fxRate,note,tbszYear}
 };
 
@@ -455,6 +490,8 @@ async function loadOrCreateGist(){
     // migrate old data if needed
     if(!data.cashTx)data.cashTx=[];
     if(!data.fixmapSeries)data.fixmapSeries=[];
+    if(!data.dkjSeries)data.dkjSeries=[];
+    if(!data.dkjSeries)data.dkjSeries=[];
     if(!data.fixmap)data.fixmap=[];
     if(!data.dkj)data.dkj=[];
     if(!data.etfTx)data.etfTx=[];
@@ -804,7 +841,7 @@ function renderAllampapir(){
   },0);
 
   const fmSeriesCount=[...new Set(data.fixmap.filter(f=>f.active).map(f=>f.seriesId||'legacy'))].length;
-  const dkjSeriesCount=[...new Set(data.dkj.filter(d=>d.active).map(d=>d.maturity))].length;
+  const dkjSeriesCount=data.dkjSeries.filter(ds=>data.dkj.some(d=>d.active&&d.seriesId===ds.id)).length||[...new Set(data.dkj.filter(d=>d.active).map(d=>d.maturity))].length;
   document.getElementById('apCards').innerHTML=`
     <div class="stat-card"><div class="stat-label">FixMáP névérték</div><div class="stat-value blurable">${fmtM(fmValue)}</div><div class="stat-sub">${fmSeriesCount} sorozat</div></div>
     <div class="stat-card"><div class="stat-label">DKJ névérték</div><div class="stat-value blurable">${fmtM(dkjValue)}</div><div class="stat-sub">${dkjSeriesCount} aktív sorozat</div></div>
@@ -853,18 +890,24 @@ function renderAllampapir(){
   document.getElementById('fixmapEmpty').style.display=fmSeriesList.length?'none':'block';
 
   // DKJ table – grouped by series (maturity)
-  const dkjSeries={};
-  data.dkj.forEach(d=>{
-    const key=d.maturity;
-    if(!dkjSeries[key])dkjSeries[key]={maturity:d.maturity,items:[],totalFace:0,totalBuy:0,active:false};
-    dkjSeries[key].items.push(d);
-    if(d.active){dkjSeries[key].totalFace+=d.faceValue;dkjSeries[key].totalBuy+=d.buyPrice;dkjSeries[key].active=true;}
+  // Build DKJ series map from dkjSeries definitions
+  const dkjSeriesMap={};
+  // Init from definitions
+  data.dkjSeries.forEach(ds=>{
+    dkjSeriesMap[ds.id]={id:ds.id,name:ds.name,maturity:ds.maturity,items:[],totalFace:0,totalBuy:0,active:false};
   });
-  const seriesList=Object.values(dkjSeries).filter(s=>s.active).sort((a,b)=>a.maturity.localeCompare(b.maturity));
-  document.getElementById('dkjBody').innerHTML=seriesList.map(s=>{
-    const name='D'+s.maturity.replace(/-/g,'').slice(2);
+  // Also handle legacy DKJ without seriesId (grouped by maturity)
+  data.dkj.forEach(d=>{
+    const key=d.seriesId||('legacy-'+d.maturity);
+    if(!dkjSeriesMap[key])dkjSeriesMap[key]={id:key,name:'D'+d.maturity.replace(/-/g,'').slice(2),maturity:d.maturity,items:[],totalFace:0,totalBuy:0,active:false};
+    dkjSeriesMap[key].items.push(d);
+    if(d.active){dkjSeriesMap[key].totalFace+=d.faceValue;dkjSeriesMap[key].totalBuy+=d.buyPrice;dkjSeriesMap[key].active=true;}
+  });
+  const seriesList=Object.values(dkjSeriesMap).filter(s=>s.active||s.items.length>0).sort((a,b)=>a.maturity.localeCompare(b.maturity));
+  document.getElementById('dkjBody').innerHTML=seriesList.filter(s=>s.active).map(s=>{
     const expectedReturn=s.totalFace-s.totalBuy;
     const rowId='dkj-'+s.maturity.replace(/-/g,'');
+    const isLegacy=s.id.startsWith('legacy-');
     const detailRows=s.items.filter(d=>d.active).map(d=>`<tr class="detail-row" id="d-${rowId}-${d.id}">
       <td colspan="2" style="color:var(--text3)">${d.date}</td>
       <td class="r blurable" style="color:var(--text)">${fmt(d.faceValue)}</td>
@@ -872,19 +915,20 @@ function renderAllampapir(){
       <td colspan="3" style="color:var(--green)">+${fmt(Math.round(d.faceValue-d.buyPrice))}</td>
     </tr>`).join('');
     return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
-      <td><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></td>
+      <td><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${s.name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.filter(d=>d.active).length} tétel</span></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
       <td class="r pos blurable">+${fmt(Math.round(expectedReturn))}</td>
       <td class="r">${s.maturity}</td>
-      <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
+      <td><span class="badge b-etf">aktív</span></td>
       <td style="white-space:nowrap" onclick="event.stopPropagation()">
-        ${s.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-dkj-series','${s.maturity}')" style="margin-right:4px">eladás</button>
-        <button class="btn btn-ghost btn-sm" onclick="expireDKJSeries('${s.maturity}')" style="margin-right:4px">lejárt</button>`:''}
+        ${!isLegacy?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-dkj-series','${s.id}')" style="margin-right:4px">✎</button>`:''}
+        <button class="btn btn-ghost btn-sm" onclick="openModal('sell-dkj-series','${s.maturity}')" style="margin-right:4px">eladás</button>
+        <button class="btn btn-ghost btn-sm" onclick="expireDKJSeries('${s.maturity}')" style="margin-right:4px">lejárt</button>
       </td>
     </tr>${detailRows}`;
   }).join('');
-  document.getElementById('dkjEmpty').style.display=seriesList.length?'none':'block';
+  document.getElementById('dkjEmpty').style.display=seriesList.filter(s=>s.active).length?'none':'block';
 }
 
 function toggleExpand(rowId, clickedTr){
@@ -1152,15 +1196,61 @@ function openModal(type, param){
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmap()">mentés</button></div>`;
     if(data.fixmapSeries.length>0) updateFixmapBuyInfo(data.fixmapSeries[0].id);
   }
+  else if(type==='new-dkj-series'){
+    title.textContent='Új DKJ sorozat';
+    body.innerHTML=`
+      <div class="form-row full"><div class="form-group"><div class="form-label">lejárat dátuma</div>
+        <input class="form-input" id="f-maturity" type="date" oninput="updateDKJSeriesName(this.value)">
+      </div></div>
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:12px;color:var(--text2);margin-bottom:8px">
+        Sorozat neve: <strong style="color:var(--text)" id="dkj-series-preview">–</strong>
+      </div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitNewDKJSeries()">mentés</button></div>`;
+  }
+  else if(type==='edit-dkj-series'){
+    const ds=data.dkjSeries.find(x=>x.id===param);
+    if(!ds)return;
+    title.textContent='DKJ sorozat szerkesztése';
+    body.innerHTML=`
+      <div class="form-row full"><div class="form-group"><div class="form-label">lejárat dátuma</div>
+        <input class="form-input" id="f-maturity" type="date" value="${ds.maturity}" oninput="updateDKJSeriesName(this.value)">
+      </div></div>
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:12px;color:var(--text2);margin-bottom:8px">
+        Sorozat neve: <strong style="color:var(--text)" id="dkj-series-preview">${ds.name}</strong>
+      </div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="saveEditDKJSeries('${param}')">mentés</button></div>`;
+  }
   else if(type==='buy-dkj'){
+    const dkjSeriesOpts=data.dkjSeries.map(s=>`<option value="${s.id}">${s.name} (${s.maturity})</option>`).join('');
     title.textContent='DKJ vétel';
     body.innerHTML=`
-      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
-      <div class="form-group"><div class="form-label">névérték (Ft)</div><input class="form-input" id="f-face" type="number" placeholder="120000"></div></div>
-      <div class="form-row"><div class="form-group"><div class="form-label">vétel ár (Ft)</div><input class="form-input" id="f-buy" type="number" placeholder="115865"></div>
-      <div class="form-group"><div class="form-label">lejárat dátuma</div><input class="form-input" id="f-maturity" type="date"></div></div>
-      <div class="form-row"><div class="form-group"><div class="form-label">hozam % (opcionális)</div><input class="form-input" id="f-yield" type="number" step="0.01" placeholder="5.5"></div></div>
+      ${data.dkjSeries.length===0?'<div style="background:var(--amber-dim);color:var(--amber);border-radius:7px;padding:10px;font-size:12px;margin-bottom:12px">Először hozz létre egy sorozatot az &quot;+ új sorozat&quot; gombbal!</div>':''}
+      <div class="form-row full"><div class="form-group"><div class="form-label">sorozat</div>
+        <select class="form-select" id="f-dkj-series">
+          ${dkjSeriesOpts||'<option value="">– nincs sorozat –</option>'}
+        </select>
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div>
+        <input class="form-input" id="f-date" type="date" value="${today()}">
+      </div>
+      <div class="form-group"><div class="form-label">névérték (Ft)</div>
+        <input class="form-input" id="f-face" type="number" placeholder="120000">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel ár (Ft)</div>
+        <input class="form-input" id="f-buy" type="number" placeholder="115865">
+      </div>
+      <div class="form-group"><div class="form-label">várható hozam</div>
+        <div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px" id="dkj-buy-yield">–</div>
+      </div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDKJ()">mentés</button></div>`;
+    ['f-face','f-buy'].forEach(id=>{
+      document.getElementById(id)?.addEventListener('input',()=>{
+        const face=parseFloat(document.getElementById('f-face')?.value)||0;
+        const buy=parseFloat(document.getElementById('f-buy')?.value)||0;
+        const el=document.getElementById('dkj-buy-yield');
+        if(el&&face&&buy)el.textContent='+'+fmt(Math.round(face-buy))+' ('+(((face-buy)/buy)*100).toFixed(2)+'%)';
+      });
+    });
   }
   else if(type==='buy-etf'){
     const livePrice=param==='WBIT'?liveWbit:liveVwce;
@@ -1489,18 +1579,51 @@ function submitDKJSell(id){
   closeModal(); renderAll(); saveData(); toast('DKJ eladás rögzítve');
 }
 // submitFixmapSell removed - replaced by submitFixmapSeriesSell
+function dkjNameFromMaturity(maturity){
+  if(!maturity)return '–';
+  return 'D'+maturity.replace(/-/g,'').slice(2);
+}
+
+function updateDKJSeriesName(maturity){
+  const el=document.getElementById('dkj-series-preview');
+  if(el)el.textContent=dkjNameFromMaturity(maturity);
+}
+
+function submitNewDKJSeries(){
+  const maturity=document.getElementById('f-maturity').value;
+  if(!maturity)return toast('Add meg a lejárat dátumát!');
+  const name=dkjNameFromMaturity(maturity);
+  if(data.dkjSeries.find(s=>s.maturity===maturity))return toast('Ez a sorozat már létezik!');
+  data.dkjSeries.push({id:uid(),name,maturity});
+  closeModal(); renderAll(); saveData(); toast('DKJ sorozat létrehozva: '+name);
+}
+
+function saveEditDKJSeries(id){
+  const ds=data.dkjSeries.find(x=>x.id===id);
+  if(!ds)return;
+  const maturity=document.getElementById('f-maturity').value;
+  if(!maturity)return toast('Add meg a lejárat dátumát!');
+  ds.maturity=maturity;
+  ds.name=dkjNameFromMaturity(maturity);
+  // update all linked dkj items
+  data.dkj.filter(d=>d.seriesId===id).forEach(d=>d.maturity=maturity);
+  closeModal(); renderAll(); saveData(); toast('Sorozat mentve');
+}
+
 function submitDKJ(){
+  const sid=document.getElementById('f-dkj-series')?.value;
   const date=document.getElementById('f-date').value;
   const faceValue=parseFloat(document.getElementById('f-face').value);
   const buyPrice=parseFloat(document.getElementById('f-buy').value)||faceValue;
-  const maturity=document.getElementById('f-maturity').value;
-  const yieldRate=parseFloat(document.getElementById('f-yield').value)||null;
-  if(!date||!faceValue||!maturity)return toast('Töltsd ki a kötelező mezőket!');
+  if(!sid||!date||!faceValue)return toast('Töltsd ki a kötelező mezőket!');
+  if(data.dkjSeries.length===0)return toast('Először hozz létre sorozatot!');
+  const ds=data.dkjSeries.find(x=>x.id===sid);
+  if(!ds)return toast('Érvénytelen sorozat!');
   const bal=cashBalance();
   if(Math.round(bal)<Math.round(buyPrice))return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
-  data.dkj.push({id:uid(),date,faceValue,buyPrice,maturity,yieldRate,active:true});
-  data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel'});
-  closeModal(); renderAll(); saveData(); toast('DKJ pozíció rögzítve');
+  data.dkj.push({id:uid(),seriesId:sid,date,faceValue,buyPrice,maturity:ds.maturity,active:true});
+  data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel – '+ds.name});
+  closeModal(); renderAll(); saveData(); toast('DKJ vétel rögzítve');
 }
 function recalcETFModal(){
   const s=parseFloat(document.getElementById('f-shares')?.value)||0;
