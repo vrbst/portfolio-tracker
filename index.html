@@ -299,22 +299,22 @@ input[type=range]::-webkit-slider-runnable-track{
     <!-- PÉNZSZÁMLA -->
     <div id="page-kincstar" class="page">
 
-      <!-- PÉNZSZÁMLA EGYENLEG -->
-      <div class="balance-bar">
-        <div>
-          <div class="stat-label">pénzszámla egyenleg</div>
-          <div class="balance-value" id="cashBalance">–</div>
-          <div class="stat-sub" id="cashSubtitle">összes befizetés – kiadás</div>
+      <!-- PÉNZSZÁMLA + ÁLLAMPAPÍR egy sorban -->
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:14px">
+        <div class="balance-bar" style="margin-bottom:0">
+          <div>
+            <div class="stat-label">pénzszámla egyenleg</div>
+            <div class="balance-value" id="cashBalance">–</div>
+            <div class="stat-sub" id="cashSubtitle">összes befizetés – kiadás</div>
+          </div>
+          <div class="balance-actions">
+            <button class="btn btn-primary btn-sm" onclick="openModal('deposit')">+ befizetés</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('coupon')">★ kamatfizetés</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
+          </div>
         </div>
-        <div class="balance-actions">
-          <button class="btn btn-primary btn-sm" onclick="openModal('deposit')">+ befizetés</button>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('coupon')">★ kamatfizetés</button>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
-        </div>
+        <div class="card-row cards-3" id="apCards" style="margin-bottom:0"></div>
       </div>
-
-      <!-- ÁLLAMPAPÍR -->
-      <div class="card-row cards-3" id="apCards"></div>
 
       <div class="section-title">
         FixMáP sorozatok &amp; pozíciók
