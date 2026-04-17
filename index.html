@@ -250,27 +250,6 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <!-- PÉNZSZÁMLA -->
     <div id="page-kincstar" class="page">
 
-      <!-- PÉNZSZÁMLA -->
-      <div class="balance-bar">
-        <div>
-          <div class="stat-label">pénzszámla egyenleg</div>
-          <div class="balance-value" id="cashBalance">–</div>
-          <div class="stat-sub" id="cashSubtitle">összes befizetés – kiadás</div>
-        </div>
-        <div class="balance-actions">
-          <button class="btn btn-primary btn-sm" onclick="openModal('deposit')">+ befizetés</button>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><div class="panel-title">pénzszámla mozgások</div></div>
-        <div class="tbl-wrap" style="max-height:280px;overflow-y:auto"><table>
-          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>megjegyzés</th><th class="r">összeg</th><th class="r">egyenleg</th><th></th></tr></thead>
-          <tbody id="cashBody"></tbody>
-        </table></div>
-        <div class="empty" id="cashEmpty" style="display:none">Még nincs mozgás. Adj hozzá befizetést!</div>
-      </div>
-
       <!-- ÁLLAMPAPÍR -->
       <div class="card-row cards-3" id="apCards"></div>
 
@@ -305,6 +284,27 @@ tr:hover td{background:rgba(255,255,255,.015)}
         <div class="empty" id="dkjEmpty" style="display:none">Még nincs DKJ pozíció.</div>
       </div>
 
+      <!-- PÉNZSZÁMLA -->
+      <div class="balance-bar" style="margin-top:16px">
+        <div>
+          <div class="stat-label">pénzszámla egyenleg</div>
+          <div class="balance-value" id="cashBalance">–</div>
+          <div class="stat-sub" id="cashSubtitle">összes befizetés – kiadás</div>
+        </div>
+        <div class="balance-actions">
+          <button class="btn btn-primary btn-sm" onclick="openModal('deposit')">+ befizetés</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">pénzszámla mozgások</div></div>
+        <div class="tbl-wrap" style="max-height:280px;overflow-y:auto"><table>
+          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>megjegyzés</th><th class="r">összeg</th><th class="r">egyenleg</th><th></th></tr></thead>
+          <tbody id="cashBody"></tbody>
+        </table></div>
+        <div class="empty" id="cashEmpty" style="display:none">Még nincs mozgás. Adj hozzá befizetést!</div>
+      </div>
+
     </div>
 
     <!-- TBSZ -->
@@ -322,7 +322,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>dátum</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. EUR</th><th class="r">akt. EUR</th><th class="r">P&L EUR</th><th class="r">P&L EUR %</th><th class="r">befekt. Ft</th><th class="r">akt. Ft</th><th class="r">P&L Ft</th><th class="r">P&L Ft %</th><th class="r">TBSZ</th><th></th></tr></thead>
+          <thead><tr><th>dátum</th><th class="r">befekt. Ft</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. EUR</th><th class="r">akt. EUR</th><th class="r">P&L EUR</th><th class="r">P&L EUR %</th><th class="r">akt. Ft</th><th class="r">P&L Ft</th><th class="r">P&L Ft %</th><th class="r">TBSZ</th><th></th></tr></thead>
           <tbody id="vwceBody"></tbody>
         </table></div>
         <div class="empty" id="vwceEmpty" style="display:none">Még nincs VWCE tétel.</div>
@@ -339,7 +339,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>dátum</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. EUR</th><th class="r">akt. EUR</th><th class="r">P&L EUR</th><th class="r">P&L EUR %</th><th class="r">befekt. Ft</th><th class="r">akt. Ft</th><th class="r">P&L Ft</th><th class="r">P&L Ft %</th><th class="r">TBSZ</th><th></th></tr></thead>
+          <thead><tr><th>dátum</th><th class="r">befekt. Ft</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. EUR</th><th class="r">akt. EUR</th><th class="r">P&L EUR</th><th class="r">P&L EUR %</th><th class="r">akt. Ft</th><th class="r">P&L Ft</th><th class="r">P&L Ft %</th><th class="r">TBSZ</th><th></th></tr></thead>
           <tbody id="wbitBody"></tbody>
         </table></div>
         <div class="empty" id="wbitEmpty" style="display:none">Még nincs WBIT tétel.</div>
@@ -590,7 +590,7 @@ function renderDashboard(){
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
-      <div class="stat-value">${Math.round(liveFx)} Ft</div>
+      <div class="stat-value">${liveFx.toFixed(2)} Ft</div>
       <div class="stat-sub">${liveVwce?'live':'becsült'}</div>
     </div>
   `;
@@ -896,6 +896,7 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
     const plEurPct=plEur!==null?plEur/costEur*100:null;
     return `<tr>
       <td>${b.date}</td>
+      <td class="r blurable">${fmtM(b.costHuf)}</td>
       <td class="r blurable">${b.shares.toFixed(2)}</td>
       <td class="r blurable">${fmtEur(b.priceEur)}</td>
       <td class="r">${Math.round(b.fxRate)}</td>
@@ -903,7 +904,6 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
       <td class="r blurable">${currentValEur!==null?fmtEur(currentValEur,0):'–'}</td>
       <td class="r blurable ${plEur===null?'':plEur>=0?'pos':'neg'}">${plEur!==null?(plEur>=0?'+':'')+fmtEur(Math.abs(plEur),0):'–'}</td>
       <td class="r ${plEurPct===null?'':plEurPct>=0?'pos':'neg'}">${plEurPct!==null?fmtSignPct(plEurPct):'–'}</td>
-      <td class="r blurable">${fmtM(b.costHuf)}</td>
       <td class="r blurable">${currentValFt!==null?fmtM(currentValFt):'–'}</td>
       <td class="r blurable ${plFt===null?'':plFt>=0?'pos':'neg'}">${plFt!==null?fmtSign(plFt):'–'}</td>
       <td class="r ${plPct===null?'':plPct>=0?'pos':'neg'}">${plPct!==null?fmtSignPct(plPct):'–'}</td>
