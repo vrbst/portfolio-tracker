@@ -572,6 +572,15 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce||liveWbit;
 
+  // Összes befektetett tőke: nettó befizetések + állampapír vételárak + ETF befektetett összegek
+  const netDeposits=data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
+    -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0);
+  const apInvested=data.fixmap.reduce((s,f)=>s+(f.buyPrice||f.faceValue),0)
+    +data.dkj.reduce((s,d)=>s+d.buyPrice,0);
+  const etfInvested=etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0)
+    +etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
+  const totalInvested=netDeposits+apInvested+etfInvested;
+
   document.getElementById('dashCards').innerHTML=`
     <div class="stat-card">
       <div class="stat-label">teljes portfólió</div>
@@ -579,9 +588,9 @@ function renderDashboard(){
       <div class="stat-sub blurable">${hasLive?'≈ '+fmtEur(totalEur,0):'EUR: nincs live adat'}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">pénzszámla</div>
-      <div class="stat-value blurable">${fmtM(cb)}</div>
-      <div class="stat-sub blurable">≈ ${fmtEur(cbEur,0)}</div>
+      <div class="stat-label">összes befektetett tőke</div>
+      <div class="stat-value blurable">${fmtM(totalInvested)}</div>
+      <div class="stat-sub">befizetés + AP + ETF</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">állampapír</div>
@@ -650,7 +659,7 @@ function renderUpcoming(){
     while(d<=matDate&&safety<20){
       const ds=d.toISOString().split('T')[0];
       if(new Date(ds)>now){
-        const amount=isFirst&&sr.firstCouponAmount?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
+        const pastFirst=sr.firstCouponAmount&&new Date(ds)<new Date();const amount=isFirst&&sr.firstCouponAmount&&!pastFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
         events.push({date:ds,label:'FixMáP kamat ('+sr.name+')',amount,color:'var(--blue)'});
       }
       isFirst=false;
@@ -705,7 +714,7 @@ function renderCashflowChart(){
       const ds=d.toISOString().split('T')[0];
       if(ds.startsWith('2026')){
         const m=parseInt(ds.split('-')[1])-1;
-        const amount=isFirst&&sr.firstCouponAmount?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
+        const pastFirst=sr.firstCouponAmount&&new Date(ds)<new Date();const amount=isFirst&&sr.firstCouponAmount&&!pastFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
         vals[m]+=amount;
       }
       isFirst=false;
@@ -810,7 +819,9 @@ function renderAllampapir(){
     const couponRate=sr?sr.couponRate:0;
     const maturity=sr?sr.maturity:'–';
     const nextCoupon=sr?sr.nextCoupon:'–';
-    const qCoupon=s.active&&couponRate?s.totalFace*couponRate/100/4:0;
+    const nextCouponPast=sr&&sr.nextCoupon&&new Date(sr.nextCoupon)<new Date();
+    const isFirstCoupon=sr&&sr.firstCouponAmount&&!nextCouponPast;
+    const qCoupon=s.active&&couponRate?(isFirstCoupon?sr.firstCouponAmount:s.totalFace*couponRate/100/4):0;
     return `<tr>
       <td><div class="asset-name">${name}</div><div style="font-size:10px;color:var(--text3)">${s.items.length} tétel</div></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
