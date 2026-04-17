@@ -1459,9 +1459,21 @@ function submitETFSell(ticker){
 // ═══════════════════════════════════════════════
 async function fetchLive(){
   try{
-    const fxUrl='https://api.frankfurter.app/latest?from=EUR&to=HUF';
-    const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(fxUrl));
-    if(r.ok){const d=await r.json();if(d.rates?.HUF)liveFx=d.rates.HUF;}
+    // EUR/HUF – több forrás sorban
+    const fxSources=[
+      'https://api.frankfurter.app/latest?from=EUR&to=HUF',
+      'https://open.er-api.com/v6/latest/EUR',
+    ];
+    for(const fxUrl of fxSources){
+      try{
+        const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(fxUrl));
+        if(r.ok){
+          const d=await r.json();
+          const rate=d.rates?.HUF||d.conversion_rates?.HUF;
+          if(rate&&rate>300){liveFx=rate;break;}
+        }
+      }catch(e){}
+    }
   }catch(e){}
 
   await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
