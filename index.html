@@ -1190,14 +1190,26 @@ function submitFixmapSeriesSell(){
 
 function submitFixmap(){
   const sid=document.getElementById('f-series')?.value;
-  const date=document.getElementById('f-date').value;
-  const faceValue=parseFloat(document.getElementById('f-face').value);
-  const ratePct=parseFloat(document.getElementById('f-rate-pct').value)||100;
-  if(!sid||!date||!faceValue)return toast('Töltsd ki a kötelező mezőket!');
-  if(data.fixmapSeries.length===0)return toast('Először hozz létre sorozatot!');
-  const buyPrice=faceValue*ratePct/100;
+  const date=document.getElementById('f-date')?.value;
+  const faceValue=parseFloat(document.getElementById('f-face')?.value);
+  const ratePctRaw=document.getElementById('f-rate-pct')?.value;
+  const ratePct=ratePctRaw?parseFloat(ratePctRaw):100;
+
+  if(!sid||sid===''||!date||isNaN(faceValue)||faceValue<=0)
+    return toast('Töltsd ki az összes kötelező mezőt!');
+  if(isNaN(ratePct)||ratePct<=0)
+    return toast('Adj meg érvényes vételi árfolyamot!');
+  if(data.fixmapSeries.length===0)
+    return toast('Először hozz létre sorozatot!');
+
+  const buyPrice=Math.round(faceValue*ratePct/100);
+  if(isNaN(buyPrice)||buyPrice<=0)
+    return toast('Érvénytelen vételár!');
+
   const bal=cashBalance();
-  if(Math.round(bal)<Math.round(buyPrice))return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
+  if(Math.round(bal)<buyPrice)
+    return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
+
   data.fixmap.push({id:uid(),seriesId:sid,date,faceValue,buyPrice,active:true});
   data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'FixMáP vétel'});
   closeModal(); renderAll(); toast('FixMáP vétel rögzítve');
