@@ -1474,14 +1474,30 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
   try{
     let price=null;
     if(isCNBC){
-      // CNBC API
-      const cnbcUrl=`https://quote.cnbc.com/quote-html-webservice/restservice/xmlQuote/symbolType/symbol/ids/${symbol}/siteType/US/rss/1/sandboxKey/sandbox`;
+      // CNBC quote API
+      const cnbcUrl=`https://quote.cnbc.com/quote-html-webservice/restservice/xmlQuote/symbolType/symbol/ids/${symbol}/siteType/US/rss/1`;
       const url='https://corsproxy.io/?url='+encodeURIComponent(cnbcUrl);
       const r=await fetch(url);
       if(r.ok){
         const text=await r.text();
-        const m=text.match(/<last>([0-9.]+)<\/last>/);
+        const m=text.match(/<last>([0-9.]+)<\/last>/)||text.match(/last":"([0-9.]+)"/)||text.match(/"price":"([0-9.]+)"/);
         if(m)price=parseFloat(m[1]);
+      }
+      // fallback: try stooq
+      if(!price){
+        const stooqUrl=`https://stooq.com/q/l/?s=wbit.de&f=sd2t2ohlcv&h&e=csv`;
+        const url2='https://corsproxy.io/?url='+encodeURIComponent(stooqUrl);
+        const r2=await fetch(url2);
+        if(r2.ok){
+          const text=await r2.text();
+          const lines=text.trim().split('
+');
+          if(lines.length>1){
+            const cols=lines[1].split(',');
+            const p=parseFloat(cols[6]);
+            if(p>1)price=p;
+          }
+        }
       }
     } else {
       // Yahoo Finance
