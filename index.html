@@ -1464,26 +1464,41 @@ async function fetchLive(){
   }catch(e){}
 
   await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
-  await fetchETFPrice('WBIT.DU','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
+  await fetchETFPrice('WBIT-DE','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
   renderTBSZ(); renderDashboard();
 }
 
 async function fetchETFPrice(symbol,pillId,labelId,cb){
+  // symbol format: 'VWCE.DE' for Yahoo, 'WBIT-DE' for CNBC
+  const isCNBC=symbol.includes('-');
   try{
-    const url='https://corsproxy.io/?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
-    const r=await fetch(url);
-    if(r.ok){
-      const d=await r.json();
-      const price=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      if(price&&price>1){
-        cb(price);
-        document.getElementById(pillId).className='live-pill live';
-        document.getElementById(labelId).textContent=fmtEur(price);
-        const hufId=pillId.replace('Pill','PriceHuf');
-        const hufEl=document.getElementById(hufId);
-        if(hufEl)hufEl.textContent='= '+fmt(Math.round(price*liveFx));
-        return;
+    let price=null;
+    if(isCNBC){
+      // CNBC API
+      const cnbcUrl=`https://quote.cnbc.com/quote-html-webservice/restservice/xmlQuote/symbolType/symbol/ids/${symbol}/siteType/US/rss/1/sandboxKey/sandbox`;
+      const url='https://corsproxy.io/?url='+encodeURIComponent(cnbcUrl);
+      const r=await fetch(url);
+      if(r.ok){
+        const text=await r.text();
+        const m=text.match(/<last>([0-9.]+)<\/last>/);
+        if(m)price=parseFloat(m[1]);
       }
+    } else {
+      // Yahoo Finance
+      const url='https://corsproxy.io/?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
+      const r=await fetch(url);
+      if(r.ok){
+        const d=await r.json();
+        price=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      }
+    }
+    if(price&&price>1){
+      cb(price);
+      document.getElementById(pillId).className='live-pill live';
+      document.getElementById(labelId).textContent=fmtEur(price);
+      const hufEl=document.getElementById(pillId.replace('Pill','PriceHuf'));
+      if(hufEl)hufEl.textContent='= '+fmt(Math.round(price*liveFx));
+      return;
     }
   }catch(e){}
   document.getElementById(pillId).className='live-pill est';
