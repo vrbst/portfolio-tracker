@@ -1475,7 +1475,7 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
     let price=null;
     if(isCNBC){
       // Yahoo Finance WBIT.DE
-      const url='https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/WBIT.DE?interval=1d&range=1d');
+      const url='https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/WBIT.DE?interval=1d&range=1d');
       const r=await fetch(url);
       if(r.ok){
         const d=await r.json();
@@ -1484,7 +1484,7 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
       }
     } else {
       // Yahoo Finance
-      const url='https://corsproxy.io/?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
+      const url='https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
       const r=await fetch(url);
       if(r.ok){
         const d=await r.json();
