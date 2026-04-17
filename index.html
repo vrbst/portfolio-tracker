@@ -642,7 +642,7 @@ function renderUpcoming(){
     const startDate=sr.nextCoupon||nextCouponDate(sr.maturity);
     if(!startDate)return;
     const matDate=new Date(sr.maturity);
-    let d=new Date(startDate);
+    let d=new Date(startDate+"T00:00:00Z");
     let isFirst=true;
     let safety=0;
     while(d<=matDate&&safety<20){
@@ -652,7 +652,7 @@ function renderUpcoming(){
         events.push({date:ds,label:'FixMáP kamat ('+sr.name+')',amount,color:'var(--blue)'});
       }
       isFirst=false;
-      d=new Date(d.getFullYear(),d.getMonth()+3,d.getDate());
+      d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+3,d.getUTCDate()));
       safety++;
     }
   });
@@ -696,7 +696,7 @@ function renderCashflowChart(){
     const startDate=sr.nextCoupon||nextCouponDate(sr.maturity);
     if(!startDate)return;
     const matDate=new Date(sr.maturity);
-    let d=new Date(startDate);
+    let d=new Date(startDate+"T00:00:00Z");
     let isFirst=true;
     let safety=0;
     while(d<=matDate&&safety<20){
@@ -707,7 +707,7 @@ function renderCashflowChart(){
         vals[m]+=amount;
       }
       isFirst=false;
-      d=new Date(d.getFullYear(),d.getMonth()+3,d.getDate());
+      d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+3,d.getUTCDate()));
       safety++;
     }
   });
