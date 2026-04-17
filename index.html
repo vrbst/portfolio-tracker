@@ -1459,19 +1459,21 @@ function submitETFSell(ticker){
 // ═══════════════════════════════════════════════
 async function fetchLive(){
   try{
-    // EUR/HUF – több forrás sorban
-    const fxSources=[
-      'https://api.frankfurter.app/latest?from=EUR&to=HUF',
-      'https://open.er-api.com/v6/latest/EUR',
-    ];
-    for(const fxUrl of fxSources){
+    // EUR/HUF – Wise (valós idejű)
+    try{
+      const wiseUrl='https://wise.com/rates/live?source=EUR&target=HUF';
+      const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(wiseUrl));
+      if(r.ok){
+        const d=await r.json();
+        const rate=d.value||d.rate||(Array.isArray(d)&&d[0]?.value);
+        if(rate&&rate>300)liveFx=rate;
+      }
+    }catch(e){}
+    // fallback: Frankfurter
+    if(liveFx===395){
       try{
-        const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(fxUrl));
-        if(r.ok){
-          const d=await r.json();
-          const rate=d.rates?.HUF||d.conversion_rates?.HUF;
-          if(rate&&rate>300){liveFx=rate;break;}
-        }
+        const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent('https://api.frankfurter.app/latest?from=EUR&to=HUF'));
+        if(r.ok){const d=await r.json();if(d.rates?.HUF)liveFx=d.rates.HUF;}
       }catch(e){}
     }
   }catch(e){}
