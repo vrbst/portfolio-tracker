@@ -153,6 +153,13 @@ tr:hover td{background:rgba(255,255,255,.015)}
 canvas.blurred{filter:blur(8px);transition:filter .2s}
 canvas.blurred:hover{filter:blur(0)}
 
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+*{scrollbar-width:thin;scrollbar-color:var(--bg4) transparent}
+
 /* RANGE SLIDER */
 input[type=range]{
   -webkit-appearance:none;appearance:none;
