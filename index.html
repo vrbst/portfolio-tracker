@@ -671,7 +671,7 @@ function renderCashflowChart(){
     cfFixmapMap[sr.id].totalFace+=f.faceValue;
   });
   Object.values(cfFixmapMap).forEach(({sr,totalFace})=>{
-    const nd=sr.nextCoupon;
+    const nd=sr.nextCoupon||nextCouponDate(sr.maturity);
     if(nd&&nd.startsWith('2026')){
       const m=parseInt(nd.split('-')[1])-1;
       vals[m]+=totalFace*sr.couponRate/100/4;
@@ -888,11 +888,13 @@ function renderTranzakciok(){
   const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell'};
   const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás'};
 
-  // Pénzszámla: csak befizetés és kiutalás jelenik meg (vétel/eladás a saját eszköz soránál látszik)
-  data.cashTx.filter(t=>['deposit','withdraw','coupon','expire'].includes(t.type)).forEach(t=>all.push({
+  // Pénzszámla: befizetés, kiutalás, kamat, lejárat + FixMáP/DKJ eladás bevételek
+  // A vétel típusú cash mozgásokat kihagyjuk (azok az eszköz soránál látszanak)
+  data.cashTx.filter(t=>t.type!=='buy').forEach(t=>all.push({
     date:t.date, type:t.type, asset:'Pénzszámla',
     amount:fmt(t.amount), rate:'–', note:t.note||'–',
-    deleteCall:`deleteTx('cash','${t.id}')`
+    deleteCall:`deleteTx('cash','${t.id}')`,
+    editCall:`editTx('cash','${t.id}')`
   }));
   // FixMáP vételek
   data.fixmap.forEach(f=>{
@@ -901,7 +903,8 @@ function renderTranzakciok(){
       date:f.date, type:'buy', asset:'FixMáP',
       amount:fmt(f.faceValue), rate:f.buyPrice?fmt(f.buyPrice):'–',
       note:sr?sr.name:(f.note||'–'),
-      deleteCall:`deleteTx('fixmap','${f.id}')`
+      deleteCall:`deleteTx('fixmap','${f.id}')`,
+      editCall:`editTx('fixmap','${f.id}')`
     });
   });
   // DKJ vételek
@@ -909,13 +912,15 @@ function renderTranzakciok(){
     date:d.date, type:d.active?'buy':'sell', asset:'DKJ',
     amount:fmt(d.faceValue), rate:fmt(d.buyPrice),
     note:'D'+d.maturity.replace(/-/g,'').slice(2)+(d.active?'':' (lezárt)'),
-    deleteCall:`deleteTx('dkj','${d.id}')`
+    deleteCall:`deleteTx('dkj','${d.id}')`,
+    editCall:`editTx('dkj','${d.id}')`
   }));
   // ETF vételek/eladások
   data.etfTx.forEach(t=>all.push({
     date:t.date, type:t.type, asset:t.ticker,
     amount:t.shares.toFixed(4)+' db', rate:fmtEur(t.priceEur), note:t.note||'–',
-    deleteCall:`deleteTx('etf','${t.id}')`
+    deleteCall:`deleteTx('etf','${t.id}')`,
+    editCall:`editTx('etf','${t.id}')`
   }));
 
   const typeOrder={deposit:6,buy:5,sell:4,withdraw:3,coupon:2,expire:1};
@@ -928,7 +933,10 @@ function renderTranzakciok(){
     <td class="r blurable">${t.amount}</td>
     <td class="r">${t.rate}</td>
     <td class="r" style="color:var(--text2)">${t.note}</td>
-    <td><button class="btn btn-danger btn-sm" onclick="${t.deleteCall}">×</button></td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-ghost btn-sm" onclick="${t.editCall}" style="margin-right:4px">✎</button>
+      <button class="btn btn-danger btn-sm" onclick="${t.deleteCall}">×</button>
+    </td>
   </tr>`).join('');
   document.getElementById('txEmpty').style.display=all.length?'none':'block';
 }
@@ -1047,24 +1055,38 @@ function openModal(type, param){
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDKJ()">mentés</button></div>`;
   }
   else if(type==='buy-etf'){
+    const livePrice=param==='WBIT'?liveWbit:liveVwce;
     title.textContent=param+' vétel';
     body.innerHTML=`
-      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
-      <div class="form-group"><div class="form-label">darabszám</div><input class="form-input" id="f-shares" type="number" step="0.0001" placeholder="10.5"></div></div>
-      <div class="form-row"><div class="form-group"><div class="form-label">vételi ár (EUR/db)</div><input class="form-input" id="f-price" type="number" step="0.01" placeholder="${liveVwce?liveVwce.toFixed(2):'148.50'}"></div>
-      <div class="form-group"><div class="form-label">EUR/HUF árfolyam</div><input class="form-input" id="f-fx" type="number" step="0.01" value="${Math.round(liveFx)}"></div></div>
-      <div class="form-row"><div class="form-group"><div class="form-label">TBSZ év</div><input class="form-input" id="f-tbsz" type="number" placeholder="2026" value="${new Date().getFullYear()}"></div>
-      <div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
-      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:8px">Befektetett összeg: <span id="calcHuf" style="color:var(--text);font-weight:500">–</span></div>
-      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFBuy('${param}')">mentés</button></div>`;
-    ['f-shares','f-price','f-fx'].forEach(id=>{
-      document.getElementById(id)?.addEventListener('input',()=>{
-        const s=parseFloat(document.getElementById('f-shares')?.value)||0;
-        const p=parseFloat(document.getElementById('f-price')?.value)||0;
-        const fx=parseFloat(document.getElementById('f-fx')?.value)||liveFx;
-        document.getElementById('calcHuf').textContent=s&&p?fmt(s*p*fx):'–';
-      });
-    });
+      <div class="form-row"><div class="form-group"><div class="form-label">ETF típusa</div>
+        <select class="form-select" id="f-ticker">
+          <option value="VWCE" ${param==='VWCE'?'selected':''}>VWCE</option>
+          <option value="WBIT" ${param==='WBIT'?'selected':''}>WBIT</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">TBSZ év</div>
+        <input class="form-input" id="f-tbsz" type="number" value="${new Date().getFullYear()}">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div>
+        <input class="form-input" id="f-date" type="date" value="${today()}">
+      </div>
+      <div class="form-group"><div class="form-label">darabszám</div>
+        <input class="form-input" id="f-shares" type="number" step="0.0001" placeholder="10.5" oninput="recalcETFModal()">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">árfolyam (EUR/db)</div>
+        <input class="form-input" id="f-price" type="number" step="0.0001" placeholder="${livePrice?livePrice.toFixed(2):'148.50'}" oninput="recalcETFModal()">
+      </div>
+      <div class="form-group"><div class="form-label">össz. vételár (Ft)</div>
+        <input class="form-input" id="f-huf" type="number" step="1" placeholder="pl. 5 600 000" oninput="recalcETFModalFromHuf()">
+      </div></div>
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between">
+        <span>EUR/HUF: <input id="f-fx" type="number" step="0.01" value="${Math.round(liveFx)}" oninput="recalcETFModal()" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;padding:0 2px"></span>
+        <span>Befektetett: <strong id="calcHuf" style="color:var(--text)">–</strong></span>
+      </div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div>
+        <input class="form-input" id="f-note" placeholder="opcionális">
+      </div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFBuy(document.getElementById('f-ticker').value)">mentés</button></div>`;
   }
   else if(type==='sell-etf'){
     const basis=etfCostBasis(param);
@@ -1350,15 +1372,44 @@ function submitDKJ(){
   data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel'});
   closeModal(); renderAll(); saveData(); toast('DKJ pozíció rögzítve');
 }
+function recalcETFModal(){
+  const s=parseFloat(document.getElementById('f-shares')?.value)||0;
+  const p=parseFloat(document.getElementById('f-price')?.value)||0;
+  const fx=parseFloat(document.getElementById('f-fx')?.value)||liveFx;
+  const hufEl=document.getElementById('f-huf');
+  const calcEl=document.getElementById('calcHuf');
+  if(s&&p&&fx){
+    const huf=Math.round(s*p*fx);
+    if(hufEl&&!hufEl.matches(':focus'))hufEl.value=huf;
+    if(calcEl)calcEl.textContent=fmt(huf);
+  } else {
+    if(calcEl)calcEl.textContent='–';
+  }
+}
+
+function recalcETFModalFromHuf(){
+  const s=parseFloat(document.getElementById('f-shares')?.value)||0;
+  const p=parseFloat(document.getElementById('f-price')?.value)||0;
+  const huf=parseFloat(document.getElementById('f-huf')?.value)||0;
+  const fxEl=document.getElementById('f-fx');
+  const calcEl=document.getElementById('calcHuf');
+  if(huf&&s&&p){
+    const fx=huf/s/p;
+    if(fxEl&&!fxEl.matches(':focus'))fxEl.value=fx.toFixed(2);
+  }
+  if(calcEl&&huf)calcEl.textContent=fmt(Math.round(huf));
+}
+
 function submitETFBuy(ticker){
   const date=document.getElementById('f-date').value;
   const shares=parseFloat(document.getElementById('f-shares').value);
   const priceEur=parseFloat(document.getElementById('f-price').value);
-  const fxRate=parseFloat(document.getElementById('f-fx').value)||liveFx;
+  const hufInput=parseFloat(document.getElementById('f-huf')?.value)||0;
+  const fxRate=hufInput&&shares&&priceEur?hufInput/shares/priceEur:(parseFloat(document.getElementById('f-fx')?.value)||liveFx);
   const tbszYear=parseInt(document.getElementById('f-tbsz').value)||new Date().getFullYear();
   const note=document.getElementById('f-note').value;
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
-  const huf=shares*priceEur*fxRate;
+  const huf=hufInput||Math.round(shares*priceEur*fxRate);
   data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,tbszYear,note});
   data.cashTx.push({id:uid(),date,type:'buy',amount:huf,note:ticker+' vétel'});
   closeModal(); renderAll(); saveData(); toast(ticker+' vétel rögzítve');
@@ -1426,6 +1477,169 @@ function applyBlur(){
 // ═══════════════════════════════════════════════
 // CSV EXPORT
 // ═══════════════════════════════════════════════
+function editTx(kind, id){
+  document.getElementById('modalBackdrop').classList.add('open');
+  const title=document.getElementById('modalTitle');
+  const body=document.getElementById('modalBody');
+
+  if(kind==='cash'){
+    const t=data.cashTx.find(t=>t.id===id);
+    if(!t)return;
+    const typeLabel={deposit:'Befizetés',withdraw:'Kiutalás',coupon:'Kamat',expire:'Lejárat',sell:'Eladás'};
+    title.textContent=(typeLabel[t.type]||t.type)+' szerkesztése';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">dátum</div>
+        <input class="form-input" id="e-date" type="date" value="${t.date}">
+      </div>
+      <div class="form-group"><div class="form-label">összeg (Ft)</div>
+        <input class="form-input" id="e-amount" type="number" value="${t.amount}">
+      </div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div>
+        <input class="form-input" id="e-note" value="${t.note||''}">
+      </div></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">mégse</button>
+        <button class="btn btn-primary" onclick="saveEditCash('${id}')">mentés</button>
+      </div>`;
+  }
+  else if(kind==='fixmap'){
+    const f=data.fixmap.find(f=>f.id===id);
+    if(!f)return;
+    const sr=data.fixmapSeries.find(x=>x.id===f.seriesId);
+    title.textContent='FixMáP vétel szerkesztése';
+    body.innerHTML=`
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:12px">
+        Sorozat: <strong style="color:var(--text)">${sr?sr.name:'–'}</strong>
+      </div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div>
+        <input class="form-input" id="e-date" type="date" value="${f.date}">
+      </div>
+      <div class="form-group"><div class="form-label">névérték (Ft)</div>
+        <input class="form-input" id="e-face" type="number" value="${f.faceValue}">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vételi árfolyam (%)</div>
+        <input class="form-input" id="e-rate-pct" type="number" step="0.01" value="${f.faceValue>0?(f.buyPrice/f.faceValue*100).toFixed(4):'100'}">
+      </div>
+      <div class="form-group"><div class="form-label">tényleges vételár</div>
+        <div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px">${fmt(f.buyPrice||f.faceValue)}</div>
+      </div></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">mégse</button>
+        <button class="btn btn-primary" onclick="saveEditFixmap('${id}')">mentés</button>
+      </div>`;
+  }
+  else if(kind==='dkj'){
+    const d=data.dkj.find(d=>d.id===id);
+    if(!d)return;
+    title.textContent='DKJ tétel szerkesztése';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div>
+        <input class="form-input" id="e-date" type="date" value="${d.date}">
+      </div>
+      <div class="form-group"><div class="form-label">névérték (Ft)</div>
+        <input class="form-input" id="e-face" type="number" value="${d.faceValue}">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vételár (Ft)</div>
+        <input class="form-input" id="e-buy" type="number" value="${d.buyPrice}">
+      </div>
+      <div class="form-group"><div class="form-label">lejárat</div>
+        <input class="form-input" id="e-maturity" type="date" value="${d.maturity}">
+      </div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">hozam %</div>
+        <input class="form-input" id="e-yield" type="number" step="0.01" value="${d.yieldRate||''}">
+      </div></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">mégse</button>
+        <button class="btn btn-primary" onclick="saveEditDKJ('${id}')">mentés</button>
+      </div>`;
+  }
+  else if(kind==='etf'){
+    const t=data.etfTx.find(t=>t.id===id);
+    if(!t)return;
+    title.textContent=t.ticker+' '+(t.type==='buy'?'vétel':'eladás')+' szerkesztése';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">dátum</div>
+        <input class="form-input" id="e-date" type="date" value="${t.date}">
+      </div>
+      <div class="form-group"><div class="form-label">darabszám</div>
+        <input class="form-input" id="e-shares" type="number" step="0.0001" value="${t.shares}">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">árfolyam (EUR/db)</div>
+        <input class="form-input" id="e-price" type="number" step="0.01" value="${t.priceEur}">
+      </div>
+      <div class="form-group"><div class="form-label">EUR/HUF árfolyam</div>
+        <input class="form-input" id="e-fx" type="number" step="0.01" value="${t.fxRate}">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">TBSZ év</div>
+        <input class="form-input" id="e-tbsz" type="number" value="${t.tbszYear||''}">
+      </div>
+      <div class="form-group"><div class="form-label">megjegyzés</div>
+        <input class="form-input" id="e-note" value="${t.note||''}">
+      </div></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">mégse</button>
+        <button class="btn btn-primary" onclick="saveEditETF('${id}')">mentés</button>
+      </div>`;
+  }
+}
+
+function saveEditCash(id){
+  const t=data.cashTx.find(t=>t.id===id);
+  if(!t)return;
+  t.date=document.getElementById('e-date').value;
+  t.amount=parseFloat(document.getElementById('e-amount').value)||t.amount;
+  t.note=document.getElementById('e-note').value;
+  closeModal(); renderAll(); saveData(); toast('Mentve');
+}
+
+function saveEditFixmap(id){
+  const f=data.fixmap.find(f=>f.id===id);
+  if(!f)return;
+  const oldBuyPrice=f.buyPrice||f.faceValue;
+  f.date=document.getElementById('e-date').value;
+  f.faceValue=parseFloat(document.getElementById('e-face').value)||f.faceValue;
+  const ratePct=parseFloat(document.getElementById('e-rate-pct').value)||100;
+  f.buyPrice=Math.round(f.faceValue*ratePct/100);
+  // update linked cashTx
+  const ct=data.cashTx.find(t=>t.type==='buy'&&t.note==='FixMáP vétel'&&t.date===f.date);
+  if(ct){ct.amount=f.buyPrice;ct.date=f.date;}
+  closeModal(); renderAll(); saveData(); toast('Mentve');
+}
+
+function saveEditDKJ(id){
+  const d=data.dkj.find(d=>d.id===id);
+  if(!d)return;
+  const oldBuyPrice=d.buyPrice;
+  const oldDate=d.date;
+  d.date=document.getElementById('e-date').value;
+  d.faceValue=parseFloat(document.getElementById('e-face').value)||d.faceValue;
+  d.buyPrice=parseFloat(document.getElementById('e-buy').value)||d.buyPrice;
+  d.maturity=document.getElementById('e-maturity').value;
+  d.yieldRate=parseFloat(document.getElementById('e-yield').value)||null;
+  // update linked cashTx
+  const ct=data.cashTx.find(t=>t.type==='buy'&&t.note==='DKJ vétel'&&t.date===oldDate&&Math.abs(t.amount-oldBuyPrice)<1);
+  if(ct){ct.amount=d.buyPrice;ct.date=d.date;}
+  closeModal(); renderAll(); saveData(); toast('Mentve');
+}
+
+function saveEditETF(id){
+  const t=data.etfTx.find(t=>t.id===id);
+  if(!t)return;
+  const oldHuf=t.shares*t.priceEur*t.fxRate;
+  const oldDate=t.date;
+  t.date=document.getElementById('e-date').value;
+  t.shares=parseFloat(document.getElementById('e-shares').value)||t.shares;
+  t.priceEur=parseFloat(document.getElementById('e-price').value)||t.priceEur;
+  t.fxRate=parseFloat(document.getElementById('e-fx').value)||t.fxRate;
+  t.tbszYear=parseInt(document.getElementById('e-tbsz').value)||t.tbszYear;
+  t.note=document.getElementById('e-note').value;
+  const newHuf=t.shares*t.priceEur*t.fxRate;
+  // update linked cashTx
+  const ct=data.cashTx.find(c=>c.type===t.type&&c.date===oldDate&&c.note&&c.note.includes(t.ticker)&&Math.abs(c.amount-oldHuf)<10);
+  if(ct){ct.amount=newHuf;ct.date=t.date;}
+  closeModal(); renderAll(); saveData(); toast('Mentve');
+}
+
 function exportCSV(){
   const rows=[['Dátum','Típus','Eszköz','Összeg/Db','Árfolyam (EUR)','Megjegyzés']];
   data.cashTx.forEach(t=>rows.push([t.date,t.type,'Pénzszámla',t.amount,'',t.note||'']));
