@@ -272,15 +272,19 @@ tr:hover td{background:rgba(255,255,255,.015)}
       <div class="card-row cards-3" id="apCards"></div>
 
       <div class="section-title">
-        FixMáP pozíciók
-        <button class="btn btn-primary btn-sm" onclick="openModal('buy-fixmap')">+ FixMáP vétel</button>
+        FixMáP sorozatok &amp; pozíciók
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="openModal('new-fixmap-series')">+ új sorozat</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('buy-fixmap')">+ vétel</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap-series')">− eladás</button>
+        </div>
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>dátum</th><th>névérték</th><th class="r">aktuális érték</th><th class="r">kamat %</th><th class="r">következő kamat</th><th class="r">lejárat</th><th class="r">státusz</th><th></th></tr></thead>
+          <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">köv. kamat</th><th class="r">lejárat</th><th class="r">státusz</th><th></th></tr></thead>
           <tbody id="fixmapBody"></tbody>
         </table></div>
-        <div class="empty" id="fixmapEmpty" style="display:none">Még nincs FixMáP pozíció.</div>
+        <div class="empty" id="fixmapEmpty" style="display:none">Még nincs FixMáP pozíció. Előbb hozz létre sorozatot!</div>
       </div>
 
       <div class="section-title">
@@ -375,10 +379,11 @@ let liveVwce=null, liveWbit=null, liveFx=395;
 let charts={};
 
 const DEFAULT_DATA = {
-  cashTx: [],       // {id,date,type:'deposit'|'withdraw'|'coupon'|'expire'|'buy'|'sell',amount,note}
-  fixmap: [],       // {id,date,faceValue,couponRate,maturity,note,active}
-  dkj: [],          // {id,date,faceValue,buyPrice,yieldRate,maturity,active}
-  etfTx: [],        // {id,date,ticker,type:'buy'|'sell',shares,priceEur,fxRate,note,tbszYear}
+  cashTx: [],         // {id,date,type,amount,note}
+  fixmapSeries: [],   // {id,name,couponRate,issueDate,nextCoupon,maturity} – sorozat definíciók
+  fixmap: [],         // {id,seriesId,date,faceValue,buyPrice,active} – vételek
+  dkj: [],            // {id,date,faceValue,buyPrice,yieldRate,maturity,active}
+  etfTx: [],          // {id,date,ticker,type,shares,priceEur,fxRate,note,tbszYear}
 };
 
 let data = null;
@@ -432,6 +437,7 @@ async function loadOrCreateGist(){
     data=JSON.parse(j.files[GIST_FILE].content);
     // migrate old data if needed
     if(!data.cashTx)data.cashTx=[];
+    if(!data.fixmapSeries)data.fixmapSeries=[];
     if(!data.fixmap)data.fixmap=[];
     if(!data.dkj)data.dkj=[];
     if(!data.etfTx)data.etfTx=[];
@@ -696,30 +702,50 @@ function renderAllampapir(){
   const dkjActive=data.dkj.filter(d=>d.active);
   const fmValue=fmActive.reduce((s,f)=>s+f.faceValue,0);
   const dkjValue=dkjActive.reduce((s,d)=>s+d.faceValue,0);
-  const annualCoupon=fmActive.reduce((s,f)=>s+f.faceValue*f.couponRate/100,0);
+  const annualCoupon=fmActive.reduce((s,f)=>{
+    const sr=data.fixmapSeries.find(x=>x.id===(f.seriesId||'legacy'));
+    const rate=sr?sr.couponRate:(f.couponRate||0);
+    return s+f.faceValue*rate/100;
+  },0);
 
+  const fmSeriesCount=[...new Set(data.fixmap.filter(f=>f.active).map(f=>f.seriesId||'legacy'))].length;
+  const dkjSeriesCount=[...new Set(data.dkj.filter(d=>d.active).map(d=>d.maturity))].length;
   document.getElementById('apCards').innerHTML=`
-    <div class="stat-card"><div class="stat-label">FixMáP névérték</div><div class="stat-value blurable">${fmtM(fmValue)}</div><div class="stat-sub">${fmActive.length} pozíció</div></div>
-    <div class="stat-card"><div class="stat-label">DKJ névérték</div><div class="stat-value blurable">${fmtM(dkjValue)}</div><div class="stat-sub">${dkjActive.length} aktív pozíció</div></div>
+    <div class="stat-card"><div class="stat-label">FixMáP névérték</div><div class="stat-value blurable">${fmtM(fmValue)}</div><div class="stat-sub">${fmSeriesCount} sorozat</div></div>
+    <div class="stat-card"><div class="stat-label">DKJ névérték</div><div class="stat-value blurable">${fmtM(dkjValue)}</div><div class="stat-sub">${dkjSeriesCount} aktív sorozat</div></div>
     <div class="stat-card"><div class="stat-label">éves kamatbevétel</div><div class="stat-value pos blurable">${fmtM(annualCoupon)}</div><div class="stat-sub">${fmt(annualCoupon/12)}/hó</div></div>
   `;
 
-  // FixMáP table
-  const fmAll=data.fixmap;
-  document.getElementById('fixmapBody').innerHTML=fmAll.map(f=>`<tr>
-    <td>${f.date}</td>
-    <td><div class="asset-name blurable">${fmt(f.faceValue)}</div><span class="badge b-ap">FixMáP</span></td>
-    <td class="r blurable">${fmt(f.faceValue*(1+f.couponRate/100*((new Date(f.maturity)-new Date(f.date))/(365*24*3600*1000))))}</td>
-    <td class="r">${f.couponRate}%</td>
-    <td class="r pos blurable">${f.active?'+'+fmt(f.faceValue*f.couponRate/100/4):'–'}</td>
-    <td class="r">${f.maturity}</td>
-    <td><span class="badge ${f.active?'b-etf':'b-cash'}">${f.active?'aktív':'lezárt'}</span></td>
-    <td style="white-space:nowrap">
-      ${f.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap','${f.id}')" style="margin-right:4px">eladás</button>`:''}
-      <button class="btn btn-danger btn-sm" onclick="deleteFixmap('${f.id}')">×</button>
-    </td>
-  </tr>`).join('');
-  document.getElementById('fixmapEmpty').style.display=fmAll.length?'none':'block';
+  // FixMáP table – grouped by series
+  const fmSeriesMap={};
+  data.fixmap.forEach(f=>{
+    const sid=f.seriesId||'legacy';
+    if(!fmSeriesMap[sid])fmSeriesMap[sid]={seriesId:sid,items:[],totalFace:0,totalBuy:0,active:false};
+    fmSeriesMap[sid].items.push(f);
+    if(f.active){fmSeriesMap[sid].totalFace+=f.faceValue;fmSeriesMap[sid].totalBuy+=(f.buyPrice||f.faceValue);fmSeriesMap[sid].active=true;}
+  });
+  const fmSeriesList=Object.values(fmSeriesMap);
+  document.getElementById('fixmapBody').innerHTML=fmSeriesList.map(s=>{
+    const sr=data.fixmapSeries.find(x=>x.id===s.seriesId);
+    const name=sr?sr.name:(s.seriesId==='legacy'?'FixMáP (régi)':'Ismeretlen');
+    const couponRate=sr?sr.couponRate:0;
+    const maturity=sr?sr.maturity:'–';
+    const nextCoupon=sr?sr.nextCoupon:'–';
+    const qCoupon=s.active&&couponRate?s.totalFace*couponRate/100/4:0;
+    return `<tr>
+      <td><div class="asset-name">${name}</div><div style="font-size:10px;color:var(--text3)">${s.items.length} tétel</div></td>
+      <td class="r blurable">${fmt(s.totalFace)}</td>
+      <td class="r blurable">${fmt(s.totalBuy)}</td>
+      <td class="r">${couponRate?couponRate+'%':'–'}</td>
+      <td class="r pos blurable">${qCoupon?'+'+fmt(qCoupon):'–'}<div style="font-size:10px;color:var(--text3)">${nextCoupon!=='–'?nextCoupon:''}</div></td>
+      <td class="r">${maturity}</td>
+      <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
+      <td style="white-space:nowrap">
+        ${s.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap-series','${s.seriesId}')" style="margin-right:4px">eladás</button>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('fixmapEmpty').style.display=fmSeriesList.length?'none':'block';
 
   // DKJ table – grouped by series (maturity)
   const dkjSeries={};
@@ -938,15 +964,32 @@ function openModal(type, param){
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitWithdraw()">mentés</button></div>`;
   }
+  else if(type==='new-fixmap-series'){
+    title.textContent='Új FixMáP sorozat';
+    body.innerHTML=`
+      <div class="form-row full"><div class="form-group"><div class="form-label">sorozat neve</div><input class="form-input" id="f-name" placeholder="pl. FixMáP 2031/I"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">kamatláb (%)</div><input class="form-input" id="f-rate" type="number" step="0.01" placeholder="7.00"></div>
+      <div class="form-group"><div class="form-label">kibocsátás dátuma</div><input class="form-input" id="f-issue" type="date"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">következő kamatfizetés</div><input class="form-input" id="f-nextcoupon" type="date"></div>
+      <div class="form-group"><div class="form-label">lejárat dátuma</div><input class="form-input" id="f-maturity" type="date"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitNewFixmapSeries()">mentés</button></div>`;
+  }
   else if(type==='buy-fixmap'){
+    const seriesOptions=data.fixmapSeries.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
     title.textContent='FixMáP vétel';
     body.innerHTML=`
+      ${data.fixmapSeries.length===0?'<div style="background:var(--amber-dim);color:var(--amber);border-radius:7px;padding:10px;font-size:12px;margin-bottom:12px">Először hozz létre egy sorozatot az &quot;+ új sorozat&quot; gombbal!</div>':''}
+      <div class="form-row full"><div class="form-group"><div class="form-label">sorozat</div>
+        <select class="form-select" id="f-series" onchange="updateFixmapBuyInfo(this.value)">
+          ${seriesOptions||'<option value="">– nincs sorozat –</option>'}
+        </select>
+      </div></div>
       <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
-      <div class="form-group"><div class="form-label">névérték (Ft)</div><input class="form-input" id="f-face" type="number" placeholder="1000000"></div></div>
-      <div class="form-row"><div class="form-group"><div class="form-label">kamatláb (%)</div><input class="form-input" id="f-rate" type="number" step="0.01" value="7.00"></div>
-      <div class="form-group"><div class="form-label">lejárat dátuma</div><input class="form-input" id="f-maturity" type="date" value="2031-01-23"></div></div>
-      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-group"><div class="form-label">névérték (Ft)</div><input class="form-input" id="f-face" type="number" placeholder="1000000" oninput="updateFixmapBuyCalc()"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">vételi árfolyam (%)</div><input class="form-input" id="f-rate-pct" type="number" step="0.01" placeholder="100.00" value="100" oninput="updateFixmapBuyCalc()"></div>
+      <div class="form-group"><div class="form-label">tényleges vételár</div><div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px" id="fixmap-buy-preview">–</div></div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmap()">mentés</button></div>`;
+    if(data.fixmapSeries.length>0) updateFixmapBuyInfo(data.fixmapSeries[0].id);
   }
   else if(type==='buy-dkj'){
     title.textContent='DKJ vétel';
@@ -991,15 +1034,31 @@ function openModal(type, param){
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFSell('${param}')">mentés</button></div>`;
   }
-  else if(type==='sell-fixmap'){
-    const f=data.fixmap.find(f=>f.id===param);
+  else if(type==='sell-fixmap-series'){
+    const activeSids=[...new Set(data.fixmap.filter(f=>f.active).map(f=>f.seriesId||'legacy'))];
+    const selectedSid=param&&param!=='undefined'?param:(activeSids[0]||'');
+    const getSeriesTotal=(sid)=>{
+      const items=data.fixmap.filter(f=>f.active&&(f.seriesId||'legacy')===sid);
+      return {totalFace:items.reduce((s,f)=>s+f.faceValue,0),totalBuy:items.reduce((s,f)=>s+(f.buyPrice||f.faceValue),0)};
+    };
+    const st=getSeriesTotal(selectedSid);
+    const seriesName=(sid)=>{const sr=data.fixmapSeries.find(x=>x.id===sid);return sr?sr.name:sid;};
     title.textContent='FixMáP eladás';
     body.innerHTML=`
-      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:12px">Névérték: <strong style="color:var(--text)">${f?fmt(f.faceValue):'–'}</strong></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">sorozat</div>
+        <select class="form-select" id="f-series" onchange="updateFixmapSellInfo(this.value)">
+          ${activeSids.map(sid=>`<option value="${sid}" ${sid===selectedSid?'selected':''}>${seriesName(sid)}</option>`).join('')}
+        </select>
+      </div></div>
+      <div id="fixmap-sell-info" style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:10px">
+        Névérték: <strong style="color:var(--text)" id="fixmap-info-face">${fmt(st.totalFace)}</strong> &nbsp;|&nbsp; Össz. vételár: <strong style="color:var(--text)" id="fixmap-info-buy">${fmt(st.totalBuy)}</strong>
+      </div>
       <div class="form-row"><div class="form-group"><div class="form-label">eladás dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
-      <div class="form-group"><div class="form-label">eladási ár (Ft)</div><input class="form-input" id="f-amount" type="number" value="${f?f.faceValue:''}"></div></div>
+      <div class="form-group"><div class="form-label">eladott névérték (Ft)</div><input class="form-input" id="f-face-sell" type="number" placeholder="${st.totalFace}" oninput="updateFixmapSellCalc()"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">eladási ár (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="piaci ár" oninput="updateFixmapSellCalc()"></div>
+      <div class="form-group"><div class="form-label">nyereség / veszteség</div><div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px" id="fixmap-pl-preview">–</div></div></div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
-      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmapSell('${param}')">mentés</button></div>`;
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmapSeriesSell()">mentés</button></div>`;
   }
   else if(type==='sell-dkj-series'){
     // param = maturity string or undefined (show dropdown)
@@ -1049,18 +1108,99 @@ function submitWithdraw(){
   data.cashTx.push({id:uid(),date,type:'withdraw',amount,note});
   closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); toast('Kiutalás rögzítve');
 }
+function submitNewFixmapSeries(){
+  const name=document.getElementById('f-name').value.trim();
+  const couponRate=parseFloat(document.getElementById('f-rate').value);
+  const issueDate=document.getElementById('f-issue').value;
+  const nextCoupon=document.getElementById('f-nextcoupon').value;
+  const maturity=document.getElementById('f-maturity').value;
+  if(!name||!couponRate||!maturity)return toast('Töltsd ki a kötelező mezőket!');
+  data.fixmapSeries.push({id:uid(),name,couponRate,issueDate,nextCoupon,maturity});
+  closeModal(); renderAll(); toast('Sorozat létrehozva: '+name);
+}
+
+function updateFixmapBuyInfo(sid){
+  updateFixmapBuyCalc();
+}
+
+function updateFixmapBuyCalc(){
+  const face=parseFloat(document.getElementById('f-face')?.value)||0;
+  const pct=parseFloat(document.getElementById('f-rate-pct')?.value)||100;
+  const el=document.getElementById('fixmap-buy-preview');
+  if(!el)return;
+  if(!face){el.textContent='–';return;}
+  const buyPrice=face*pct/100;
+  el.textContent=fmt(buyPrice);
+  el.style.color=pct<100?'var(--green)':pct>100?'var(--red)':'var(--text)';
+}
+
+function updateFixmapSellInfo(sid){
+  const items=data.fixmap.filter(f=>f.active&&(f.seriesId||'legacy')===sid);
+  const totalFace=items.reduce((s,f)=>s+f.faceValue,0);
+  const totalBuy=items.reduce((s,f)=>s+(f.buyPrice||f.faceValue),0);
+  const fEl=document.getElementById('fixmap-info-face');
+  const bEl=document.getElementById('fixmap-info-buy');
+  if(fEl)fEl.textContent=fmt(totalFace);
+  if(bEl)bEl.textContent=fmt(totalBuy);
+  updateFixmapSellCalc();
+}
+
+function updateFixmapSellCalc(){
+  const sid=document.getElementById('f-series')?.value;
+  const faceSell=parseFloat(document.getElementById('f-face-sell')?.value)||0;
+  const sellPrice=parseFloat(document.getElementById('f-amount')?.value)||0;
+  const el=document.getElementById('fixmap-pl-preview');
+  if(!el)return;
+  if(!faceSell||!sellPrice){el.textContent='–';el.style.color='var(--text2)';return;}
+  const items=data.fixmap.filter(f=>f.active&&(f.seriesId||'legacy')===sid);
+  const totalFace=items.reduce((s,f)=>s+f.faceValue,0);
+  const totalBuy=items.reduce((s,f)=>s+(f.buyPrice||f.faceValue),0);
+  const propBuy=totalFace>0?(faceSell/totalFace)*totalBuy:0;
+  const pl=sellPrice-propBuy;
+  el.textContent=(pl>=0?'+':'')+fmt(pl);
+  el.style.color=pl>=0?'var(--green)':'var(--red)';
+}
+
+function submitFixmapSeriesSell(){
+  const sid=document.getElementById('f-series')?.value;
+  const date=document.getElementById('f-date').value;
+  const faceSell=parseFloat(document.getElementById('f-face-sell')?.value)||0;
+  const sellPrice=parseFloat(document.getElementById('f-amount').value);
+  const note=document.getElementById('f-note').value;
+  if(!sid||!date||!faceSell||!sellPrice)return toast('Töltsd ki a kötelező mezőket!');
+  // FIFO
+  let remaining=faceSell;
+  const items=data.fixmap.filter(f=>f.active&&(f.seriesId||'legacy')===sid).sort((a,b)=>a.date.localeCompare(b.date));
+  for(const item of items){
+    if(remaining<=0)break;
+    if(item.faceValue<=remaining){item.active=false;remaining-=item.faceValue;}
+    else{
+      const ratio=remaining/item.faceValue;
+      data.fixmap.push({...item,id:uid(),faceValue:item.faceValue-remaining,buyPrice:(item.buyPrice||item.faceValue)*(1-ratio)});
+      item.faceValue=remaining;
+      item.buyPrice=(item.buyPrice||item.faceValue)*ratio;
+      item.active=false;
+      remaining=0;
+    }
+  }
+  const sr=data.fixmapSeries.find(x=>x.id===sid);
+  data.cashTx.push({id:uid(),date,type:'sell',amount:sellPrice,note:'FixMáP eladás'+(sr?' '+sr.name:'')+(note?' – '+note:'')});
+  closeModal(); renderAll(); toast('FixMáP eladás rögzítve');
+}
+
 function submitFixmap(){
+  const sid=document.getElementById('f-series')?.value;
   const date=document.getElementById('f-date').value;
   const faceValue=parseFloat(document.getElementById('f-face').value);
-  const couponRate=parseFloat(document.getElementById('f-rate').value);
-  const maturity=document.getElementById('f-maturity').value;
-  const note=document.getElementById('f-note').value;
-  if(!date||!faceValue||!couponRate||!maturity)return toast('Töltsd ki a kötelező mezőket!');
+  const ratePct=parseFloat(document.getElementById('f-rate-pct').value)||100;
+  if(!sid||!date||!faceValue)return toast('Töltsd ki a kötelező mezőket!');
+  if(data.fixmapSeries.length===0)return toast('Először hozz létre sorozatot!');
+  const buyPrice=faceValue*ratePct/100;
   const bal=cashBalance();
-  if(bal<faceValue)return toast('Nincs elég egyenleg! Szükséges: '+fmt(faceValue)+', jelenlegi: '+fmt(bal));
-  data.fixmap.push({id:uid(),date,faceValue,couponRate,maturity,note,active:true});
-  data.cashTx.push({id:uid(),date,type:'buy',amount:faceValue,note:'FixMáP vétel'});
-  closeModal(); renderAll(); toast('FixMáP pozíció rögzítve');
+  if(bal<buyPrice)return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
+  data.fixmap.push({id:uid(),seriesId:sid,date,faceValue,buyPrice,active:true});
+  data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'FixMáP vétel'});
+  closeModal(); renderAll(); toast('FixMáP vétel rögzítve');
 }
 function updateDKJSellInfo(maturity){
   const items=data.dkj.filter(d=>d.active&&d.maturity===maturity);
@@ -1139,17 +1279,7 @@ function submitDKJSell(id){
   data.cashTx.push({id:uid(),date,type:'sell',amount,note:'DKJ eladás'+(note?' – '+note:'')});
   closeModal(); renderAll(); toast('DKJ eladás rögzítve');
 }
-function submitFixmapSell(id){
-  const f=data.fixmap.find(f=>f.id===id);
-  if(!f)return;
-  const date=document.getElementById('f-date').value;
-  const amount=parseFloat(document.getElementById('f-amount').value);
-  const note=document.getElementById('f-note').value;
-  if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
-  f.active=false;
-  data.cashTx.push({id:uid(),date,type:'sell',amount,note:'FixMáP eladás'+(note?' – '+note:'')});
-  closeModal(); renderAll(); toast('FixMáP eladás rögzítve');
-}
+// submitFixmapSell removed - replaced by submitFixmapSeriesSell
 function submitDKJ(){
   const date=document.getElementById('f-date').value;
   const faceValue=parseFloat(document.getElementById('f-face').value);
