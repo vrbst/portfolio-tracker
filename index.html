@@ -985,14 +985,46 @@ function renderTBSZ(){
 
 function renderETFTable(ticker,bodyId,emptyId,livePrice){
   const buys=etfCostBasis(ticker).sort((a,b)=>b.date.localeCompare(a.date));
-  document.getElementById(bodyId).innerHTML=buys.map(b=>{
+  if(!buys.length){document.getElementById(emptyId).style.display='block';return;}
+  document.getElementById(emptyId).style.display='none';
+
+  // Totals & weighted averages
+  const totShares=buys.reduce((s,b)=>s+b.shares,0);
+  const totCostHuf=buys.reduce((s,b)=>s+b.costHuf,0);
+  const totCostEur=buys.reduce((s,b)=>s+b.shares*b.priceEur,0);
+  const wavgPriceEur=totCostEur/totShares;
+  const wavgFx=totCostHuf/totCostEur;
+  const totValFt=livePrice?totShares*livePrice*liveFx:null;
+  const totValEur=livePrice?totShares*livePrice:null;
+  const totPlFt=totValFt!==null?totValFt-totCostHuf:null;
+  const totPlEur=totValEur!==null?totValEur-totCostEur:null;
+  const totPlPct=totPlFt!==null?totPlFt/totCostHuf*100:null;
+  const totPlEurPct=totPlEur!==null?totPlEur/totCostEur*100:null;
+
+  const summaryRow=`<tr style="border-top:2px solid var(--border2);font-weight:500;background:var(--bg3)">
+    <td style="font-size:11px;color:var(--text2)">összesítés</td>
+    <td class="r blurable">${fmtM(totCostHuf)}</td>
+    <td class="r blurable">${totShares.toFixed(2)}</td>
+    <td class="r blurable" style="font-size:11px;color:var(--text2)">∅ ${fmtEur(wavgPriceEur)}</td>
+    <td class="r" style="font-size:11px;color:var(--text2)">∅ ${Math.round(wavgFx)}</td>
+    <td class="r blurable">${fmtEur(totCostEur,0)}</td>
+    <td class="r blurable">${totValEur!==null?fmtEur(totValEur,0):'–'}</td>
+    <td class="r blurable ${totPlEur===null?'':totPlEur>=0?'pos':'neg'}">${totPlEur!==null?(totPlEur>=0?'+':'')+fmtEur(Math.abs(totPlEur),0):'–'}</td>
+    <td class="r ${totPlEurPct===null?'':totPlEurPct>=0?'pos':'neg'}">${totPlEurPct!==null?fmtSignPct(totPlEurPct):'–'}</td>
+    <td class="r blurable">${totValFt!==null?fmtM(totValFt):'–'}</td>
+    <td class="r blurable ${totPlFt===null?'':totPlFt>=0?'pos':'neg'}">${totPlFt!==null?fmtSign(totPlFt):'–'}</td>
+    <td class="r ${totPlPct===null?'':totPlPct>=0?'pos':'neg'}">${totPlPct!==null?fmtSignPct(totPlPct):'–'}</td>
+    <td class="r">–</td>
+    <td></td>
+  </tr>`;
+
+  const rows=buys.map(b=>{
     const costEur=b.shares*b.priceEur;
     const currentValFt=livePrice?b.shares*livePrice*liveFx:null;
     const currentValEur=livePrice?b.shares*livePrice:null;
     const plFt=currentValFt!==null?currentValFt-b.costHuf:null;
     const plEur=currentValEur!==null?currentValEur-costEur:null;
     const plPct=plFt!==null?plFt/b.costHuf*100:null;
-    const signEur=plEur!==null?(plEur>=0?'+':'')+fmtEur(Math.abs(plEur),0):'–';
     const plEurPct=plEur!==null?plEur/costEur*100:null;
     return `<tr>
       <td>${b.date}</td>
@@ -1011,7 +1043,8 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
       <td><button class="btn btn-danger btn-sm" onclick="deleteEtfTx('${b.id}')">×</button></td>
     </tr>`;
   }).join('');
-  document.getElementById(emptyId).style.display=buys.length?'none':'block';
+
+  document.getElementById(bodyId).innerHTML=summaryRow+rows;
 }
 
 function deleteEtfTx(id){
