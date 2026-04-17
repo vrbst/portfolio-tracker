@@ -313,15 +313,16 @@ tr:hover td{background:rgba(255,255,255,.015)}
 
       <div class="section-title">
         VWCE pozíciók
-        <div style="display:flex;gap:6px;align-items:center">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span id="vwcePill" class="live-pill est"><span class="live-dot"></span><span id="vwcePriceLabel"><span class="spin"></span>betöltés</span></span>
+          <span id="vwcePriceHuf" style="font-size:11px;color:var(--text2)"></span>
           <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf','VWCE')">+ vétel</button>
           <button class="btn btn-ghost btn-sm" onclick="openModal('sell-etf','VWCE')">− eladás</button>
         </div>
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>dátum</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. Ft</th><th class="r">befekt. EUR</th><th class="r">akt. Ft</th><th class="r">akt. EUR</th><th class="r">P&L Ft</th><th class="r">P&L EUR</th><th class="r">P&L %</th><th class="r">TBSZ</th><th></th></tr></thead>
+          <thead><tr><th>dátum</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. EUR</th><th class="r">akt. EUR</th><th class="r">P&L EUR</th><th class="r">P&L EUR %</th><th class="r">befekt. Ft</th><th class="r">akt. Ft</th><th class="r">P&L Ft</th><th class="r">P&L Ft %</th><th class="r">TBSZ</th><th></th></tr></thead>
           <tbody id="vwceBody"></tbody>
         </table></div>
         <div class="empty" id="vwceEmpty" style="display:none">Még nincs VWCE tétel.</div>
@@ -329,15 +330,16 @@ tr:hover td{background:rgba(255,255,255,.015)}
 
       <div class="section-title">
         WBIT pozíciók
-        <div style="display:flex;gap:6px;align-items:center">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span id="wbitPill" class="live-pill est"><span class="live-dot"></span><span id="wbitPriceLabel"><span class="spin"></span>betöltés</span></span>
+          <span id="wbitPriceHuf" style="font-size:11px;color:var(--text2)"></span>
           <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf','WBIT')">+ vétel</button>
           <button class="btn btn-ghost btn-sm" onclick="openModal('sell-etf','WBIT')">− eladás</button>
         </div>
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>dátum</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. Ft</th><th class="r">befekt. EUR</th><th class="r">akt. Ft</th><th class="r">akt. EUR</th><th class="r">P&L Ft</th><th class="r">P&L EUR</th><th class="r">P&L %</th><th class="r">TBSZ</th><th></th></tr></thead>
+          <thead><tr><th>dátum</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. EUR</th><th class="r">akt. EUR</th><th class="r">P&L EUR</th><th class="r">P&L EUR %</th><th class="r">befekt. Ft</th><th class="r">akt. Ft</th><th class="r">P&L Ft</th><th class="r">P&L Ft %</th><th class="r">TBSZ</th><th></th></tr></thead>
           <tbody id="wbitBody"></tbody>
         </table></div>
         <div class="empty" id="wbitEmpty" style="display:none">Még nincs WBIT tétel.</div>
@@ -891,17 +893,19 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
     const plEur=currentValEur!==null?currentValEur-costEur:null;
     const plPct=plFt!==null?plFt/b.costHuf*100:null;
     const signEur=plEur!==null?(plEur>=0?'+':'')+fmtEur(Math.abs(plEur),0):'–';
+    const plEurPct=plEur!==null?plEur/costEur*100:null;
     return `<tr>
       <td>${b.date}</td>
       <td class="r blurable">${b.shares.toFixed(2)}</td>
       <td class="r blurable">${fmtEur(b.priceEur)}</td>
       <td class="r">${Math.round(b.fxRate)}</td>
-      <td class="r blurable">${fmtM(b.costHuf)}</td>
       <td class="r blurable">${fmtEur(costEur,0)}</td>
-      <td class="r blurable">${currentValFt!==null?fmtM(currentValFt):'–'}</td>
       <td class="r blurable">${currentValEur!==null?fmtEur(currentValEur,0):'–'}</td>
-      <td class="r blurable ${plFt===null?'':plFt>=0?'pos':'neg'}">${plFt!==null?fmtSign(plFt):'–'}</td>
       <td class="r blurable ${plEur===null?'':plEur>=0?'pos':'neg'}">${plEur!==null?(plEur>=0?'+':'')+fmtEur(Math.abs(plEur),0):'–'}</td>
+      <td class="r ${plEurPct===null?'':plEurPct>=0?'pos':'neg'}">${plEurPct!==null?fmtSignPct(plEurPct):'–'}</td>
+      <td class="r blurable">${fmtM(b.costHuf)}</td>
+      <td class="r blurable">${currentValFt!==null?fmtM(currentValFt):'–'}</td>
+      <td class="r blurable ${plFt===null?'':plFt>=0?'pos':'neg'}">${plFt!==null?fmtSign(plFt):'–'}</td>
       <td class="r ${plPct===null?'':plPct>=0?'pos':'neg'}">${plPct!==null?fmtSignPct(plPct):'–'}</td>
       <td class="r">${b.tbszYear||'–'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="deleteEtfTx('${b.id}')">×</button></td>
@@ -1460,7 +1464,7 @@ async function fetchLive(){
   }catch(e){}
 
   await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
-  await fetchETFPrice('WBIT.DE','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
+  await fetchETFPrice('WBIT.DU','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
   renderTBSZ(); renderDashboard();
 }
 
@@ -1475,6 +1479,9 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
         cb(price);
         document.getElementById(pillId).className='live-pill live';
         document.getElementById(labelId).textContent=fmtEur(price);
+        const hufId=pillId.replace('Pill','PriceHuf');
+        const hufEl=document.getElementById(hufId);
+        if(hufEl)hufEl.textContent='= '+fmt(Math.round(price*liveFx));
         return;
       }
     }
