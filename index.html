@@ -618,12 +618,18 @@ function renderPie(cb,ap,tbsz){
 function renderUpcoming(){
   const now=new Date('2026-04-17');
   const events=[];
-  // FixMáP coupons – use series nextCoupon date and couponRate
+  // FixMáP coupons – grouped by series
+  const fmCouponMap={};
   data.fixmap.filter(f=>f.active).forEach(f=>{
     const sr=data.fixmapSeries.find(x=>x.id===(f.seriesId||''));
     if(!sr)return;
+    const sid=sr.id;
+    if(!fmCouponMap[sid])fmCouponMap[sid]={sr,totalFace:0};
+    fmCouponMap[sid].totalFace+=f.faceValue;
+  });
+  Object.values(fmCouponMap).forEach(({sr,totalFace})=>{
     const nd=sr.nextCoupon||nextCouponDate(sr.maturity);
-    if(nd) events.push({date:nd,label:'FixMáP kamat ('+sr.name+')',amount:f.faceValue*sr.couponRate/100/4,color:'var(--blue)'});
+    if(nd) events.push({date:nd,label:'FixMáP kamat ('+sr.name+')',amount:totalFace*sr.couponRate/100/4,color:'var(--blue)'});
   });
   // DKJ lejáratok
   data.dkj.filter(d=>d.active).forEach(d=>{
