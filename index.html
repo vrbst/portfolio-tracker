@@ -1459,8 +1459,9 @@ function submitETFSell(ticker){
 // ═══════════════════════════════════════════════
 async function fetchLive(){
   try{
-    const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
-    if(r.ok){const d=await r.json();if(d.eur?.huf)liveFx=d.eur.huf;}
+    const fxUrl='https://api.frankfurter.app/latest?from=EUR&to=HUF';
+    const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(fxUrl));
+    if(r.ok){const d=await r.json();if(d.rates?.HUF)liveFx=d.rates.HUF;}
   }catch(e){}
 
   await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
@@ -1474,13 +1475,17 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
   try{
     let price=null;
     if(isCNBC){
-      // Yahoo Finance WBIT.DE
-      const url='https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/WBIT.DE?interval=1d&range=1d');
+      // CNBC via Cloudflare Worker – https://www.cnbc.com/quotes/WBIT-DE
+      const cnbcUrl='https://www.cnbc.com/quotes/'+symbol;
+      const url='https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(cnbcUrl);
       const r=await fetch(url);
       if(r.ok){
-        const d=await r.json();
-        const p=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        if(p&&p>1)price=p;
+        const html=await r.text();
+        const m=html.match(/class="QuoteStrip-lastPrice[^"]*">([0-9.,]+)</);
+        if(m){
+          const p=parseFloat(m[1].replace(',','.'));
+          if(p>1)price=p;
+        }
       }
     } else {
       // Yahoo Finance
