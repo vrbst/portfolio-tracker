@@ -261,8 +261,8 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
       <div class="panel">
         <div class="panel-header"><div class="panel-title">pénzszámla mozgások</div></div>
-        <div class="tbl-wrap"><table>
-          <thead><tr><th>dátum</th><th>típus</th><th>megjegyzés</th><th class="r">összeg</th><th class="r">egyenleg</th><th></th></tr></thead>
+        <div class="tbl-wrap" style="max-height:280px;overflow-y:auto"><table>
+          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>megjegyzés</th><th class="r">összeg</th><th class="r">egyenleg</th><th></th></tr></thead>
           <tbody id="cashBody"></tbody>
         </table></div>
         <div class="empty" id="cashEmpty" style="display:none">Még nincs mozgás. Adj hozzá befizetést!</div>
@@ -519,12 +519,16 @@ function fixmapAnnualCoupon(){
 }
 
 function nextCouponDate(maturity){
-  // quarterly coupons, work backwards from maturity
+  if(!maturity)return null;
   const mat=new Date(maturity);
+  if(isNaN(mat.getTime()))return null;
   const now=new Date();
+  if(mat<=now)return null;
   let d=new Date(mat);
-  while(d>now) d=new Date(d.getFullYear(),d.getMonth()-3,d.getDate());
+  let safety=0;
+  while(d>now&&safety<20){d=new Date(d.getFullYear(),d.getMonth()-3,d.getDate());safety++;}
   d=new Date(d.getFullYear(),d.getMonth()+3,d.getDate());
+  if(isNaN(d.getTime()))return null;
   return d.toISOString().split('T')[0];
 }
 
@@ -614,10 +618,12 @@ function renderPie(cb,ap,tbsz){
 function renderUpcoming(){
   const now=new Date('2026-04-17');
   const events=[];
-  // FixMáP coupons
+  // FixMáP coupons – use series nextCoupon date and couponRate
   data.fixmap.filter(f=>f.active).forEach(f=>{
-    const nd=nextCouponDate(f.maturity);
-    if(nd) events.push({date:nd,label:'FixMáP kamat',amount:f.faceValue*f.couponRate/100/4,color:'var(--blue)'});
+    const sr=data.fixmapSeries.find(x=>x.id===(f.seriesId||''));
+    if(!sr)return;
+    const nd=sr.nextCoupon||nextCouponDate(sr.maturity);
+    if(nd) events.push({date:nd,label:'FixMáP kamat ('+sr.name+')',amount:f.faceValue*sr.couponRate/100/4,color:'var(--blue)'});
   });
   // DKJ lejáratok
   data.dkj.filter(d=>d.active).forEach(d=>{
@@ -640,12 +646,14 @@ function renderCashflowChart(){
   data.cashTx.filter(t=>t.date&&t.date.startsWith('2026')&&['coupon','expire'].includes(t.type)).forEach(t=>{
     vals[parseInt(t.date.split('-')[1])-1]+=t.amount;
   });
-  // projected from fixmap
+  // projected from fixmap series
   data.fixmap.filter(f=>f.active).forEach(f=>{
-    const nd=nextCouponDate(f.maturity);
+    const sr=data.fixmapSeries.find(x=>x.id===(f.seriesId||''));
+    if(!sr)return;
+    const nd=sr.nextCoupon||nextCouponDate(sr.maturity);
     if(nd&&nd.startsWith('2026')){
       const m=parseInt(nd.split('-')[1])-1;
-      vals[m]+=f.faceValue*f.couponRate/100/4;
+      vals[m]+=f.faceValue*sr.couponRate/100/4;
     }
   });
   charts['cf']=new Chart(document.getElementById('cashflowChart'),{
