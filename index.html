@@ -250,6 +250,20 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <!-- PÉNZSZÁMLA -->
     <div id="page-kincstar" class="page">
 
+      <!-- PÉNZSZÁMLA EGYENLEG -->
+      <div class="balance-bar">
+        <div>
+          <div class="stat-label">pénzszámla egyenleg</div>
+          <div class="balance-value" id="cashBalance">–</div>
+          <div class="stat-sub" id="cashSubtitle">összes befizetés – kiadás</div>
+        </div>
+        <div class="balance-actions">
+          <button class="btn btn-primary btn-sm" onclick="openModal('deposit')">+ befizetés</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('coupon')">★ kamatfizetés</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
+        </div>
+      </div>
+
       <!-- ÁLLAMPAPÍR -->
       <div class="card-row cards-3" id="apCards"></div>
 
@@ -284,18 +298,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
         <div class="empty" id="dkjEmpty" style="display:none">Még nincs DKJ pozíció.</div>
       </div>
 
-      <!-- PÉNZSZÁMLA -->
-      <div class="balance-bar" style="margin-top:16px">
-        <div>
-          <div class="stat-label">pénzszámla egyenleg</div>
-          <div class="balance-value" id="cashBalance">–</div>
-          <div class="stat-sub" id="cashSubtitle">összes befizetés – kiadás</div>
-        </div>
-        <div class="balance-actions">
-          <button class="btn btn-primary btn-sm" onclick="openModal('deposit')">+ befizetés</button>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
-        </div>
-      </div>
+
       <div class="panel">
         <div class="panel-header"><div class="panel-title">pénzszámla mozgások</div></div>
         <div class="tbl-wrap" style="max-height:280px;overflow-y:auto"><table>
@@ -636,17 +639,19 @@ function renderUpcoming(){
     fmCouponMap[sr.id].totalFace+=f.faceValue;
   });
   Object.values(fmCouponMap).forEach(({sr,totalFace})=>{
-    // generate all quarterly coupon dates from nextCoupon to maturity
     const startDate=sr.nextCoupon||nextCouponDate(sr.maturity);
     if(!startDate)return;
     const matDate=new Date(sr.maturity);
     let d=new Date(startDate);
+    let isFirst=true;
     let safety=0;
     while(d<=matDate&&safety<20){
       const ds=d.toISOString().split('T')[0];
       if(new Date(ds)>now){
-        events.push({date:ds,label:'FixMáP kamat ('+sr.name+')',amount:totalFace*sr.couponRate/100/4,color:'var(--blue)'});
+        const amount=isFirst&&sr.firstCouponAmount?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
+        events.push({date:ds,label:'FixMáP kamat ('+sr.name+')',amount,color:'var(--blue)'});
       }
+      isFirst=false;
       d=new Date(d.getFullYear(),d.getMonth()+3,d.getDate());
       safety++;
     }
@@ -692,13 +697,16 @@ function renderCashflowChart(){
     if(!startDate)return;
     const matDate=new Date(sr.maturity);
     let d=new Date(startDate);
+    let isFirst=true;
     let safety=0;
     while(d<=matDate&&safety<20){
       const ds=d.toISOString().split('T')[0];
       if(ds.startsWith('2026')){
         const m=parseInt(ds.split('-')[1])-1;
-        vals[m]+=totalFace*sr.couponRate/100/4;
+        const amount=isFirst&&sr.firstCouponAmount?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
+        vals[m]+=amount;
       }
+      isFirst=false;
       d=new Date(d.getFullYear(),d.getMonth()+3,d.getDate());
       safety++;
     }
@@ -810,6 +818,7 @@ function renderAllampapir(){
       <td class="r">${maturity}</td>
       <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
       <td style="white-space:nowrap">
+        ${sr?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-fixmap-series','${s.seriesId}')" style="margin-right:4px">✎</button>`:''}
         ${s.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap-series','${s.seriesId}')" style="margin-right:4px">eladás</button>`:''}
       </td>
     </tr>`;
@@ -1046,6 +1055,20 @@ function openModal(type, param){
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitWithdraw()">mentés</button></div>`;
   }
+  else if(type==='coupon'){
+    title.textContent='Kamatfizetés';
+    body.innerHTML=`
+      <div class="form-row"><div class="form-group"><div class="form-label">dátum</div>
+        <input class="form-input" id="f-date" type="date" value="${today()}">
+      </div>
+      <div class="form-group"><div class="form-label">összeg (Ft)</div>
+        <input class="form-input" id="f-amount" type="number" placeholder="618750">
+      </div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div>
+        <input class="form-input" id="f-note" placeholder="pl. FixMáP 2031/I kamat">
+      </div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitCoupon()">mentés</button></div>`;
+  }
   else if(type==='new-fixmap-series'){
     title.textContent='Új FixMáP sorozat';
     body.innerHTML=`
@@ -1054,7 +1077,23 @@ function openModal(type, param){
       <div class="form-group"><div class="form-label">kibocsátás dátuma</div><input class="form-input" id="f-issue" type="date"></div></div>
       <div class="form-row"><div class="form-group"><div class="form-label">következő kamatfizetés</div><input class="form-input" id="f-nextcoupon" type="date"></div>
       <div class="form-group"><div class="form-label">lejárat dátuma</div><input class="form-input" id="f-maturity" type="date"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">első kamat összege (Ft) – ha eltér</div><input class="form-input" id="f-firstcoupon" type="number" placeholder="opcionális, pl. 734850"></div>
+      <div class="form-group"></div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitNewFixmapSeries()">mentés</button></div>`;
+  }
+  else if(type==='edit-fixmap-series'){
+    const sr=data.fixmapSeries.find(x=>x.id===param);
+    if(!sr)return;
+    title.textContent='Sorozat szerkesztése';
+    body.innerHTML=`
+      <div class="form-row full"><div class="form-group"><div class="form-label">sorozat neve</div><input class="form-input" id="f-name" value="${sr.name}"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">kamatláb (%)</div><input class="form-input" id="f-rate" type="number" step="0.01" value="${sr.couponRate}"></div>
+      <div class="form-group"><div class="form-label">kibocsátás dátuma</div><input class="form-input" id="f-issue" type="date" value="${sr.issueDate||''}"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">következő kamatfizetés</div><input class="form-input" id="f-nextcoupon" type="date" value="${sr.nextCoupon||''}"></div>
+      <div class="form-group"><div class="form-label">lejárat dátuma</div><input class="form-input" id="f-maturity" type="date" value="${sr.maturity||''}"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">első kamat összege (Ft)</div><input class="form-input" id="f-firstcoupon" type="number" value="${sr.firstCouponAmount||''}" placeholder="opcionális"></div>
+      <div class="form-group"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="saveEditFixmapSeries('${param}')">mentés</button></div>`;
   }
   else if(type==='buy-fixmap'){
     const seriesOptions=data.fixmapSeries.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
@@ -1188,6 +1227,15 @@ function openModal(type, param){
 function closeModal(){document.getElementById('modalBackdrop').classList.remove('open');}
 function closeModalOutside(e){if(e.target===document.getElementById('modalBackdrop'))closeModal();}
 
+function submitCoupon(){
+  const date=document.getElementById('f-date').value;
+  const amount=parseFloat(document.getElementById('f-amount').value);
+  const note=document.getElementById('f-note').value;
+  if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
+  data.cashTx.push({id:uid(),date,type:'coupon',amount,note:note||'Kamatfizetés'});
+  closeModal(); renderAll(); saveData(); toast('Kamatfizetés rögzítve: +'+fmt(amount));
+}
+
 function submitDeposit(){
   const date=document.getElementById('f-date').value;
   const amount=parseFloat(document.getElementById('f-amount').value);
@@ -1210,9 +1258,22 @@ function submitNewFixmapSeries(){
   const issueDate=document.getElementById('f-issue').value;
   const nextCoupon=document.getElementById('f-nextcoupon').value;
   const maturity=document.getElementById('f-maturity').value;
+  const firstCouponAmount=parseFloat(document.getElementById('f-firstcoupon')?.value)||null;
   if(!name||!couponRate||!maturity)return toast('Töltsd ki a kötelező mezőket!');
-  data.fixmapSeries.push({id:uid(),name,couponRate,issueDate,nextCoupon,maturity});
+  data.fixmapSeries.push({id:uid(),name,couponRate,issueDate,nextCoupon,maturity,firstCouponAmount});
   closeModal(); renderAll(); saveData(); toast('Sorozat létrehozva: '+name);
+}
+
+function saveEditFixmapSeries(id){
+  const sr=data.fixmapSeries.find(x=>x.id===id);
+  if(!sr)return;
+  sr.name=document.getElementById('f-name').value.trim()||sr.name;
+  sr.couponRate=parseFloat(document.getElementById('f-rate').value)||sr.couponRate;
+  sr.issueDate=document.getElementById('f-issue').value;
+  sr.nextCoupon=document.getElementById('f-nextcoupon').value;
+  sr.maturity=document.getElementById('f-maturity').value;
+  sr.firstCouponAmount=parseFloat(document.getElementById('f-firstcoupon')?.value)||null;
+  closeModal(); renderAll(); saveData(); toast('Sorozat mentve');
 }
 
 function updateFixmapBuyInfo(sid){
