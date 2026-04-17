@@ -1474,19 +1474,13 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
   try{
     let price=null;
     if(isCNBC){
-      // stooq.com – EUR árfolyam, CORS-barát
-      const stooqUrl='https://stooq.com/q/l/?s=wbit.de&f=sd2t2ohlcv&h&e=csv';
-      const url='https://api.allorigins.win/get?url='+encodeURIComponent(stooqUrl);
+      // Yahoo Finance WBIT.DE
+      const url='https://corsproxy.io/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/WBIT.DE?interval=1d&range=1d');
       const r=await fetch(url);
       if(r.ok){
-        const json=await r.json();
-        const csv=json.contents;
-        const rows=csv.trim().split(String.fromCharCode(10));
-        if(rows.length>1){
-          const cols=rows[1].split(',');
-          const p=parseFloat(cols[6]);
-          if(p>1)price=p;
-        }
+        const d=await r.json();
+        const p=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+        if(p&&p>1)price=p;
       }
     } else {
       // Yahoo Finance
