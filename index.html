@@ -984,7 +984,7 @@ function renderTBSZ(){
 }
 
 function renderETFTable(ticker,bodyId,emptyId,livePrice){
-  const buys=etfCostBasis(ticker);
+  const buys=etfCostBasis(ticker).sort((a,b)=>b.date.localeCompare(a.date));
   document.getElementById(bodyId).innerHTML=buys.map(b=>{
     const costEur=b.shares*b.priceEur;
     const currentValFt=livePrice?b.shares*livePrice*liveFx:null;
