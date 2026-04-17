@@ -209,6 +209,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <div class="header-right">
       <button class="hbtn" id="hideBtn" onclick="toggleBlur()" title="Összegek elrejtése">👁 <span class="lbl">elrejt</span></button>
       <button class="hbtn" onclick="saveData()"><div class="sync-dot" id="syncDot"></div><span class="lbl" id="syncLabel">mentés</span></button>
+      <button class="hbtn danger" onclick="confirmDeleteDB()" title="Adatbázis törlése">🗑 <span class="lbl">törlés</span></button>
       <button class="hbtn danger" onclick="logout()">↪ <span class="lbl">kilépés</span></button>
     </div>
   </div>
@@ -229,7 +230,9 @@ tr:hover td{background:rgba(255,255,255,.015)}
         <div class="panel">
           <div class="panel-header"><div class="panel-title">portfólió megoszlás</div></div>
           <div style="display:flex;gap:16px;align-items:center">
-            <canvas id="pieChart" style="width:130px!important;height:130px!important;flex-shrink:0" role="img" aria-label="Megoszlás"></canvas>
+            <div style="width:150px;height:150px;flex-shrink:0;position:relative">
+              <canvas id="pieChart" role="img" aria-label="Megoszlás"></canvas>
+            </div>
             <div id="pieLegend" style="flex:1"></div>
           </div>
         </div>
@@ -605,7 +608,7 @@ function renderPie(cb,ap,tbsz){
   charts['pie']=new Chart(document.getElementById('pieChart'),{
     type:'doughnut',
     data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:0,hoverOffset:4}]},
-    options:{responsive:false,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${fmtM(c.parsed)} (${(c.parsed/total*100).toFixed(1)}%)`}}}}
+    options:{responsive:true,maintainAspectRatio:true,aspectRatio:1,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${fmtM(c.parsed)} (${(c.parsed/total*100).toFixed(1)}%)`}}}}
   });
   document.getElementById('pieLegend').innerHTML=labels.map((l,i)=>`
     <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
@@ -1130,7 +1133,7 @@ function submitNewFixmapSeries(){
   const maturity=document.getElementById('f-maturity').value;
   if(!name||!couponRate||!maturity)return toast('Töltsd ki a kötelező mezőket!');
   data.fixmapSeries.push({id:uid(),name,couponRate,issueDate,nextCoupon,maturity});
-  closeModal(); renderAll(); toast('Sorozat létrehozva: '+name);
+  closeModal(); renderAll(); saveData(); toast('Sorozat létrehozva: '+name);
 }
 
 function updateFixmapBuyInfo(sid){
@@ -1199,7 +1202,7 @@ function submitFixmapSeriesSell(){
   }
   const sr=data.fixmapSeries.find(x=>x.id===sid);
   data.cashTx.push({id:uid(),date,type:'sell',amount:sellPrice,note:'FixMáP eladás'+(sr?' '+sr.name:'')+(note?' – '+note:'')});
-  closeModal(); renderAll(); toast('FixMáP eladás rögzítve');
+  closeModal(); renderAll(); saveData(); toast('FixMáP eladás rögzítve');
 }
 
 function submitFixmap(){
@@ -1226,7 +1229,7 @@ function submitFixmap(){
 
   data.fixmap.push({id:uid(),seriesId:sid,date,faceValue,buyPrice,active:true});
   data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'FixMáP vétel'});
-  closeModal(); renderAll(); toast('FixMáP vétel rögzítve');
+  closeModal(); renderAll(); saveData(); toast('FixMáP vétel rögzítve');
 }
 function updateDKJSellInfo(maturity){
   const items=data.dkj.filter(d=>d.active&&d.maturity===maturity);
@@ -1283,7 +1286,7 @@ function submitDKJSeriesSell(){
     }
   }
   data.cashTx.push({id:uid(),date,type:'sell',amount:sellPrice,note:'DKJ eladás D'+maturity.replace(/-/g,'').slice(2)+(note?' – '+note:'')});
-  closeModal(); renderAll(); toast('DKJ eladás rögzítve');
+  closeModal(); renderAll(); saveData(); toast('DKJ eladás rögzítve');
 }
 
 function expireDKJSeries(maturity){
@@ -1303,7 +1306,7 @@ function submitDKJSell(id){
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
   d.active=false;
   data.cashTx.push({id:uid(),date,type:'sell',amount,note:'DKJ eladás'+(note?' – '+note:'')});
-  closeModal(); renderAll(); toast('DKJ eladás rögzítve');
+  closeModal(); renderAll(); saveData(); toast('DKJ eladás rögzítve');
 }
 // submitFixmapSell removed - replaced by submitFixmapSeriesSell
 function submitDKJ(){
@@ -1317,7 +1320,7 @@ function submitDKJ(){
   if(Math.round(bal)<Math.round(buyPrice))return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
   data.dkj.push({id:uid(),date,faceValue,buyPrice,maturity,yieldRate,active:true});
   data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel'});
-  closeModal(); renderAll(); toast('DKJ pozíció rögzítve');
+  closeModal(); renderAll(); saveData(); toast('DKJ pozíció rögzítve');
 }
 function submitETFBuy(ticker){
   const date=document.getElementById('f-date').value;
@@ -1330,7 +1333,7 @@ function submitETFBuy(ticker){
   const huf=shares*priceEur*fxRate;
   data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,tbszYear,note});
   data.cashTx.push({id:uid(),date,type:'buy',amount:huf,note:ticker+' vétel'});
-  closeModal(); renderAll(); toast(ticker+' vétel rögzítve');
+  closeModal(); renderAll(); saveData(); toast(ticker+' vétel rögzítve');
 }
 function submitETFSell(ticker){
   const date=document.getElementById('f-date').value;
@@ -1342,7 +1345,7 @@ function submitETFSell(ticker){
   const huf=shares*priceEur*fxRate;
   data.etfTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,note});
   data.cashTx.push({id:uid(),date,type:'sell',amount:huf,note:ticker+' eladás'});
-  closeModal(); renderAll(); toast(ticker+' eladás rögzítve');
+  closeModal(); renderAll(); saveData(); toast(ticker+' eladás rögzítve');
 }
 
 // ═══════════════════════════════════════════════
@@ -1408,6 +1411,18 @@ function exportCSV(){
   a.download='portfolio-export.csv';
   a.click();
   toast('CSV letöltve');
+}
+
+// ═══════════════════════════════════════════════
+// DELETE DB
+// ═══════════════════════════════════════════════
+async function confirmDeleteDB(){
+  if(!confirm('Biztosan törlöd az összes adatot? Ez visszafordíthatatlan!'))return;
+  if(!confirm('Megerősítés: az összes tranzakció, pozíció és sorozat törlődik!'))return;
+  data=JSON.parse(JSON.stringify({cashTx:[],fixmapSeries:[],fixmap:[],dkj:[],etfTx:[]}));
+  await saveData();
+  renderAll();
+  toast('Adatbázis törölve');
 }
 
 // ═══════════════════════════════════════════════
