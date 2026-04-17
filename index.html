@@ -1197,7 +1197,7 @@ function submitFixmap(){
   if(data.fixmapSeries.length===0)return toast('Először hozz létre sorozatot!');
   const buyPrice=faceValue*ratePct/100;
   const bal=cashBalance();
-  if(bal<buyPrice)return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
+  if(Math.round(bal)<Math.round(buyPrice))return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
   data.fixmap.push({id:uid(),seriesId:sid,date,faceValue,buyPrice,active:true});
   data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'FixMáP vétel'});
   closeModal(); renderAll(); toast('FixMáP vétel rögzítve');
@@ -1288,7 +1288,7 @@ function submitDKJ(){
   const yieldRate=parseFloat(document.getElementById('f-yield').value)||null;
   if(!date||!faceValue||!maturity)return toast('Töltsd ki a kötelező mezőket!');
   const bal=cashBalance();
-  if(bal<buyPrice)return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
+  if(Math.round(bal)<Math.round(buyPrice))return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
   data.dkj.push({id:uid(),date,faceValue,buyPrice,maturity,yieldRate,active:true});
   data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel'});
   closeModal(); renderAll(); toast('DKJ pozíció rögzítve');
