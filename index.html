@@ -396,7 +396,7 @@ let data = null;
 // ═══════════════════════════════════════════════
 const fmt = n => new Intl.NumberFormat('hu-HU').format(Math.round(n))+' Ft';
 const fmtM = n => Math.abs(n)>=1e6?(n/1e6).toFixed(2)+' M Ft':fmt(n);
-const fmtEur = n => '€'+n.toFixed(2);
+const fmtEur = (n, decimals=2) => '€'+new Intl.NumberFormat('hu-HU',{minimumFractionDigits:decimals,maximumFractionDigits:decimals}).format(n).replace(',','.');
 const fmtSign = n => (n>=0?'+':'')+fmtM(n);
 const fmtSignPct = n => (n>=0?'+':'')+n.toFixed(2)+'%';
 const today = () => new Date().toISOString().split('T')[0];
@@ -569,7 +569,7 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">teljes portfólió</div>
       <div class="stat-value blurable">${fmtM(total)}</div>
-      <div class="stat-sub blurable">${hasLive?'≈ €'+totalEur.toFixed(0):'EUR: nincs live adat'}</div>
+      <div class="stat-sub blurable">${hasLive?'≈ '+fmtEur(totalEur,0):'EUR: nincs live adat'}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">pénzszámla</div>
@@ -584,7 +584,7 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">tbsz (etf)</div>
       <div class="stat-value blurable">${tbszVal>0?fmtM(tbszVal):'–'}</div>
-      <div class="stat-sub blurable">${tbszEur>0?'€'+tbszEur.toFixed(0):'nincs live adat'}</div>
+      <div class="stat-sub blurable">${tbszEur>0?fmtEur(tbszEur,0):'nincs live adat'}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
@@ -634,9 +634,16 @@ function renderUpcoming(){
     const nd=sr.nextCoupon||nextCouponDate(sr.maturity);
     if(nd) events.push({date:nd,label:'FixMáP kamat ('+sr.name+')',amount:totalFace*sr.couponRate/100/4,color:'var(--blue)'});
   });
-  // DKJ lejáratok
+  // DKJ lejáratok – grouped by maturity
+  const dkjExpireMap={};
   data.dkj.filter(d=>d.active).forEach(d=>{
-    if(new Date(d.maturity)>now) events.push({date:d.maturity,label:'DKJ lejárat',amount:d.faceValue,color:'var(--purple)'});
+    if(new Date(d.maturity)<=now)return;
+    if(!dkjExpireMap[d.maturity])dkjExpireMap[d.maturity]={maturity:d.maturity,totalFace:0};
+    dkjExpireMap[d.maturity].totalFace+=d.faceValue;
+  });
+  Object.values(dkjExpireMap).forEach(({maturity,totalFace})=>{
+    const name='D'+maturity.replace(/-/g,'').slice(2);
+    events.push({date:maturity,label:'DKJ lejárat ('+name+')',amount:totalFace,color:'var(--purple)'});
   });
   events.sort((a,b)=>a.date.localeCompare(b.date));
   const upcoming=events.slice(0,5);
@@ -655,15 +662,30 @@ function renderCashflowChart(){
   data.cashTx.filter(t=>t.date&&t.date.startsWith('2026')&&['coupon','expire'].includes(t.type)).forEach(t=>{
     vals[parseInt(t.date.split('-')[1])-1]+=t.amount;
   });
-  // projected from fixmap series
+  // projected FixMáP coupons (grouped by series)
+  const cfFixmapMap={};
   data.fixmap.filter(f=>f.active).forEach(f=>{
     const sr=data.fixmapSeries.find(x=>x.id===(f.seriesId||''));
     if(!sr)return;
-    const nd=sr.nextCoupon||nextCouponDate(sr.maturity);
+    if(!cfFixmapMap[sr.id])cfFixmapMap[sr.id]={sr,totalFace:0};
+    cfFixmapMap[sr.id].totalFace+=f.faceValue;
+  });
+  Object.values(cfFixmapMap).forEach(({sr,totalFace})=>{
+    const nd=sr.nextCoupon;
     if(nd&&nd.startsWith('2026')){
       const m=parseInt(nd.split('-')[1])-1;
-      vals[m]+=f.faceValue*sr.couponRate/100/4;
+      vals[m]+=totalFace*sr.couponRate/100/4;
     }
+  });
+  // projected DKJ maturities (grouped)
+  const cfDkjMap={};
+  data.dkj.filter(d=>d.active&&d.maturity&&d.maturity.startsWith('2026')).forEach(d=>{
+    if(!cfDkjMap[d.maturity])cfDkjMap[d.maturity]=0;
+    cfDkjMap[d.maturity]+=d.faceValue;
+  });
+  Object.entries(cfDkjMap).forEach(([mat,total])=>{
+    const m=parseInt(mat.split('-')[1])-1;
+    vals[m]+=total;
   });
   charts['cf']=new Chart(document.getElementById('cashflowChart'),{
     type:'bar',
@@ -772,7 +794,7 @@ function renderAllampapir(){
     dkjSeries[key].items.push(d);
     if(d.active){dkjSeries[key].totalFace+=d.faceValue;dkjSeries[key].totalBuy+=d.buyPrice;dkjSeries[key].active=true;}
   });
-  const seriesList=Object.values(dkjSeries).sort((a,b)=>a.maturity.localeCompare(b.maturity));
+  const seriesList=Object.values(dkjSeries).filter(s=>s.active).sort((a,b)=>a.maturity.localeCompare(b.maturity));
   document.getElementById('dkjBody').innerHTML=seriesList.map(s=>{
     const name='D'+s.maturity.replace(/-/g,'').slice(2);
     const avgBuy=s.items.filter(i=>i.active).length>0?s.totalBuy/s.items.filter(i=>i.active).length:0;
@@ -782,7 +804,7 @@ function renderAllampapir(){
       <td><div class="asset-name">${name}</div><div style="font-size:10px;color:var(--text3)">${s.items.length} tétel</div></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
-      <td class="r pos blurable">+${fmt(expectedReturn)}</td>
+      <td class="r pos blurable">+${fmt(Math.round(expectedReturn))}</td>
       <td class="r">${s.maturity}</td>
       <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
       <td style="white-space:nowrap">
@@ -866,32 +888,38 @@ function renderTranzakciok(){
   const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell'};
   const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás'};
 
-  // cash transactions – deletable individually
-  data.cashTx.forEach(t=>all.push({
+  // Pénzszámla: csak befizetés és kiutalás jelenik meg (vétel/eladás a saját eszköz soránál látszik)
+  data.cashTx.filter(t=>['deposit','withdraw','coupon','expire'].includes(t.type)).forEach(t=>all.push({
     date:t.date, type:t.type, asset:'Pénzszámla',
     amount:fmt(t.amount), rate:'–', note:t.note||'–',
     deleteCall:`deleteTx('cash','${t.id}')`
   }));
-  // fixmap – each position as a buy tx
-  data.fixmap.forEach(f=>all.push({
-    date:f.date, type:'buy', asset:'FixMáP',
-    amount:fmt(f.faceValue), rate:'–', note:f.note||'–',
-    deleteCall:`deleteTx('fixmap','${f.id}')`
-  }));
-  // dkj
+  // FixMáP vételek
+  data.fixmap.forEach(f=>{
+    const sr=data.fixmapSeries.find(x=>x.id===f.seriesId);
+    all.push({
+      date:f.date, type:'buy', asset:'FixMáP',
+      amount:fmt(f.faceValue), rate:f.buyPrice?fmt(f.buyPrice):'–',
+      note:sr?sr.name:(f.note||'–'),
+      deleteCall:`deleteTx('fixmap','${f.id}')`
+    });
+  });
+  // DKJ vételek
   data.dkj.forEach(d=>all.push({
-    date:d.date, type:'buy', asset:'DKJ',
-    amount:fmt(d.faceValue), rate:'–', note:'D'+d.maturity.replace(/-/g,'').slice(2),
+    date:d.date, type:d.active?'buy':'sell', asset:'DKJ',
+    amount:fmt(d.faceValue), rate:fmt(d.buyPrice),
+    note:'D'+d.maturity.replace(/-/g,'').slice(2)+(d.active?'':' (lezárt)'),
     deleteCall:`deleteTx('dkj','${d.id}')`
   }));
-  // etf
+  // ETF vételek/eladások
   data.etfTx.forEach(t=>all.push({
     date:t.date, type:t.type, asset:t.ticker,
     amount:t.shares.toFixed(4)+' db', rate:fmtEur(t.priceEur), note:t.note||'–',
     deleteCall:`deleteTx('etf','${t.id}')`
   }));
 
-  all.sort((a,b)=>b.date.localeCompare(a.date));
+  const typeOrder={deposit:6,buy:5,sell:4,withdraw:3,coupon:2,expire:1};
+  all.sort((a,b)=>b.date.localeCompare(a.date)||(typeOrder[a.type]||9)-(typeOrder[b.type]||9));
 
   document.getElementById('txBody').innerHTML=all.map(t=>`<tr>
     <td>${t.date}</td>
