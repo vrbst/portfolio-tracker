@@ -621,18 +621,29 @@ function renderPie(cb,ap,tbsz){
 function renderUpcoming(){
   const now=new Date('2026-04-17');
   const events=[];
-  // FixMáP coupons – grouped by series
+  // FixMáP coupons – all future quarterly dates per series
   const fmCouponMap={};
   data.fixmap.filter(f=>f.active).forEach(f=>{
     const sr=data.fixmapSeries.find(x=>x.id===(f.seriesId||''));
     if(!sr)return;
-    const sid=sr.id;
-    if(!fmCouponMap[sid])fmCouponMap[sid]={sr,totalFace:0};
-    fmCouponMap[sid].totalFace+=f.faceValue;
+    if(!fmCouponMap[sr.id])fmCouponMap[sr.id]={sr,totalFace:0};
+    fmCouponMap[sr.id].totalFace+=f.faceValue;
   });
   Object.values(fmCouponMap).forEach(({sr,totalFace})=>{
-    const nd=sr.nextCoupon||nextCouponDate(sr.maturity);
-    if(nd) events.push({date:nd,label:'FixMáP kamat ('+sr.name+')',amount:totalFace*sr.couponRate/100/4,color:'var(--blue)'});
+    // generate all quarterly coupon dates from nextCoupon to maturity
+    const startDate=sr.nextCoupon||nextCouponDate(sr.maturity);
+    if(!startDate)return;
+    const matDate=new Date(sr.maturity);
+    let d=new Date(startDate);
+    let safety=0;
+    while(d<=matDate&&safety<20){
+      const ds=d.toISOString().split('T')[0];
+      if(new Date(ds)>now){
+        events.push({date:ds,label:'FixMáP kamat ('+sr.name+')',amount:totalFace*sr.couponRate/100/4,color:'var(--blue)'});
+      }
+      d=new Date(d.getFullYear(),d.getMonth()+3,d.getDate());
+      safety++;
+    }
   });
   // DKJ lejáratok – grouped by maturity
   const dkjExpireMap={};
@@ -646,7 +657,7 @@ function renderUpcoming(){
     events.push({date:maturity,label:'DKJ lejárat ('+name+')',amount:totalFace,color:'var(--purple)'});
   });
   events.sort((a,b)=>a.date.localeCompare(b.date));
-  const upcoming=events.slice(0,5);
+  const upcoming=events.slice(0,3);
   document.getElementById('upcomingEvents').innerHTML=upcoming.length
     ? upcoming.map(e=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
         <div><span style="color:${e.color};margin-right:6px">●</span>${e.label}</div>
@@ -671,10 +682,19 @@ function renderCashflowChart(){
     cfFixmapMap[sr.id].totalFace+=f.faceValue;
   });
   Object.values(cfFixmapMap).forEach(({sr,totalFace})=>{
-    const nd=sr.nextCoupon||nextCouponDate(sr.maturity);
-    if(nd&&nd.startsWith('2026')){
-      const m=parseInt(nd.split('-')[1])-1;
-      vals[m]+=totalFace*sr.couponRate/100/4;
+    const startDate=sr.nextCoupon||nextCouponDate(sr.maturity);
+    if(!startDate)return;
+    const matDate=new Date(sr.maturity);
+    let d=new Date(startDate);
+    let safety=0;
+    while(d<=matDate&&safety<20){
+      const ds=d.toISOString().split('T')[0];
+      if(ds.startsWith('2026')){
+        const m=parseInt(ds.split('-')[1])-1;
+        vals[m]+=totalFace*sr.couponRate/100/4;
+      }
+      d=new Date(d.getFullYear(),d.getMonth()+3,d.getDate());
+      safety++;
     }
   });
   // projected DKJ maturities (grouped)
@@ -976,16 +996,6 @@ function deleteTx(kind, id){
     data.dkj=data.dkj.filter(d=>d.id!==id);
   }
   else if(kind==='etf'){
-    const tx=data.etfTx.find(t=>t.id===id);
-    if(!tx)return;
-    const huf=tx.shares*tx.priceEur*tx.fxRate;
-    // Remove linked cash tx (buy or sell, same date, approximate amount)
-    const cashIdx=data.cashTx.findIndex(t=>
-      t.type===tx.type && t.date===tx.date &&
-      t.note&&t.note.includes(tx.ticker) &&
-      Math.abs(t.amount-huf)<10
-    );
-    if(cashIdx>=0)data.cashTx.splice(cashIdx,1);
     data.etfTx=data.etfTx.filter(t=>t.id!==id);
   }
 
@@ -1411,7 +1421,6 @@ function submitETFBuy(ticker){
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
   const huf=hufInput||Math.round(shares*priceEur*fxRate);
   data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,tbszYear,note});
-  data.cashTx.push({id:uid(),date,type:'buy',amount:huf,note:ticker+' vétel'});
   closeModal(); renderAll(); saveData(); toast(ticker+' vétel rögzítve');
 }
 function submitETFSell(ticker){
@@ -1423,7 +1432,6 @@ function submitETFSell(ticker){
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
   const huf=shares*priceEur*fxRate;
   data.etfTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,note});
-  data.cashTx.push({id:uid(),date,type:'sell',amount:huf,note:ticker+' eladás'});
   closeModal(); renderAll(); saveData(); toast(ticker+' eladás rögzítve');
 }
 
@@ -1625,18 +1633,12 @@ function saveEditDKJ(id){
 function saveEditETF(id){
   const t=data.etfTx.find(t=>t.id===id);
   if(!t)return;
-  const oldHuf=t.shares*t.priceEur*t.fxRate;
-  const oldDate=t.date;
   t.date=document.getElementById('e-date').value;
   t.shares=parseFloat(document.getElementById('e-shares').value)||t.shares;
   t.priceEur=parseFloat(document.getElementById('e-price').value)||t.priceEur;
   t.fxRate=parseFloat(document.getElementById('e-fx').value)||t.fxRate;
   t.tbszYear=parseInt(document.getElementById('e-tbsz').value)||t.tbszYear;
   t.note=document.getElementById('e-note').value;
-  const newHuf=t.shares*t.priceEur*t.fxRate;
-  // update linked cashTx
-  const ct=data.cashTx.find(c=>c.type===t.type&&c.date===oldDate&&c.note&&c.note.includes(t.ticker)&&Math.abs(c.amount-oldHuf)<10);
-  if(ct){ct.amount=newHuf;ct.date=t.date;}
   closeModal(); renderAll(); saveData(); toast('Mentve');
 }
 
