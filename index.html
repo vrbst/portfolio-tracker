@@ -70,10 +70,10 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 .cards-3{grid-template-columns:repeat(3,1fr)}
 .cards-2{grid-template-columns:repeat(2,1fr)}
 .cards-5{grid-template-columns:repeat(5,1fr)}
-.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;transition:border-color .2s}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;transition:border-color .2s}
 .stat-card:hover{border-color:var(--border2)}
 .stat-label{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
-.stat-value{font-family:var(--font-head);font-size:20px;font-weight:600;line-height:1.1;letter-spacing:-.5px}
+.stat-value{font-family:var(--font-head);font-size:18px;font-weight:600;line-height:1.1;letter-spacing:-.5px}
 .stat-sub{font-size:11px;color:var(--text2);margin-top:3px}
 .pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--text2)}
 
@@ -305,7 +305,7 @@ input[type=range]::-webkit-slider-runnable-track{
           <div>
             <div class="stat-label">pénzszámla egyenleg</div>
             <div class="balance-value" id="cashBalance">–</div>
-            <div class="stat-sub" id="cashSubtitle">összes befizetés – kiadás</div>
+  
           </div>
           <div class="balance-actions">
             <button class="btn btn-primary btn-sm" onclick="openModal('deposit')">+ befizetés</button>
