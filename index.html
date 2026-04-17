@@ -69,6 +69,7 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 .cards-4{grid-template-columns:repeat(4,1fr)}
 .cards-3{grid-template-columns:repeat(3,1fr)}
 .cards-2{grid-template-columns:repeat(2,1fr)}
+.cards-5{grid-template-columns:repeat(5,1fr)}
 .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;transition:border-color .2s}
 .stat-card:hover{border-color:var(--border2)}
 .stat-label{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
@@ -168,7 +169,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
 
 /* RESPONSIVE */
 @media(max-width:700px){
-  .cards-4,.cards-3{grid-template-columns:1fr 1fr}
+  .cards-4,.cards-3,.cards-5{grid-template-columns:1fr 1fr}
   .cards-2{grid-template-columns:1fr}
   .grid2{grid-template-columns:1fr}
   .content{padding:12px 14px}
@@ -214,8 +215,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
 
   <div class="tabs">
     <button class="tab active" onclick="showTab('dashboard',this)">dashboard</button>
-    <button class="tab" onclick="showTab('cash',this)">pénzszámla</button>
-    <button class="tab" onclick="showTab('allampapir',this)">állampapír</button>
+    <button class="tab" onclick="showTab('kincstar',this)">államkincstár</button>
     <button class="tab" onclick="showTab('tbsz',this)">tbsz</button>
     <button class="tab" onclick="showTab('tranzakciok',this)">tranzakciók</button>
   </div>
@@ -224,7 +224,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
 
     <!-- DASHBOARD -->
     <div id="page-dashboard" class="page active">
-      <div class="card-row cards-4" id="dashCards"></div>
+      <div class="card-row cards-5" id="dashCards"></div>
       <div class="grid2">
         <div class="panel">
           <div class="panel-header"><div class="panel-title">portfólió megoszlás</div></div>
@@ -245,7 +245,9 @@ tr:hover td{background:rgba(255,255,255,.015)}
     </div>
 
     <!-- PÉNZSZÁMLA -->
-    <div id="page-cash" class="page">
+    <div id="page-kincstar" class="page">
+
+      <!-- PÉNZSZÁMLA -->
       <div class="balance-bar">
         <div>
           <div class="stat-label">pénzszámla egyenleg</div>
@@ -265,10 +267,8 @@ tr:hover td{background:rgba(255,255,255,.015)}
         </table></div>
         <div class="empty" id="cashEmpty" style="display:none">Még nincs mozgás. Adj hozzá befizetést!</div>
       </div>
-    </div>
 
-    <!-- ÁLLAMPAPÍR -->
-    <div id="page-allampapir" class="page">
+      <!-- ÁLLAMPAPÍR -->
       <div class="card-row cards-3" id="apCards"></div>
 
       <div class="section-title">
@@ -297,6 +297,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
         </table></div>
         <div class="empty" id="dkjEmpty" style="display:none">Még nincs DKJ pozíció.</div>
       </div>
+
     </div>
 
     <!-- TBSZ -->
@@ -344,7 +345,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
           <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ CSV export</button>
         </div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>dátum</th><th>típus</th><th>eszköz</th><th class="r">összeg / db</th><th class="r">árfolyam</th><th class="r">megjegyzés</th></tr></thead>
+          <thead><tr><th>dátum</th><th>típus</th><th>eszköz</th><th class="r">összeg / db</th><th class="r">árfolyam</th><th class="r">megjegyzés</th><th></th></tr></thead>
           <tbody id="txBody"></tbody>
         </table></div>
         <div class="empty" id="txEmpty">Még nincs tranzakció.</div>
@@ -526,8 +527,7 @@ function nextCouponDate(maturity){
 // ═══════════════════════════════════════════════
 function renderAll(){
   renderDashboard();
-  renderCash();
-  renderAllampapir();
+  renderKincstar();
   renderTBSZ();
   renderTranzakciok();
 }
@@ -541,17 +541,43 @@ function renderDashboard(){
     +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
   const vwceShares=etfShares('VWCE');
   const wbitShares=etfShares('WBIT');
-  const vwceVal=(liveVwce||0)*vwceShares*liveFx;
-  const wbitVal=(liveWbit||0)*wbitShares*liveFx;
-  const tbszVal=vwceVal+wbitVal;
+  const vwceEur=(liveVwce||0)*vwceShares;
+  const wbitEur=(liveWbit||0)*wbitShares;
+  const tbszEur=vwceEur+wbitEur;
+  const tbszVal=tbszEur*liveFx;
   const total=cb+apValue+tbszVal;
   const annualYield=fixmapAnnualCoupon();
+  const apEur=liveFx>0?apValue/liveFx:0;
+  const cbEur=liveFx>0?cb/liveFx:0;
+  const totalEur=cbEur+apEur+tbszEur;
+  const hasLive=liveVwce||liveWbit;
 
   document.getElementById('dashCards').innerHTML=`
-    <div class="stat-card"><div class="stat-label">teljes portfólió</div><div class="stat-value blurable">${fmtM(total)}</div><div class="stat-sub">összes eszköz</div></div>
-    <div class="stat-card"><div class="stat-label">pénzszámla</div><div class="stat-value blurable">${fmtM(cb)}</div><div class="stat-sub">szabad tőke</div></div>
-    <div class="stat-card"><div class="stat-label">állampapír</div><div class="stat-value blurable">${fmtM(apValue)}</div><div class="stat-sub">névértéken</div></div>
-    <div class="stat-card"><div class="stat-label">tbsz (etf)</div><div class="stat-value blurable">${tbszVal>0?fmtM(tbszVal):'– (nincs live)'}</div><div class="stat-sub">live árfolyamon</div></div>
+    <div class="stat-card">
+      <div class="stat-label">teljes portfólió</div>
+      <div class="stat-value blurable">${fmtM(total)}</div>
+      <div class="stat-sub blurable">${hasLive?'≈ €'+totalEur.toFixed(0):'EUR: nincs live adat'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">pénzszámla</div>
+      <div class="stat-value blurable">${fmtM(cb)}</div>
+      <div class="stat-sub blurable">≈ €${cbEur.toFixed(0)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">állampapír</div>
+      <div class="stat-value blurable">${fmtM(apValue)}</div>
+      <div class="stat-sub blurable">≈ €${apEur.toFixed(0)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">tbsz (etf)</div>
+      <div class="stat-value blurable">${tbszVal>0?fmtM(tbszVal):'–'}</div>
+      <div class="stat-sub blurable">${tbszEur>0?'€'+tbszEur.toFixed(0):'nincs live adat'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">eur / huf árfolyam</div>
+      <div class="stat-value">${Math.round(liveFx)} Ft</div>
+      <div class="stat-sub">${liveVwce?'live':'becsült'}</div>
+    </div>
   `;
   renderPie(cb,apValue,tbszVal);
   renderUpcoming();
@@ -626,6 +652,11 @@ function renderCashflowChart(){
 // ═══════════════════════════════════════════════
 // CASH
 // ═══════════════════════════════════════════════
+function renderKincstar(){
+  renderCash();
+  renderAllampapir();
+}
+
 function renderCash(){
   const txs=[...data.cashTx].sort((a,b)=>a.date.localeCompare(b.date));
   let running=0;
@@ -789,14 +820,35 @@ function deleteEtfTx(id){
 // ═══════════════════════════════════════════════
 function renderTranzakciok(){
   const all=[];
-  data.cashTx.forEach(t=>all.push({date:t.date,type:t.type,asset:'Pénzszámla',amount:fmt(t.amount),rate:'–',note:t.note||'–'}));
-  data.fixmap.forEach(f=>all.push({date:f.date,type:'buy',asset:'FixMáP',amount:fmt(f.faceValue),rate:'–',note:f.note||'–'}));
-  data.dkj.forEach(d=>all.push({date:d.date,type:'buy',asset:'DKJ',amount:fmt(d.faceValue),rate:'–',note:d.maturity+' lejárat'}));
-  data.etfTx.forEach(t=>all.push({date:t.date,type:t.type,asset:t.ticker,amount:t.shares.toFixed(4)+' db',rate:fmtEur(t.priceEur),note:t.note||'–'}));
-  all.sort((a,b)=>b.date.localeCompare(a.date));
-
   const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell'};
   const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás'};
+
+  // cash transactions – deletable individually
+  data.cashTx.forEach(t=>all.push({
+    date:t.date, type:t.type, asset:'Pénzszámla',
+    amount:fmt(t.amount), rate:'–', note:t.note||'–',
+    deleteCall:`deleteTx('cash','${t.id}')`
+  }));
+  // fixmap – each position as a buy tx
+  data.fixmap.forEach(f=>all.push({
+    date:f.date, type:'buy', asset:'FixMáP',
+    amount:fmt(f.faceValue), rate:'–', note:f.note||'–',
+    deleteCall:`deleteTx('fixmap','${f.id}')`
+  }));
+  // dkj
+  data.dkj.forEach(d=>all.push({
+    date:d.date, type:'buy', asset:'DKJ',
+    amount:fmt(d.faceValue), rate:'–', note:'D'+d.maturity.replace(/-/g,'').slice(2),
+    deleteCall:`deleteTx('dkj','${d.id}')`
+  }));
+  // etf
+  data.etfTx.forEach(t=>all.push({
+    date:t.date, type:t.type, asset:t.ticker,
+    amount:t.shares.toFixed(4)+' db', rate:fmtEur(t.priceEur), note:t.note||'–',
+    deleteCall:`deleteTx('etf','${t.id}')`
+  }));
+
+  all.sort((a,b)=>b.date.localeCompare(a.date));
 
   document.getElementById('txBody').innerHTML=all.map(t=>`<tr>
     <td>${t.date}</td>
@@ -805,8 +857,61 @@ function renderTranzakciok(){
     <td class="r blurable">${t.amount}</td>
     <td class="r">${t.rate}</td>
     <td class="r" style="color:var(--text2)">${t.note}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="${t.deleteCall}">×</button></td>
   </tr>`).join('');
   document.getElementById('txEmpty').style.display=all.length?'none':'block';
+}
+
+function deleteTx(kind, id){
+  if(!confirm('Biztosan törlöd ezt a tranzakciót? A kapcsolódó pozíció is visszaáll.'))return;
+
+  if(kind==='cash'){
+    // Just remove the cash transaction
+    data.cashTx=data.cashTx.filter(t=>t.id!==id);
+  }
+  else if(kind==='fixmap'){
+    const f=data.fixmap.find(f=>f.id===id);
+    if(!f)return;
+    // Remove linked cash buy transaction (same date, amount = faceValue, note = FixMáP vétel)
+    const cashIdx=data.cashTx.findIndex(t=>t.type==='buy'&&t.amount===f.faceValue&&t.note==='FixMáP vétel'&&t.date===f.date);
+    if(cashIdx>=0)data.cashTx.splice(cashIdx,1);
+    // If was sold (inactive), also remove the sell cash tx
+    if(!f.active){
+      const sellIdx=data.cashTx.findIndex(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP eladás'));
+      if(sellIdx>=0)data.cashTx.splice(sellIdx,1);
+    }
+    data.fixmap=data.fixmap.filter(f=>f.id!==id);
+  }
+  else if(kind==='dkj'){
+    const d=data.dkj.find(d=>d.id===id);
+    if(!d)return;
+    // Remove linked cash buy tx
+    const cashIdx=data.cashTx.findIndex(t=>t.type==='buy'&&t.amount===d.buyPrice&&t.note==='DKJ vétel'&&t.date===d.date);
+    if(cashIdx>=0)data.cashTx.splice(cashIdx,1);
+    // If expired/sold, remove linked cash tx
+    if(!d.active){
+      const seriesName='DKJ'+(!d.active?'':'')+' lejárat D'+d.maturity.replace(/-/g,'').slice(2);
+      const expIdx=data.cashTx.findIndex(t=>['expire','sell'].includes(t.type)&&t.note&&t.note.includes('D'+d.maturity.replace(/-/g,'').slice(2)));
+      if(expIdx>=0)data.cashTx.splice(expIdx,1);
+    }
+    data.dkj=data.dkj.filter(d=>d.id!==id);
+  }
+  else if(kind==='etf'){
+    const tx=data.etfTx.find(t=>t.id===id);
+    if(!tx)return;
+    const huf=tx.shares*tx.priceEur*tx.fxRate;
+    // Remove linked cash tx (buy or sell, same date, approximate amount)
+    const cashIdx=data.cashTx.findIndex(t=>
+      t.type===tx.type && t.date===tx.date &&
+      t.note&&t.note.includes(tx.ticker) &&
+      Math.abs(t.amount-huf)<10
+    );
+    if(cashIdx>=0)data.cashTx.splice(cashIdx,1);
+    data.etfTx=data.etfTx.filter(t=>t.id!==id);
+  }
+
+  renderAll();
+  toast('Tranzakció törölve');
 }
 
 // ═══════════════════════════════════════════════
@@ -951,6 +1056,8 @@ function submitFixmap(){
   const maturity=document.getElementById('f-maturity').value;
   const note=document.getElementById('f-note').value;
   if(!date||!faceValue||!couponRate||!maturity)return toast('Töltsd ki a kötelező mezőket!');
+  const bal=cashBalance();
+  if(bal<faceValue)return toast('Nincs elég egyenleg! Szükséges: '+fmt(faceValue)+', jelenlegi: '+fmt(bal));
   data.fixmap.push({id:uid(),date,faceValue,couponRate,maturity,note,active:true});
   data.cashTx.push({id:uid(),date,type:'buy',amount:faceValue,note:'FixMáP vétel'});
   closeModal(); renderAll(); toast('FixMáP pozíció rögzítve');
@@ -1050,6 +1157,8 @@ function submitDKJ(){
   const maturity=document.getElementById('f-maturity').value;
   const yieldRate=parseFloat(document.getElementById('f-yield').value)||null;
   if(!date||!faceValue||!maturity)return toast('Töltsd ki a kötelező mezőket!');
+  const bal=cashBalance();
+  if(bal<buyPrice)return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
   data.dkj.push({id:uid(),date,faceValue,buyPrice,maturity,yieldRate,active:true});
   data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel'});
   closeModal(); renderAll(); toast('DKJ pozíció rögzítve');
