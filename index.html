@@ -321,7 +321,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>vétel dátuma</th><th class="r">db</th><th class="r">vételi ár (EUR)</th><th class="r">vétel HUF/EUR</th><th class="r">befektetett</th><th class="r">aktuális érték</th><th class="r">P&L</th><th class="r">P&L %</th><th class="r">TBSZ év</th><th></th></tr></thead>
+          <thead><tr><th>dátum</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. Ft</th><th class="r">befekt. EUR</th><th class="r">akt. Ft</th><th class="r">akt. EUR</th><th class="r">P&L Ft</th><th class="r">P&L EUR</th><th class="r">P&L %</th><th class="r">TBSZ</th><th></th></tr></thead>
           <tbody id="vwceBody"></tbody>
         </table></div>
         <div class="empty" id="vwceEmpty" style="display:none">Még nincs VWCE tétel.</div>
@@ -337,7 +337,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>vétel dátuma</th><th class="r">db</th><th class="r">vételi ár (EUR)</th><th class="r">vétel HUF/EUR</th><th class="r">befektetett</th><th class="r">aktuális érték</th><th class="r">P&L</th><th class="r">P&L %</th><th class="r">TBSZ év</th><th></th></tr></thead>
+          <thead><tr><th>dátum</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. Ft</th><th class="r">befekt. EUR</th><th class="r">akt. Ft</th><th class="r">akt. EUR</th><th class="r">P&L Ft</th><th class="r">P&L EUR</th><th class="r">P&L %</th><th class="r">TBSZ</th><th></th></tr></thead>
           <tbody id="wbitBody"></tbody>
         </table></div>
         <div class="empty" id="wbitEmpty" style="display:none">Még nincs WBIT tétel.</div>
@@ -574,12 +574,12 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">pénzszámla</div>
       <div class="stat-value blurable">${fmtM(cb)}</div>
-      <div class="stat-sub blurable">≈ €${cbEur.toFixed(0)}</div>
+      <div class="stat-sub blurable">≈ ${fmtEur(cbEur,0)}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">állampapír</div>
       <div class="stat-value blurable">${fmtM(apValue)}</div>
-      <div class="stat-sub blurable">≈ €${apEur.toFixed(0)}</div>
+      <div class="stat-sub blurable">≈ ${fmtEur(apEur,0)}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">tbsz (etf)</div>
@@ -600,11 +600,15 @@ function renderDashboard(){
 
 function renderPie(cb,ap,tbsz){
   destroyChart('pie');
-  const total=cb+ap+tbsz;
+  const vwceShares=etfShares('VWCE');
+  const wbitShares=etfShares('WBIT');
+  const vwceVal=(liveVwce||0)*vwceShares*liveFx;
+  const wbitVal=(liveWbit||0)*wbitShares*liveFx;
+  const labels=['Állampapír','VWCE','WBIT'];
+  const vals=[ap,vwceVal,wbitVal];
+  const colors=['#60a5fa','#4ade9a','#f59e0b'];
+  const total=vals.reduce((s,v)=>s+v,0);
   if(total<=0)return;
-  const labels=['Pénzszámla','Állampapír','TBSZ ETF'];
-  const vals=[cb,ap,tbsz];
-  const colors=['#8a8880','#60a5fa','#4ade9a'];
   charts['pie']=new Chart(document.getElementById('pieChart'),{
     type:'doughnut',
     data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:0,hoverOffset:4}]},
@@ -707,10 +711,14 @@ function renderCashflowChart(){
     const m=parseInt(mat.split('-')[1])-1;
     vals[m]+=total;
   });
+  const currentMonth=new Date().getMonth();
+  const barColors=months.map((_,i)=>i===currentMonth?'rgba(96,165,250,0.5)':'rgba(96,165,250,0.2)');
+  const barBorders=months.map((_,i)=>i===currentMonth?'#60a5fa':'#60a5fa');
+  const tickColors=months.map((_,i)=>i===currentMonth?'#e8e6e0':'#55534f');
   charts['cf']=new Chart(document.getElementById('cashflowChart'),{
     type:'bar',
-    data:{labels:months,datasets:[{label:'Cashflow',data:vals,backgroundColor:'rgba(96,165,250,0.2)',borderColor:'#60a5fa',borderWidth:1,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#55534f',font:{size:11}}},y:{ticks:{color:'#55534f',callback:v=>v?fmtM(v):0}}}}
+    data:{labels:months,datasets:[{label:'Cashflow',data:vals,backgroundColor:barColors,borderColor:barBorders,borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:ctx=>tickColors[ctx.index]||'#55534f',font:{size:11}}},y:{ticks:{color:'#55534f',callback:v=>v?fmtM(v):0}}}}
   });
 }
 
@@ -876,17 +884,24 @@ function renderTBSZ(){
 function renderETFTable(ticker,bodyId,emptyId,livePrice){
   const buys=etfCostBasis(ticker);
   document.getElementById(bodyId).innerHTML=buys.map(b=>{
-    const currentVal=livePrice?b.shares*livePrice*liveFx:null;
-    const pl=currentVal?currentVal-b.costHuf:null;
-    const plPct=pl?pl/b.costHuf*100:null;
+    const costEur=b.shares*b.priceEur;
+    const currentValFt=livePrice?b.shares*livePrice*liveFx:null;
+    const currentValEur=livePrice?b.shares*livePrice:null;
+    const plFt=currentValFt!==null?currentValFt-b.costHuf:null;
+    const plEur=currentValEur!==null?currentValEur-costEur:null;
+    const plPct=plFt!==null?plFt/b.costHuf*100:null;
+    const signEur=plEur!==null?(plEur>=0?'+':'')+fmtEur(Math.abs(plEur),0):'–';
     return `<tr>
       <td>${b.date}</td>
-      <td class="r blurable">${b.shares.toFixed(4)}</td>
+      <td class="r blurable">${b.shares.toFixed(2)}</td>
       <td class="r blurable">${fmtEur(b.priceEur)}</td>
-      <td class="r">${Math.round(b.fxRate)} Ft</td>
+      <td class="r">${Math.round(b.fxRate)}</td>
       <td class="r blurable">${fmtM(b.costHuf)}</td>
-      <td class="r blurable">${currentVal?fmtM(currentVal):'–'}</td>
-      <td class="r blurable ${pl===null?'':pl>=0?'pos':'neg'}">${pl!==null?fmtSign(pl):'–'}</td>
+      <td class="r blurable">${fmtEur(costEur,0)}</td>
+      <td class="r blurable">${currentValFt!==null?fmtM(currentValFt):'–'}</td>
+      <td class="r blurable">${currentValEur!==null?fmtEur(currentValEur,0):'–'}</td>
+      <td class="r blurable ${plFt===null?'':plFt>=0?'pos':'neg'}">${plFt!==null?fmtSign(plFt):'–'}</td>
+      <td class="r blurable ${plEur===null?'':plEur>=0?'pos':'neg'}">${plEur!==null?(plEur>=0?'+':'')+fmtEur(Math.abs(plEur),0):'–'}</td>
       <td class="r ${plPct===null?'':plPct>=0?'pos':'neg'}">${plPct!==null?fmtSignPct(plPct):'–'}</td>
       <td class="r">${b.tbszYear||'–'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="deleteEtfTx('${b.id}')">×</button></td>
