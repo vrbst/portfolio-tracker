@@ -148,8 +148,10 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .toast.show{opacity:1;transform:translateY(0)}
 
 /* BLUR */
-.blurred{filter:blur(6px);transition:filter .2s;user-select:none}
-.blurred:hover{filter:blur(0)}
+.blurred{filter:blur(6px);transition:filter .2s;user-select:none;min-width:60px;display:inline-block}
+.blurred:hover{filter:blur(0);min-width:unset}
+canvas.blurred{filter:blur(8px);transition:filter .2s}
+canvas.blurred:hover{filter:blur(0)}
 
 /* SPINNER */
 .spin{display:inline-block;width:10px;height:10px;border:1.5px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
@@ -231,7 +233,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
           <div class="panel-header"><div class="panel-title">portfólió megoszlás</div></div>
           <div style="display:flex;gap:16px;align-items:center">
             <div style="width:150px;height:150px;flex-shrink:0;position:relative">
-              <canvas id="pieChart" role="img" aria-label="Megoszlás"></canvas>
+              <canvas id="pieChart" class="blurable" role="img" aria-label="Megoszlás"></canvas>
             </div>
             <div id="pieLegend" style="flex:1"></div>
           </div>
@@ -243,7 +245,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
       <div class="panel">
         <div class="panel-header"><div class="panel-title">havi cashflow (2026)</div></div>
-        <div class="chart-wrap"><canvas id="cashflowChart" role="img" aria-label="Cashflow"></canvas></div>
+        <div class="chart-wrap"><canvas id="cashflowChart" class="blurable" role="img" aria-label="Cashflow"></canvas></div>
       </div>
     </div>
 
@@ -790,7 +792,7 @@ function renderAllampapir(){
   document.getElementById('apCards').innerHTML=`
     <div class="stat-card"><div class="stat-label">FixMáP névérték</div><div class="stat-value blurable">${fmtM(fmValue)}</div><div class="stat-sub">${fmSeriesCount} sorozat</div></div>
     <div class="stat-card"><div class="stat-label">DKJ névérték</div><div class="stat-value blurable">${fmtM(dkjValue)}</div><div class="stat-sub">${dkjSeriesCount} aktív sorozat</div></div>
-    <div class="stat-card"><div class="stat-label">éves kamatbevétel</div><div class="stat-value pos blurable">${fmtM(annualCoupon)}</div><div class="stat-sub">${fmt(annualCoupon/12)}/hó</div></div>
+    <div class="stat-card"><div class="stat-label">éves kamatbevétel</div><div class="stat-value pos blurable">${fmtM(annualCoupon)}</div><div class="stat-sub blurable">${fmt(annualCoupon/12)}/hó</div></div>
   `;
 
   // FixMáP table – grouped by series
@@ -883,9 +885,9 @@ function renderTBSZ(){
 
   document.getElementById('tbszCards').innerHTML=`
     <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db':'nincs live adat'}</div></div>
-    <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
+    <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub blurable">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
     <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db':'nincs live adat'}</div></div>
-    <div class="stat-card"><div class="stat-label">WBIT aktuális érték</div><div class="stat-value blurable">${wbitVal>0?fmtM(wbitVal):'–'}</div><div class="stat-sub">${wbitCost>0?'befektetett: '+fmtM(wbitCost):'–'}</div></div>
+    <div class="stat-card"><div class="stat-label">WBIT aktuális érték</div><div class="stat-value blurable">${wbitVal>0?fmtM(wbitVal):'–'}</div><div class="stat-sub blurable">${wbitCost>0?'befektetett: '+fmtM(wbitCost):'–'}</div></div>
   `;
 
   renderETFTable('VWCE','vwceBody','vwceEmpty',liveVwce);
@@ -979,7 +981,7 @@ function renderTranzakciok(){
     <td><span class="badge ${typeBadge[t.type]||'b-deposit'}">${typeLabel[t.type]||t.type}</span></td>
     <td>${t.asset}</td>
     <td class="r blurable">${t.amount}</td>
-    <td class="r">${t.rate}</td>
+    <td class="r blurable">${t.rate}</td>
     <td class="r" style="color:var(--text2)">${t.note}</td>
     <td style="white-space:nowrap">
       <button class="btn btn-ghost btn-sm" onclick="${t.editCall}" style="margin-right:4px">✎</button>
