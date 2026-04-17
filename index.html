@@ -153,6 +153,13 @@ tr:hover td{background:rgba(255,255,255,.015)}
 canvas.blurred{filter:blur(8px);transition:filter .2s}
 canvas.blurred:hover{filter:blur(0)}
 
+/* EXPAND ROWS */
+.detail-row{display:none;background:var(--bg3)}
+.detail-row.open{display:table-row}
+.detail-row td{padding:6px 10px 6px 24px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)}
+.expand-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:0 4px;transition:transform .15s}
+.expand-btn.open{transform:rotate(90deg)}
+
 /* SPINNER */
 .spin{display:inline-block;width:10px;height:10px;border:1.5px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -822,19 +829,26 @@ function renderAllampapir(){
     const nextCouponPast=sr&&sr.nextCoupon&&new Date(sr.nextCoupon)<new Date();
     const isFirstCoupon=sr&&sr.firstCouponAmount&&!nextCouponPast;
     const qCoupon=s.active&&couponRate?(isFirstCoupon?sr.firstCouponAmount:s.totalFace*couponRate/100/4):0;
-    return `<tr>
-      <td><div class="asset-name">${name}</div><div style="font-size:10px;color:var(--text3)">${s.items.length} tétel</div></td>
+    const rowId='fm-'+s.seriesId.replace(/[^a-z0-9]/gi,'');
+    const detailRows=s.items.map(f=>`<tr class="detail-row" id="d-${rowId}-${f.id}">
+      <td colspan="2" style="color:var(--text3)">${f.date}</td>
+      <td class="r blurable" style="color:var(--text)">${fmt(f.faceValue)}</td>
+      <td class="r blurable" style="color:var(--text)">${fmt(f.buyPrice||f.faceValue)}</td>
+      <td colspan="4" style="color:var(--text3)">${f.active?'aktív':'lezárt'}</td>
+    </tr>`).join('');
+    return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
+      <td><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
       <td class="r">${couponRate?couponRate+'%':'–'}</td>
       <td class="r pos blurable">${qCoupon?'+'+fmt(qCoupon):'–'}<div style="font-size:10px;color:var(--text3)">${nextCoupon!=='–'?nextCoupon:''}</div></td>
       <td class="r">${maturity}</td>
       <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
-      <td style="white-space:nowrap">
+      <td style="white-space:nowrap" onclick="event.stopPropagation()">
         ${sr?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-fixmap-series','${s.seriesId}')" style="margin-right:4px">✎</button>`:''}
         ${s.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap-series','${s.seriesId}')" style="margin-right:4px">eladás</button>`:''}
       </td>
-    </tr>`;
+    </tr>${detailRows}`;
   }).join('');
   document.getElementById('fixmapEmpty').style.display=fmSeriesList.length?'none':'block';
 
@@ -849,23 +863,36 @@ function renderAllampapir(){
   const seriesList=Object.values(dkjSeries).filter(s=>s.active).sort((a,b)=>a.maturity.localeCompare(b.maturity));
   document.getElementById('dkjBody').innerHTML=seriesList.map(s=>{
     const name='D'+s.maturity.replace(/-/g,'').slice(2);
-    const avgBuy=s.items.filter(i=>i.active).length>0?s.totalBuy/s.items.filter(i=>i.active).length:0;
     const expectedReturn=s.totalFace-s.totalBuy;
-    const allActive=s.items.every(i=>i.active);
-    return `<tr>
-      <td><div class="asset-name">${name}</div><div style="font-size:10px;color:var(--text3)">${s.items.length} tétel</div></td>
+    const rowId='dkj-'+s.maturity.replace(/-/g,'');
+    const detailRows=s.items.filter(d=>d.active).map(d=>`<tr class="detail-row" id="d-${rowId}-${d.id}">
+      <td colspan="2" style="color:var(--text3)">${d.date}</td>
+      <td class="r blurable" style="color:var(--text)">${fmt(d.faceValue)}</td>
+      <td class="r blurable" style="color:var(--text)">${fmt(d.buyPrice)}</td>
+      <td colspan="3" style="color:var(--green)">+${fmt(Math.round(d.faceValue-d.buyPrice))}</td>
+    </tr>`).join('');
+    return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
+      <td><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
       <td class="r pos blurable">+${fmt(Math.round(expectedReturn))}</td>
       <td class="r">${s.maturity}</td>
       <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
-      <td style="white-space:nowrap">
+      <td style="white-space:nowrap" onclick="event.stopPropagation()">
         ${s.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-dkj-series','${s.maturity}')" style="margin-right:4px">eladás</button>
         <button class="btn btn-ghost btn-sm" onclick="expireDKJSeries('${s.maturity}')" style="margin-right:4px">lejárt</button>`:''}
       </td>
-    </tr>`;
+    </tr>${detailRows}`;
   }).join('');
   document.getElementById('dkjEmpty').style.display=seriesList.length?'none':'block';
+}
+
+function toggleExpand(rowId, clickedTr){
+  const btn=document.getElementById('btn-'+rowId);
+  const details=document.querySelectorAll('[id^="d-'+rowId+'-"]');
+  const isOpen=btn&&btn.classList.contains('open');
+  if(btn)btn.classList.toggle('open',!isOpen);
+  details.forEach(r=>r.classList.toggle('open',!isOpen));
 }
 
 function deleteFixmap(id){data.fixmap=data.fixmap.filter(f=>f.id!==id);renderAllampapir();renderDashboard();toast('Törölve');}
