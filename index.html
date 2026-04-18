@@ -431,10 +431,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div style="display:flex;gap:8px;align-items:center">
             <select class="form-select" id="histRange" onchange="renderHistory()" style="padding:5px 10px;font-size:11px;width:auto">
               <option value="all">teljes időszak</option>
-              <option value="365">1 év</option>
-              <option value="180">6 hónap</option>
               <option value="30">1 hónap</option>
               <option value="90">3 hónap</option>
+              <option value="180">6 hónap</option>
+              <option value="365">1 év</option>
             </select>
             <button class="btn btn-primary btn-sm" id="histLoadBtn" onclick="loadHistoricData()">adatok betöltése</button>
           </div>
@@ -2300,13 +2300,14 @@ function renderHistory(){
   const firstDate=getFirstTransactionDate();
   const today=new Date().toISOString().split('T')[0];
 
-  // Generate date range (weekly points for performance)
+  // Generate date range – napi felbontás <= 90 nap, heti felbontás egyébként
+  const step=(range&&range<=90)?1:7;
   const dates=[];
   let d=new Date(firstDate);
   const end=new Date(today);
   while(d<=end){
     dates.push(d.toISOString().split('T')[0]);
-    d.setDate(d.getDate()+7);
+    d.setDate(d.getDate()+step);
   }
   if(dates[dates.length-1]!==today)dates.push(today);
 
