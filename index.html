@@ -193,6 +193,12 @@ input[type=range]::-webkit-slider-runnable-track{
   height:4px;border-radius:2px;
 }
 
+/* SORTABLE HEADERS */
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:var(--text)}
+th.sort-asc::after{content:' ↑';color:var(--green)}
+th.sort-desc::after{content:' ↓';color:var(--green)}
+
 /* EXPAND ROWS */
 .detail-row{display:none;background:var(--bg3)}
 .detail-row.open{display:table-row}
@@ -375,7 +381,7 @@ input[type=range]::-webkit-slider-runnable-track{
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap" style="max-height:450px;overflow-y:auto"><table>
-          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th class="r">befekt. Ft</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. EUR</th><th class="r">akt. EUR</th><th class="r">P&L EUR</th><th class="r">P&L EUR %</th><th class="r">akt. Ft</th><th class="r">P&L Ft</th><th class="r">P&L Ft %</th><th class="r">TBSZ</th><th></th></tr></thead>
+          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr id="vwce-thead"></tr></thead>
           <tbody id="vwceBody"></tbody>
         </table></div>
         <div class="empty" id="vwceEmpty" style="display:none">Még nincs VWCE tétel.</div>
@@ -392,7 +398,7 @@ input[type=range]::-webkit-slider-runnable-track{
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap" style="max-height:450px;overflow-y:auto"><table>
-          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th class="r">befekt. Ft</th><th class="r">db</th><th class="r">vételi ár</th><th class="r">HUF/EUR</th><th class="r">befekt. EUR</th><th class="r">akt. EUR</th><th class="r">P&L EUR</th><th class="r">P&L EUR %</th><th class="r">akt. Ft</th><th class="r">P&L Ft</th><th class="r">P&L Ft %</th><th class="r">TBSZ</th><th></th></tr></thead>
+          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr id="wbit-thead"></tr></thead>
           <tbody id="wbitBody"></tbody>
         </table></div>
         <div class="empty" id="wbitEmpty" style="display:none">Még nincs WBIT tétel.</div>
@@ -983,8 +989,37 @@ function renderTBSZ(){
   renderETFTable('WBIT','wbitBody','wbitEmpty',liveWbit);
 }
 
+const etfSortState={VWCE:{col:'date',dir:-1},WBIT:{col:'date',dir:-1}};
+
+function sortETF(ticker,col){
+  const s=etfSortState[ticker];
+  if(s.col===col) s.dir*=-1;
+  else{s.col=col;s.dir=-1;}
+  const livePrice=ticker==='VWCE'?liveVwce:liveWbit;
+  renderETFTable(ticker,ticker.toLowerCase()+'Body',ticker.toLowerCase()+'Empty',livePrice);
+}
+
 function renderETFTable(ticker,bodyId,emptyId,livePrice){
-  const buys=etfCostBasis(ticker).sort((a,b)=>b.date.localeCompare(a.date));
+  const {col,dir}=etfSortState[ticker]||{col:'date',dir:-1};
+  const buys=etfCostBasis(ticker).sort((a,b)=>{
+    const lp=livePrice||0;
+    const vals={
+      date:[a.date,b.date],
+      costHuf:[a.costHuf,b.costHuf],
+      shares:[a.shares,b.shares],
+      priceEur:[a.priceEur,b.priceEur],
+      fxRate:[a.fxRate,b.fxRate],
+      costEur:[a.shares*a.priceEur,b.shares*b.priceEur],
+      valEur:[a.shares*lp,b.shares*lp],
+      plEur:[a.shares*lp-a.shares*a.priceEur,b.shares*lp-b.shares*b.priceEur],
+      plEurPct:[(a.shares*lp-a.shares*a.priceEur)/(a.shares*a.priceEur),(b.shares*lp-b.shares*b.priceEur)/(b.shares*b.priceEur)],
+      valFt:[a.shares*lp*liveFx,b.shares*lp*liveFx],
+      plFt:[a.shares*lp*liveFx-a.costHuf,b.shares*lp*liveFx-b.costHuf],
+      plPct:[(a.shares*lp*liveFx-a.costHuf)/a.costHuf,(b.shares*lp*liveFx-b.costHuf)/b.costHuf],
+    };
+    const [av,bv]=vals[col]||[a.date,b.date];
+    return typeof av==='string'?dir*av.localeCompare(bv):dir*(av-bv);
+  });
   if(!buys.length){document.getElementById(emptyId).style.display='block';return;}
   document.getElementById(emptyId).style.display='none';
 
@@ -1001,7 +1036,30 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
   const totPlPct=totPlFt!==null?totPlFt/totCostHuf*100:null;
   const totPlEurPct=totPlEur!==null?totPlEur/totCostEur*100:null;
 
-  const summaryRow=`<tr style="border-top:2px solid var(--border2);font-weight:500;background:var(--bg3)">
+  // Render sortable header
+  const cols=[
+    {key:'date',label:'dátum',r:false},
+    {key:'costHuf',label:'befekt. Ft',r:true},
+    {key:'shares',label:'db',r:true},
+    {key:'priceEur',label:'vételi ár',r:true},
+    {key:'fxRate',label:'HUF/EUR',r:true},
+    {key:'costEur',label:'befekt. EUR',r:true},
+    {key:'valEur',label:'akt. EUR',r:true},
+    {key:'plEur',label:'P&L EUR',r:true},
+    {key:'plEurPct',label:'P&L EUR %',r:true},
+    {key:'valFt',label:'akt. Ft',r:true},
+    {key:'plFt',label:'P&L Ft',r:true},
+    {key:'plPct',label:'P&L Ft %',r:true},
+    {key:'tbsz',label:'TBSZ',r:true},
+    {key:null,label:'',r:false},
+  ];
+  const theadEl=document.getElementById(ticker.toLowerCase()+'-thead');
+  if(theadEl) theadEl.innerHTML=cols.map(c=>c.key?
+    `<th class="sortable ${c.r?'r':''} ${col===c.key?(dir===-1?'sort-desc':'sort-asc'):''}" onclick="sortETF('${ticker}','${c.key}')">${c.label}</th>`
+    :`<th></th>`
+  ).join('');
+
+  const summaryRow=`<tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--border2);font-weight:500;background:var(--bg3)">
     <td style="font-size:11px;color:var(--text2)">összesítés</td>
     <td class="r blurable">${fmtM(totCostHuf)}</td>
     <td class="r blurable">${totShares.toFixed(2)}</td>
