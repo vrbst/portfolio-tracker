@@ -2272,9 +2272,8 @@ function calcPortfolioOnDate(date){
     etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
   }
 
-  // total = állampapír + ETF érték (cash ~0 mivel a vételek levonódnak)
-  // a cash-t nem adjuk hozzá mivel az AP/DKJ vételek a cashTx-ben vannak mint 'buy'
-  // ami már levonta az egyenlegből
+  if(date===new Date().toISOString().split('T')[0])
+    console.log('DEBUG portfolio',date,'cash:',Math.round(cash),'ap:',Math.round(ap),'etf:',Math.round(etfEur*fx),'total:',Math.round(ap+etfEur*fx));
   return {cash, ap, etf:etfEur*fx, total:ap+etfEur*fx};
 }
 
