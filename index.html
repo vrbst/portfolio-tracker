@@ -2282,10 +2282,11 @@ function calcPortfolioOnDate(date){
 }
 
 function calcInvestedOnDate(date){
+  // Befektetett tőke = nettó befizetések (deposit - withdraw)
+  // Az ETF és AP vételek a befizetésekből mennek, nem adjuk hozzá kétszer
   let invested=0;
   data.cashTx.filter(t=>t.date<=date&&t.type==='deposit').forEach(t=>invested+=t.amount);
   data.cashTx.filter(t=>t.date<=date&&t.type==='withdraw').forEach(t=>invested-=t.amount);
-  data.etfTx.filter(t=>t.date<=date&&t.type==='buy').forEach(t=>invested+=t.shares*t.priceEur*t.fxRate);
   return invested;
 }
 
