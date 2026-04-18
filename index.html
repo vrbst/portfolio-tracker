@@ -2186,8 +2186,9 @@ function getFirstTransactionDate(){
 }
 
 function interpolate(prices, date){
-  // Find closest available price on or before date
+  if(!prices||typeof prices!=='object')return null;
   const sorted=Object.keys(prices).sort();
+  if(!sorted.length)return null;
   let last=null;
   for(const d of sorted){
     if(d<=date)last=prices[d];
@@ -2208,18 +2209,23 @@ async function loadHistoricData(){
   const vwcePrices=await fetchHistoricalPrices('VWCE.DE', firstDate);
 
   status.textContent='WBIT árfolyam lekérése...';
-  const wbitPrices=await fetchHistoricalPrices('WBIT.DU', firstDate);
+  const wbitPrices=await fetchHistoricalPrices('WBIT.DE', firstDate);
 
   status.textContent='EUR/HUF árfolyam lekérése...';
   const fxPrices=await fetchHistoricalFX(firstDate);
 
   if(!vwcePrices&&!fxPrices){
-    status.textContent='Nem sikerült az adatok lekérése.';
+    status.textContent='Nem sikerült az adatok lekérése. Próbáld újra!';
     btn.disabled=false; btn.textContent='újra próbál';
     return;
   }
 
-  histData={vwcePrices, wbitPrices, fxPrices, firstDate};
+  histData={
+    vwcePrices:vwcePrices||{},
+    wbitPrices:wbitPrices||{},
+    fxPrices:fxPrices||{},
+    firstDate
+  };
   status.textContent='';status.style.display='none';
   btn.disabled=false; btn.textContent='frissítés';
   renderHistory();
@@ -2260,10 +2266,10 @@ function calcPortfolioOnDate(date){
     if(t.type==='sell')etfHoldings[t.ticker]-=t.shares;
   });
 
-  const fx=histData?interpolate(histData.fxPrices,date)||liveFx:liveFx;
+  const fx=(histData&&histData.fxPrices)?interpolate(histData.fxPrices,date)||liveFx:liveFx;
   if(histData){
-    const vp=interpolate(histData.vwcePrices,date)||0;
-    const wp=interpolate(histData.wbitPrices,date)||0;
+    const vp=(histData.vwcePrices?interpolate(histData.vwcePrices,date):null)||liveVwce||0;
+    const wp=(histData.wbitPrices?interpolate(histData.wbitPrices,date):null)||liveWbit||0;
     etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
   }
 
