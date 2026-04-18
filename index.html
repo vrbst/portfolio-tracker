@@ -369,7 +369,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
     <!-- TBSZ -->
     <div id="page-tbsz" class="page">
-      <div class="card-row cards-4" id="tbszCards"></div>
+      <div class="card-row cards-5" id="tbszCards"></div>
 
       <div class="section-title">
         VWCE pozíciók
@@ -981,6 +981,7 @@ function renderTBSZ(){
   const wbitVal=liveWbit?liveWbit*wbitShares*liveFx:0;
 
   document.getElementById('tbszCards').innerHTML=`
+    <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx.toFixed(2)} Ft</div><div class="stat-sub">${liveVwce?'live':'becsült'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db':'nincs live adat'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub blurable">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
     <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db':'nincs live adat'}</div></div>
@@ -2123,6 +2124,17 @@ function startAutoRefresh(){
 async function manualRefresh(){
   const btn=document.getElementById('refreshBtn');
   if(btn){btn.style.opacity='.5';btn.style.pointerEvents='none';}
+  // Reset pills to loading state
+  ['vwce','wbit'].forEach(t=>{
+    const pill=document.getElementById(t+'Pill');
+    const label=document.getElementById(t+'PriceLabel');
+    const huf=document.getElementById(t+'PriceHuf');
+    if(pill)pill.className='live-pill est';
+    if(label)label.innerHTML='<span class="spin"></span>betöltés';
+    if(huf)huf.textContent='';
+  });
+  liveVwce=null; liveWbit=null;
+  renderDashboard(); renderTBSZ();
   await fetchLive();
   if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
   toast('Árfolyamok frissítve');
