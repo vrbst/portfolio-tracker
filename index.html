@@ -264,6 +264,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
     <div class="header-right">
       <button class="hbtn" id="hideBtn" onclick="toggleBlur()" title="Összegek elrejtése">👁 <span class="lbl">elrejt</span></button>
       <button class="hbtn" onclick="saveData()"><div class="sync-dot" id="syncDot"></div><span class="lbl" id="syncLabel">mentés</span></button>
+      <button class="hbtn" id="refreshBtn" onclick="manualRefresh()" title="Árfolyamok frissítése">↻ <span class="lbl">frissít</span></button>
       <button class="hbtn danger" onclick="confirmDeleteDB()" title="Adatbázis törlése">🗑 <span class="lbl">törlés</span></button>
       <button class="hbtn danger" onclick="logout()">↪ <span class="lbl">kilépés</span></button>
     </div>
@@ -534,6 +535,7 @@ function showApp(){
   document.getElementById('app').style.display='block';
   renderAll();
   fetchLive();
+  startAutoRefresh();
 }
 
 // ═══════════════════════════════════════════════
@@ -2104,6 +2106,26 @@ async function confirmDeleteDB(){
   await saveData();
   renderAll();
   toast('Adatbázis törölve');
+}
+
+// ═══════════════════════════════════════════════
+// LIVE REFRESH
+// ═══════════════════════════════════════════════
+let refreshInterval=null;
+
+function startAutoRefresh(){
+  if(refreshInterval)clearInterval(refreshInterval);
+  refreshInterval=setInterval(()=>{
+    fetchLive();
+  }, 60000); // percenként
+}
+
+async function manualRefresh(){
+  const btn=document.getElementById('refreshBtn');
+  if(btn){btn.style.opacity='.5';btn.style.pointerEvents='none';}
+  await fetchLive();
+  if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
+  toast('Árfolyamok frissítve');
 }
 
 // ═══════════════════════════════════════════════
