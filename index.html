@@ -275,6 +275,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
     <button class="tab" onclick="showTab('kincstar',this)">államkincstár</button>
     <button class="tab" onclick="showTab('tbsz',this)">tbsz</button>
     <button class="tab" onclick="showTab('tranzakciok',this)">tranzakciók</button>
+    <button class="tab" onclick="showTab('history',this)">historikus</button>
   </div>
 
   <div class="content">
@@ -418,6 +419,31 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <tbody id="txBody"></tbody>
         </table></div>
         <div class="empty" id="txEmpty">Még nincs tranzakció.</div>
+      </div>
+    </div>
+
+    <!-- HISTORIKUS -->
+    <div id="page-history" class="page">
+      <div class="card-row cards-3" id="histCards" style="margin-bottom:14px"></div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">portfólió értéke időben</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-select" id="histRange" onchange="renderHistory()" style="padding:5px 10px;font-size:11px;width:auto">
+              <option value="all">teljes időszak</option>
+              <option value="365">1 év</option>
+              <option value="180">6 hónap</option>
+              <option value="90">3 hónap</option>
+            </select>
+            <button class="btn btn-primary btn-sm" id="histLoadBtn" onclick="loadHistoricData()">adatok betöltése</button>
+          </div>
+        </div>
+        <div id="histStatus" style="font-size:12px;color:var(--text2);margin-bottom:10px;display:none"></div>
+        <div class="chart-wrap" style="height:320px"><canvas id="histChart" role="img" aria-label="Historikus portfólió érték"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">befektetett tőke vs. portfólió érték</div></div>
+        <div class="chart-wrap" style="height:240px"><canvas id="histChart2" role="img" aria-label="Befektetett vs portfólió"></canvas></div>
       </div>
     </div>
 
@@ -609,6 +635,7 @@ function renderAll(){
   renderKincstar();
   renderTBSZ();
   renderTranzakciok();
+  if(document.getElementById('page-history')?.classList.contains('active'))renderHistory();
 }
 
 // ═══════════════════════════════════════════════
@@ -2107,6 +2134,229 @@ async function confirmDeleteDB(){
   await saveData();
   renderAll();
   toast('Adatbázis törölve');
+}
+
+// ═══════════════════════════════════════════════
+// HISTORIKUS
+// ═══════════════════════════════════════════════
+let histData=null; // cached historical prices
+
+async function fetchHistoricalPrices(symbol, startDate){
+  // Yahoo Finance historical data via Cloudflare Worker
+  const start=Math.floor(new Date(startDate).getTime()/1000);
+  const end=Math.floor(Date.now()/1000);
+  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${start}&period2=${end}`;
+  const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
+  if(!r.ok)return null;
+  const d=await r.json();
+  const result=d?.chart?.result?.[0];
+  if(!result)return null;
+  const timestamps=result.timestamp||[];
+  const closes=result.indicators?.adjclose?.[0]?.adjclose||result.indicators?.quote?.[0]?.close||[];
+  const prices={};
+  timestamps.forEach((ts,i)=>{
+    if(closes[i]){
+      const date=new Date(ts*1000).toISOString().split('T')[0];
+      prices[date]=closes[i];
+    }
+  });
+  return prices;
+}
+
+async function fetchHistoricalFX(startDate){
+  // EUR/HUF historical from Frankfurter API
+  const start=startDate;
+  const end=new Date().toISOString().split('T')[0];
+  const url=`https://api.frankfurter.app/${start}..${end}?from=EUR&to=HUF`;
+  const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
+  if(!r.ok)return null;
+  const d=await r.json();
+  const rates={};
+  Object.entries(d.rates||{}).forEach(([date,r])=>{ rates[date]=r.HUF; });
+  return rates;
+}
+
+function getFirstTransactionDate(){
+  const dates=[];
+  data.cashTx.forEach(t=>dates.push(t.date));
+  data.fixmap.forEach(f=>dates.push(f.date));
+  data.dkj.forEach(d=>dates.push(d.date));
+  data.etfTx.forEach(t=>dates.push(t.date));
+  return dates.sort()[0]||new Date().toISOString().split('T')[0];
+}
+
+function interpolate(prices, date){
+  // Find closest available price on or before date
+  const sorted=Object.keys(prices).sort();
+  let last=null;
+  for(const d of sorted){
+    if(d<=date)last=prices[d];
+    else break;
+  }
+  return last;
+}
+
+async function loadHistoricData(){
+  const btn=document.getElementById('histLoadBtn');
+  const status=document.getElementById('histStatus');
+  btn.disabled=true; btn.textContent='betöltés...';
+  status.style.display='block'; status.textContent='Historikus adatok lekérése...';
+
+  const firstDate=getFirstTransactionDate();
+
+  status.textContent='VWCE árfolyam lekérése...';
+  const vwcePrices=await fetchHistoricalPrices('VWCE.DE', firstDate);
+
+  status.textContent='WBIT árfolyam lekérése...';
+  const wbitPrices=await fetchHistoricalPrices('WBIT.DU', firstDate);
+
+  status.textContent='EUR/HUF árfolyam lekérése...';
+  const fxPrices=await fetchHistoricalFX(firstDate);
+
+  if(!vwcePrices&&!fxPrices){
+    status.textContent='Nem sikerült az adatok lekérése.';
+    btn.disabled=false; btn.textContent='újra próbál';
+    return;
+  }
+
+  histData={vwcePrices, wbitPrices, fxPrices, firstDate};
+  status.textContent='';status.style.display='none';
+  btn.disabled=false; btn.textContent='frissítés';
+  renderHistory();
+}
+
+function calcPortfolioOnDate(date){
+  // Calculate portfolio value on a given date based on transactions up to that date
+  // Cash balance
+  let cash=0;
+  data.cashTx.forEach(t=>{
+    if(t.date>date)return;
+    if(['deposit','coupon','expire','sell'].includes(t.type))cash+=t.amount;
+    if(['withdraw','buy'].includes(t.type))cash-=t.amount;
+  });
+
+  // AP value (face value of active positions on that date)
+  let ap=0;
+  data.fixmap.forEach(f=>{
+    if(f.date>date)return;
+    if(f.active||f.date<=date)ap+=f.faceValue;
+  });
+  // subtract sold fixmap
+  data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP')&&t.date<=date).forEach(t=>{
+    // approximate: subtract sold amount from ap
+  });
+
+  data.dkj.forEach(d=>{
+    if(d.date>date)return;
+    if(d.active||(d.maturity>date))ap+=d.faceValue;
+  });
+
+  // ETF value
+  let etfEur=0;
+  const etfHoldings={};
+  data.etfTx.filter(t=>t.date<=date).forEach(t=>{
+    if(!etfHoldings[t.ticker])etfHoldings[t.ticker]=0;
+    if(t.type==='buy')etfHoldings[t.ticker]+=t.shares;
+    if(t.type==='sell')etfHoldings[t.ticker]-=t.shares;
+  });
+
+  const fx=histData?interpolate(histData.fxPrices,date)||liveFx:liveFx;
+  if(histData){
+    const vp=interpolate(histData.vwcePrices,date)||0;
+    const wp=interpolate(histData.wbitPrices,date)||0;
+    etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
+  }
+
+  return {cash, ap, etf:etfEur*fx, total:cash+ap+etfEur*fx};
+}
+
+function calcInvestedOnDate(date){
+  let invested=0;
+  data.cashTx.filter(t=>t.date<=date&&t.type==='deposit').forEach(t=>invested+=t.amount);
+  data.cashTx.filter(t=>t.date<=date&&t.type==='withdraw').forEach(t=>invested-=t.amount);
+  data.etfTx.filter(t=>t.date<=date&&t.type==='buy').forEach(t=>invested+=t.shares*t.priceEur*t.fxRate);
+  return invested;
+}
+
+function renderHistory(){
+  destroyChart('hist'); destroyChart('hist2');
+  const range=parseInt(document.getElementById('histRange')?.value)||0;
+  const firstDate=getFirstTransactionDate();
+  const today=new Date().toISOString().split('T')[0];
+
+  // Generate date range (weekly points for performance)
+  const dates=[];
+  let d=new Date(firstDate);
+  const end=new Date(today);
+  while(d<=end){
+    dates.push(d.toISOString().split('T')[0]);
+    d.setDate(d.getDate()+7);
+  }
+  if(dates[dates.length-1]!==today)dates.push(today);
+
+  // Filter by range
+  const filtered=range?dates.filter(d=>d>=new Date(Date.now()-range*86400000).toISOString().split('T')[0]):dates;
+
+  const portfolioVals=filtered.map(d=>Math.round(calcPortfolioOnDate(d).total));
+  const investedVals=filtered.map(d=>Math.round(calcInvestedOnDate(d)));
+  const labels=filtered.map(d=>d.slice(0,7)); // YYYY-MM
+
+  // Summary cards
+  const first=portfolioVals[0]||0;
+  const last=portfolioVals[portfolioVals.length-1]||0;
+  const gain=last-first;
+  const gainPct=first>0?gain/first*100:0;
+  const maxVal=Math.max(...portfolioVals);
+  document.getElementById('histCards').innerHTML=`
+    <div class="stat-card"><div class="stat-label">jelenlegi érték</div><div class="stat-value blurable">${fmtM(last)}</div><div class="stat-sub blurable">${gainPct>=0?'+':''}${gainPct.toFixed(1)}% az időszak alatt</div></div>
+    <div class="stat-card"><div class="stat-label">nyereség az időszakban</div><div class="stat-value blurable ${gain>=0?'pos':'neg'}">${fmtSign(gain)}</div><div class="stat-sub">az első ponttól</div></div>
+    <div class="stat-card"><div class="stat-label">legmagasabb érték</div><div class="stat-value blurable">${fmtM(maxVal)}</div><div class="stat-sub">${filtered[portfolioVals.indexOf(maxVal)]||'–'}</div></div>
+  `;
+
+  // Main chart
+  charts['hist']=new Chart(document.getElementById('histChart'),{
+    type:'line',
+    data:{
+      labels:filtered,
+      datasets:[{
+        label:'Portfólió értéke',
+        data:portfolioVals,
+        borderColor:'#4ade9a',
+        backgroundColor:'rgba(74,222,154,0.08)',
+        fill:true, tension:.3, pointRadius:0, borderWidth:2
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${fmtM(c.parsed.y)}`}}},
+      scales:{
+        x:{ticks:{color:'#55534f',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.03)'}},
+        y:{ticks:{color:'#55534f',callback:v=>fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+
+  // Invested vs portfolio chart
+  charts['hist2']=new Chart(document.getElementById('histChart2'),{
+    type:'line',
+    data:{
+      labels:filtered,
+      datasets:[
+        {label:'Portfólió értéke',data:portfolioVals,borderColor:'#4ade9a',backgroundColor:'transparent',tension:.3,pointRadius:0,borderWidth:2},
+        {label:'Befektetett tőke',data:investedVals,borderColor:'#60a5fa',backgroundColor:'transparent',borderDash:[4,4],tension:.3,pointRadius:0,borderWidth:1.5}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmtM(c.parsed.y)}`}}},
+      scales:{
+        x:{ticks:{color:'#55534f',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.03)'}},
+        y:{ticks:{color:'#55534f',callback:v=>fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════
