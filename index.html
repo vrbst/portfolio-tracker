@@ -1261,6 +1261,10 @@ function openModal(type, param){
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div>
         <input class="form-input" id="f-note" placeholder="pl. FixMáP 2031/I kamat">
       </div></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:10px;background:var(--bg3);border-radius:7px;font-size:12px">
+        <input type="checkbox" id="f-withdraw" style="width:14px;height:14px;accent-color:var(--green);cursor:pointer">
+        <label for="f-withdraw" style="cursor:pointer;color:var(--text2)">Rögtön kiutalom a pénzszámláról</label>
+      </div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitCoupon()">mentés</button></div>`;
   }
   else if(type==='new-fixmap-series'){
@@ -1471,9 +1475,14 @@ function submitCoupon(){
   const date=document.getElementById('f-date').value;
   const amount=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
+  const withdraw=document.getElementById('f-withdraw')?.checked;
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
   data.cashTx.push({id:uid(),date,type:'coupon',amount,note:note||'Kamatfizetés'});
-  closeModal(); renderAll(); saveData(); toast('Kamatfizetés rögzítve: +'+fmt(amount));
+  if(withdraw){
+    data.cashTx.push({id:uid(),date,type:'withdraw',amount,note:(note||'Kamatfizetés')+' – kiutalás'});
+  }
+  closeModal(); renderAll(); saveData();
+  toast(withdraw?'Kamat rögzítve és kiutalva: '+fmt(amount):'Kamatfizetés rögzítve: +'+fmt(amount));
 }
 
 function submitDeposit(){
