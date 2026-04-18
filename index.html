@@ -2232,18 +2232,12 @@ async function loadHistoricData(){
 }
 
 function calcPortfolioOnDate(date){
-  // 1. Cash balance – csak a pénzszámla mozgások (befizetés, kiutalás, kamat, lejárat, eladás bevétel)
-  // A 'buy' típusú cashTx-ek az állampapír/ETF vételeket jelzik – ezeket nem vonjuk le,
-  // mert az értékük az AP és ETF értékben jelenik meg
+  // 1. Cash balance – nettó pénzszámla egyenleg az adott dátumon
   let cash=0;
   data.cashTx.forEach(t=>{
     if(t.date>date)return;
-    if(t.type==='deposit')cash+=t.amount;
-    if(t.type==='withdraw')cash-=t.amount;
-    if(t.type==='coupon')cash+=t.amount;
-    if(t.type==='expire')cash+=t.amount;
-    if(t.type==='sell')cash+=t.amount;
-    if(t.type==='buy')cash-=t.amount;
+    if(['deposit','coupon','expire','sell'].includes(t.type))cash+=t.amount;
+    if(['withdraw','buy'].includes(t.type))cash-=t.amount;
   });
 
   // 2. FixMáP – névértéken, csak azok amik vásárolva lettek és még nem lezárva az adott dátumon
@@ -2278,8 +2272,10 @@ function calcPortfolioOnDate(date){
     etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
   }
 
-  // cash = nettó pénzszámla egyenleg az adott dátumon
-  return {cash, ap, etf:etfEur*fx, total:cash+ap+etfEur*fx};
+  // total = állampapír + ETF érték (cash ~0 mivel a vételek levonódnak)
+  // a cash-t nem adjuk hozzá mivel az AP/DKJ vételek a cashTx-ben vannak mint 'buy'
+  // ami már levonta az egyenlegből
+  return {cash, ap, etf:etfEur*fx, total:ap+etfEur*fx};
 }
 
 function calcInvestedOnDate(date){
