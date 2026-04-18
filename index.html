@@ -293,7 +293,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
         <div class="panel">
           <div class="panel-header"><div class="panel-title">közelgő események</div></div>
-          <div id="upcomingEvents" style="max-height:164px;overflow-y:auto"></div>
+          <div id="upcomingEvents" style="max-height:220px;overflow-y:auto"></div>
         </div>
       </div>
       <div class="panel">
@@ -413,7 +413,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ CSV export</button>
         </div>
         <div class="tbl-wrap" style="max-height:650px;overflow-y:auto"><table>
-          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>eszköz</th><th class="r">összeg / db</th><th class="r">árfolyam</th><th class="r">Ft összeg</th><th class="r">megjegyzés</th><th></th></tr></thead>
+          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>eszköz</th><th class="r">vételár (Ft)</th><th class="r">névérték / db</th><th class="r">árfolyam (EUR)</th><th class="r">megjegyzés</th><th></th></tr></thead>
           <tbody id="txBody"></tbody>
         </table></div>
         <div class="empty" id="txEmpty">Még nincs tranzakció.</div>
@@ -1122,7 +1122,7 @@ function renderTranzakciok(){
   // A vétel típusú cash mozgásokat kihagyjuk (azok az eszköz soránál látszanak)
   data.cashTx.filter(t=>t.type!=='buy').forEach(t=>all.push({
     date:t.date, type:t.type, asset:'Pénzszámla',
-    amount:fmt(t.amount), rate:'–', huf:'–', note:t.note||'–',
+    vetelar:fmt(t.amount), nevd:'–', rate:'–', note:t.note||'–',
     deleteCall:`deleteTx('cash','${t.id}')`,
     editCall:`editTx('cash','${t.id}')`
   }));
@@ -1131,7 +1131,7 @@ function renderTranzakciok(){
     const sr=data.fixmapSeries.find(x=>x.id===f.seriesId);
     all.push({
       date:f.date, type:'buy', asset:'FixMáP',
-      amount:fmt(f.faceValue), rate:f.buyPrice?fmt(f.buyPrice):'–', huf:'–',
+      vetelar:f.buyPrice?fmt(f.buyPrice):'–', nevd:fmt(f.faceValue), rate:'–',
       note:sr?sr.name:(f.note||'–'),
       deleteCall:`deleteTx('fixmap','${f.id}')`,
       editCall:`editTx('fixmap','${f.id}')`
@@ -1140,7 +1140,7 @@ function renderTranzakciok(){
   // DKJ vételek
   data.dkj.forEach(d=>all.push({
     date:d.date, type:d.active?'buy':'sell', asset:'DKJ',
-    amount:fmt(d.faceValue), rate:fmt(d.buyPrice), huf:'–',
+    vetelar:fmt(d.buyPrice), nevd:fmt(d.faceValue), rate:'–',
     note:'D'+d.maturity.replace(/-/g,'').slice(2)+(d.active?'':' (lezárt)'),
     deleteCall:`deleteTx('dkj','${d.id}')`,
     editCall:`editTx('dkj','${d.id}')`
@@ -1148,8 +1148,9 @@ function renderTranzakciok(){
   // ETF vételek/eladások
   data.etfTx.forEach(t=>all.push({
     date:t.date, type:t.type, asset:t.ticker,
-    amount:t.shares.toFixed(4)+' db', rate:fmtEur(t.priceEur),
-    huf:fmt(Math.round(t.shares*t.priceEur*t.fxRate)),
+    vetelar:fmt(Math.round(t.shares*t.priceEur*t.fxRate)),
+    nevd:t.shares.toFixed(4)+' db',
+    rate:fmtEur(t.priceEur),
     note:t.note||'–',
     deleteCall:`deleteTx('etf','${t.id}')`,
     editCall:`editTx('etf','${t.id}')`
@@ -1162,9 +1163,9 @@ function renderTranzakciok(){
     <td>${t.date}</td>
     <td><span class="badge ${typeBadge[t.type]||'b-deposit'}">${typeLabel[t.type]||t.type}</span></td>
     <td>${t.asset}</td>
-    <td class="r blurable">${t.amount}</td>
-    <td class="r blurable">${t.rate}</td>
-    <td class="r blurable" style="color:var(--text2)">${t.huf||'–'}</td>
+    <td class="r blurable">${t.vetelar||'–'}</td>
+    <td class="r" style="color:var(--text2)">${t.nevd||'–'}</td>
+    <td class="r" style="color:var(--text2)">${t.rate||'–'}</td>
     <td class="r" style="color:var(--text3)">${t.note}</td>
     <td style="white-space:nowrap">
       <button class="btn btn-ghost btn-sm" onclick="${t.editCall}" style="margin-right:4px">✎</button>
