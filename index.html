@@ -1138,13 +1138,21 @@ function renderTranzakciok(){
     });
   });
   // DKJ vételek
-  data.dkj.forEach(d=>all.push({
-    date:d.date, type:d.active?'buy':'sell', asset:'DKJ',
-    vetelar:fmt(d.buyPrice), nevd:fmt(d.faceValue), rate:'–',
-    note:'D'+d.maturity.replace(/-/g,'').slice(2)+(d.active?'':' (lezárt)'),
-    deleteCall:`deleteTx('dkj','${d.id}')`,
-    editCall:`editTx('dkj','${d.id}')`
-  }));
+  data.dkj.forEach(d=>{
+    let vetelar=fmt(d.buyPrice);
+    if(!d.active){
+      const sName='D'+d.maturity.replace(/-/g,'').slice(2);
+      const sellTx=data.cashTx.find(t=>t.type==='sell'&&t.note&&t.note.includes(sName));
+      if(sellTx)vetelar=fmt(sellTx.amount);
+    }
+    all.push({
+      date:d.date, type:d.active?'buy':'sell', asset:'DKJ',
+      vetelar, nevd:fmt(d.faceValue), rate:'–',
+      note:'D'+d.maturity.replace(/-/g,'').slice(2)+(d.active?'':' (lezárt)'),
+      deleteCall:`deleteTx('dkj','${d.id}')`,
+      editCall:`editTx('dkj','${d.id}')`
+    });
+  });
   // ETF vételek/eladások
   data.etfTx.forEach(t=>all.push({
     date:t.date, type:t.type, asset:t.ticker,
