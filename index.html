@@ -2362,7 +2362,7 @@ function calcPortfolioOnDate(date){
     etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
   }
 
-  return {cash, ap, etf:etfEur*fx, total:ap+etfEur*fx};
+  return {cash, ap, etf:etfEur*fx, etfEur, fx, total:ap+etfEur*fx};
 }
 
 function calcInvestedOnDate(date){
