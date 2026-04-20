@@ -443,11 +443,11 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           </div>
         </div>
         <div id="histStatus" style="font-size:12px;color:var(--text2);margin-bottom:10px;display:none"></div>
-        <div class="chart-wrap" style="height:320px"><canvas id="histChart" role="img" aria-label="Historikus portfólió érték"></canvas></div>
+        <div class="chart-wrap" style="height:320px"><canvas id="histChart" class="blurable" role="img" aria-label="Historikus portfólió érték"></canvas></div>
       </div>
       <div class="panel">
         <div class="panel-header"><div class="panel-title">befektetett tőke vs. portfólió érték</div></div>
-        <div class="chart-wrap" style="height:240px"><canvas id="histChart2" role="img" aria-label="Befektetett vs portfólió"></canvas></div>
+        <div class="chart-wrap" style="height:240px"><canvas id="histChart2" class="blurable" role="img" aria-label="Befektetett vs portfólió"></canvas></div>
       </div>
     </div>
 
@@ -646,6 +646,7 @@ function renderAll(){
   renderTranzakciok();
   if(document.getElementById('page-history')?.classList.contains('active'))renderHistory();
   if(histData)setTimeout(updatePortfolioChange,0);
+  if(blurOn)setTimeout(applyBlur,50);
 }
 
 // ═══════════════════════════════════════════════
@@ -905,6 +906,7 @@ function renderCashflowChart(){
       }
     }
   });
+  if(blurOn)setTimeout(applyBlur,50);
 }
 
 // ═══════════════════════════════════════════════
@@ -2060,6 +2062,9 @@ function applyBlur(){
   document.querySelectorAll('.blurable').forEach(el=>el.classList.toggle('blurred',blurOn));
 }
 
+// Override renderHistory and renderCashflowChart to reapply blur after render
+const _origRenderHistory=typeof renderHistory==='function'?renderHistory:null;
+
 // ═══════════════════════════════════════════════
 // CSV EXPORT
 // ═══════════════════════════════════════════════
@@ -2484,6 +2489,7 @@ function renderHistory(){
     <div class="stat-card"><div class="stat-label">nyereség az időszakban</div><div class="stat-value blurable ${gain>=0?'pos':'neg'}">${fmtSign(gain)}</div><div class="stat-sub">az első ponttól</div></div>
     <div class="stat-card"><div class="stat-label">legmagasabb érték</div><div class="stat-value blurable">${fmtM(maxVal)}</div><div class="stat-sub">${filtered[portfolioVals.indexOf(maxVal)]||'–'}</div></div>
   `;
+  if(blurOn)applyBlur();
 
   // Main chart
   charts['hist']=new Chart(document.getElementById('histChart'),{
@@ -2501,10 +2507,10 @@ function renderHistory(){
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${fmtM(c.parsed.y)}`}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>blurOn?'···':` ${fmtM(c.parsed.y)}`}}},
       scales:{
         x:{ticks:{color:'#55534f',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.03)'}},
-        y:{ticks:{color:'#55534f',callback:v=>fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
+        y:{ticks:{color:'#55534f',callback:v=>blurOn?'···':fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
       }
     }
   });
@@ -2522,13 +2528,15 @@ function renderHistory(){
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmtM(c.parsed.y)}`}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>blurOn?'···':` ${c.dataset.label}: ${fmtM(c.parsed.y)}`}}},
       scales:{
         x:{ticks:{color:'#55534f',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.03)'}},
-        y:{ticks:{color:'#55534f',callback:v=>fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
+        y:{ticks:{color:'#55534f',callback:v=>blurOn?'···':fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
       }
     }
   });
+  // Reapply blur if active
+  if(blurOn)setTimeout(applyBlur,50);
 }
 
 // ═══════════════════════════════════════════════
