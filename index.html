@@ -677,6 +677,8 @@ function renderDashboard(){
       <div class="stat-label">teljes portfólió</div>
       <div class="stat-value blurable">${fmtM(total)}</div>
       <div class="stat-sub blurable">${hasLive?'≈ '+fmtEur(totalEur,0):'EUR: nincs live adat'}</div>
+      <div id="portfolioChgFt" style="font-size:11px;margin-top:2px"></div>
+      <div id="portfolioChgEur" style="font-size:11px"></div>
     </div>
     <div class="stat-card">
       <div class="stat-label">összes befektetett tőke</div>
@@ -695,7 +697,7 @@ function renderDashboard(){
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
-      <div class="stat-value">${liveFx.toFixed(2)} Ft</div>
+      <div class="stat-value">${liveFx.toFixed(2)} Ft <span id="dashFxChange" style="font-size:12px"></span></div>
       <div class="stat-sub">${liveVwce?'live':'becsült'}</div>
     </div>
   `;
@@ -1013,7 +1015,7 @@ function renderTBSZ(){
   const wbitVal=liveWbit?liveWbit*wbitShares*liveFx:0;
 
   document.getElementById('tbszCards').innerHTML=`
-    <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx.toFixed(2)} Ft</div><div class="stat-sub">${liveVwce?'live':'becsült'}</div></div>
+    <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx.toFixed(2)} Ft <span id="tbszFxChange" style="font-size:11px"></span></div><div class="stat-sub">${liveVwce?'live':'becsült'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db':'nincs live adat'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub blurable">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
     <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db':'nincs live adat'}</div></div>
@@ -1836,6 +1838,7 @@ function submitETFSell(ticker){
 // LIVE PRICES
 // ═══════════════════════════════════════════════
 async function fetchLive(){
+  let prevFx=liveFx;
   try{
     // EUR/HUF – Wise (valós idejű)
     try{
@@ -1847,51 +1850,118 @@ async function fetchLive(){
         if(rate&&rate>300)liveFx=rate;
       }
     }catch(e){}
-    // fallback: Frankfurter
-    if(liveFx===395){
-      try{
-        const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent('https://api.frankfurter.app/latest?from=EUR&to=HUF'));
-        if(r.ok){const d=await r.json();if(d.rates?.HUF)liveFx=d.rates.HUF;}
-      }catch(e){}
-    }
+    // fallback: Frankfurter – lekérjük a tegnapi értéket is a % változáshoz
+    try{
+      const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent('https://api.frankfurter.app/latest?from=EUR&to=HUF'));
+      if(r.ok){
+        const d=await r.json();
+        if(d.rates?.HUF){
+          if(liveFx===395)liveFx=d.rates.HUF;
+          // tegnapi árfolyam a % számításhoz
+          const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+          const yd=yesterday.toISOString().split('T')[0];
+          try{
+            const r2=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(`https://api.frankfurter.app/${yd}?from=EUR&to=HUF`));
+            if(r2.ok){const d2=await r2.json();prevFx=d2.rates?.HUF||prevFx;}
+          }catch(e){}
+        }
+      }
+    }catch(e){}
   }catch(e){}
+
+  // EUR/HUF % változás megjelenítése a dashboardon és tbsz-en
+  const fxChangePct=prevFx&&prevFx!==liveFx?(liveFx-prevFx)/prevFx*100:null;
+  const fxChangeHtml=fxChangePct!==null
+    ?` <span style="color:${fxChangePct>=0?'var(--red)':'var(--green)'};font-size:11px">${fxChangePct>=0?'+':''}${fxChangePct.toFixed(2)}%</span>`
+    :'';
+  ['dashFxChange','tbszFxChange'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.innerHTML=fxChangeHtml;
+  });
 
   await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
   await fetchETFPrice('WBIT-DE','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
   renderTBSZ(); renderDashboard();
+  updatePortfolioChange();
+}
+
+function updatePortfolioChange(){
+  if(!histData)return;
+  const today=new Date().toISOString().split('T')[0];
+  const yesterday=new Date(Date.now()-86400000).toISOString().split('T')[0];
+
+  // Today's value (live)
+  const todayVal=calcPortfolioOnDate(today);
+  const todayTotal=todayVal.total;
+
+  // Yesterday's value (from histData)
+  const yesterdayVal=calcPortfolioOnDate(yesterday);
+  const yesterdayTotal=yesterdayVal.total;
+
+  if(!yesterdayTotal||yesterdayTotal===0)return;
+
+  const chgFt=todayTotal-yesterdayTotal;
+  const chgPct=chgFt/yesterdayTotal*100;
+
+  // EUR change
+  const todayFx=liveFx;
+  const yesterdayFx=histData.fxPrices?interpolate(histData.fxPrices,yesterday)||liveFx:liveFx;
+  const todayEur=todayTotal/todayFx;
+  const yesterdayEur=yesterdayTotal/yesterdayFx;
+  const chgEur=todayEur-yesterdayEur;
+  const chgEurPct=chgEur/yesterdayEur*100;
+
+  const color=chgFt>=0?'var(--green)':'var(--red)';
+  const colorEur=chgEur>=0?'var(--green)':'var(--red)';
+
+  const ftEl=document.getElementById('portfolioChgFt');
+  const eurEl=document.getElementById('portfolioChgEur');
+  if(ftEl)ftEl.innerHTML=`<span style="color:${color};font-size:11px">${chgFt>=0?'+':''}${fmtM(chgFt)} (${chgFt>=0?'+':''}${chgPct.toFixed(2)}%)</span>`;
+  if(eurEl)eurEl.innerHTML=`<span style="color:${colorEur};font-size:11px">${chgEur>=0?'+':''}${fmtEur(chgEur,0)} (${chgEur>=0?'+':''}${chgEurPct.toFixed(2)}%)</span>`;
 }
 
 async function fetchETFPrice(symbol,pillId,labelId,cb){
-  // symbol format: 'VWCE.DE' for Yahoo, 'WBIT-DE' for CNBC
   const isCNBC=symbol.includes('-');
   try{
-    let price=null;
+    let price=null, changePct=null;
     if(isCNBC){
-      // CNBC via Cloudflare Worker – https://www.cnbc.com/quotes/WBIT-DE
+      // WBIT ára CNBC-ről
       const cnbcUrl='https://www.cnbc.com/quotes/'+symbol;
-      const url='https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(cnbcUrl);
-      const r=await fetch(url);
+      const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(cnbcUrl));
       if(r.ok){
         const html=await r.text();
         const m=html.match(/class="QuoteStrip-lastPrice[^"]*">([0-9.,]+)</);
-        if(m){
-          const p=parseFloat(m[1].replace(',','.'));
-          if(p>1)price=p;
-        }
+        if(m){const p=parseFloat(m[1].replace(',','.'));if(p>1)price=p;}
       }
+      // BTC % változás Yahoo-ról
+      try{
+        const rb=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=2d'));
+        if(rb.ok){
+          const db=await rb.json();
+          const closes=db?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+          const prev=closes[closes.length-2], last=closes[closes.length-1];
+          if(prev&&last)changePct=(last-prev)/prev*100;
+        }
+      }catch(e){}
     } else {
-      // Yahoo Finance
-      const url='https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
+      // Yahoo Finance – ár + % változás (2 napos adat)
+      const url='https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`);
       const r=await fetch(url);
       if(r.ok){
         const d=await r.json();
         price=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+        const closes=d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+        const prev=closes[closes.length-2], last=closes[closes.length-1];
+        if(prev&&last)changePct=(last-prev)/prev*100;
       }
     }
     if(price&&price>1){
       cb(price);
       document.getElementById(pillId).className='live-pill live';
-      document.getElementById(labelId).textContent=fmtEur(price);
+      const pctHtml=changePct!==null
+        ? ` <span style="color:${changePct>=0?'var(--green)':'var(--red)'};font-size:10px">${changePct>=0?'+':''}${changePct.toFixed(2)}%${isCNBC?' (BTC)':''}</span>`
+        : '';
+      document.getElementById(labelId).innerHTML=fmtEur(price)+pctHtml;
       const hufEl=document.getElementById(pillId.replace('Pill','PriceHuf'));
       if(hufEl)hufEl.textContent='= '+fmt(Math.round(price*liveFx));
       return;
