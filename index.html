@@ -1913,7 +1913,7 @@ function updatePortfolioChange(){
   const yesterdayEur=yesterdayVal.etfEur+(yesterdayVal.ap/yesterdayFx);
   const chgEur=todayEur-yesterdayEur;
   const chgEurPct=yesterdayEur>0?chgEur/yesterdayEur*100:0;
-  console.log('EUR debug: todayFx',todayFx.toFixed(4),'yesterdayFx',yesterdayFx.toFixed(4),'todayAP_EUR',(todayVal.ap/todayFx).toFixed(0),'yesterdayAP_EUR',(yesterdayVal.ap/yesterdayFx).toFixed(0),'todayETF_EUR',todayVal.etfEur.toFixed(0),'yesterdayETF_EUR',yesterdayVal.etfEur.toFixed(0));
+  console.log('EUR debug: todayFx',todayFx,'yesterdayFx',yesterdayFx,'todayEur',todayEur,'yesterdayEur',yesterdayEur,'chgEurPct',chgEurPct);
 
   const color=chgFt>=0?'var(--green)':'var(--red)';
   const colorEur=chgEur>=0?'var(--green)':'var(--red)';
