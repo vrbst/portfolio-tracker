@@ -467,7 +467,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 // ═══════════════════════════════════════════════
 const GIST_FILE = 'portfolio-tracker-v2.json';
 let token='', gistId='', blurOn=false;
-let liveVwce=null, liveWbit=null, liveFx=395;
+let liveVwce=null, liveWbit=null, liveFx=395, liveVwcePct=null, liveWbitPct=null;
 let charts={};
 
 const DEFAULT_DATA = {
@@ -1016,9 +1016,9 @@ function renderTBSZ(){
 
   document.getElementById('tbszCards').innerHTML=`
     <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx.toFixed(2)} Ft ${getFxChangeHtml()}</div><div class="stat-sub">${liveVwce?'live':'becsült'}</div></div>
-    <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db':'nincs live adat'}</div></div>
+    <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db'+(liveVwcePct!==null?' <span style="color:'+(liveVwcePct>=0?'var(--green)':'var(--red)')+'">'+(liveVwcePct>=0?'+':'')+liveVwcePct.toFixed(2)+'%</span>':''):'nincs live adat'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub blurable">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
-    <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db':'nincs live adat'}</div></div>
+    <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db'+(liveWbitPct!==null?' <span style="color:'+(liveWbitPct>=0?'var(--green)':'var(--red)')+'">'+(liveWbitPct>=0?'+':'')+liveWbitPct.toFixed(2)+'% (BTC)</span>':''):'nincs live adat'}</div></div>
     <div class="stat-card"><div class="stat-label">WBIT aktuális érték</div><div class="stat-value blurable">${wbitVal>0?fmtM(wbitVal):'–'}</div><div class="stat-sub blurable">${wbitCost>0?'befektetett: '+fmtM(wbitCost):'–'}</div></div>
   `;
 
@@ -1872,8 +1872,8 @@ async function fetchLive(){
   // Store prevFx for % calculation
   window._prevFx=prevFx;
 
-  await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
-  await fetchETFPrice('WBIT-DE','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
+  await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',(p,pct)=>{liveVwce=p;liveVwcePct=pct;});
+  await fetchETFPrice('WBIT-DE','wbitPill','wbitPriceLabel',(p,pct)=>{liveWbit=p;liveWbitPct=pct;});
   renderTBSZ(); renderDashboard();
   // updatePortfolioChange after renderDashboard so spans exist in DOM
   setTimeout(updatePortfolioChange, 0);
@@ -1913,7 +1913,7 @@ function updatePortfolioChange(){
   const yesterdayEur=yesterdayVal.etfEur+(yesterdayVal.ap/yesterdayFx);
   const chgEur=todayEur-yesterdayEur;
   const chgEurPct=yesterdayEur>0?chgEur/yesterdayEur*100:0;
-  console.log('EUR debug: todayFx',todayFx,'yesterdayFx',yesterdayFx,'todayEur',todayEur,'yesterdayEur',yesterdayEur,'chgEurPct',chgEurPct);
+
 
   const color=chgFt>=0?'var(--green)':'var(--red)';
   const colorEur=chgEur>=0?'var(--green)':'var(--red)';
@@ -1960,7 +1960,7 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
       }
     }
     if(price&&price>1){
-      cb(price);
+      cb(price, changePct);
       document.getElementById(pillId).className='live-pill live';
       const pctHtml=changePct!==null
         ? ` <span style="color:${changePct>=0?'var(--green)':'var(--red)'};font-size:10px">${changePct>=0?'+':''}${changePct.toFixed(2)}%${isCNBC?' (BTC)':''}</span>`
