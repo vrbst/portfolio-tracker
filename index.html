@@ -299,7 +299,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">havi cashflow (2026)</div></div>
+        <div class="panel-header">
+          <div class="panel-title">havi cashflow</div>
+          <select class="form-select" id="cashflowYear" onchange="renderCashflowChart()" style="padding:5px 10px;font-size:11px;width:auto"></select>
+        </div>
         <div class="chart-wrap"><canvas id="cashflowChart" class="blurable" role="img" aria-label="Cashflow"></canvas></div>
       </div>
     </div>
@@ -784,11 +787,42 @@ function renderUpcoming(){
 function renderCashflowChart(){
   destroyChart('cf');
   const months=['Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Sze','Okt','Nov','Dec'];
+
+  // Determine available years (current year up to last maturity year)
+  const currentYear=new Date().getFullYear();
+  const maturityYears=[
+    ...data.fixmapSeries.map(s=>s.maturity?parseInt(s.maturity.slice(0,4)):0),
+    ...data.dkjSeries.map(s=>s.maturity?parseInt(s.maturity.slice(0,4)):0),
+    ...data.dkj.map(d=>d.maturity?parseInt(d.maturity.slice(0,4)):0),
+  ].filter(y=>y>0);
+  const lastYear=maturityYears.length?Math.max(...maturityYears):currentYear;
+
+  // Populate year selector
+  const sel=document.getElementById('cashflowYear');
+  if(sel){
+    const prevVal=sel.value||String(currentYear);
+    sel.innerHTML='';
+    for(let y=currentYear;y<=lastYear;y++){
+      const opt=document.createElement('option');
+      opt.value=y; opt.textContent=y;
+      if(String(y)===prevVal)opt.selected=true;
+      sel.appendChild(opt);
+    }
+  }
+  const year=sel?sel.value:String(currentYear);
+
   const vals=new Array(12).fill(0);
-  data.cashTx.filter(t=>t.date&&t.date.startsWith('2026')&&['coupon','expire'].includes(t.type)).forEach(t=>{
-    vals[parseInt(t.date.split('-')[1])-1]+=t.amount;
+  const details=Array.from({length:12},()=>[]); // tételes lebontás havonta
+
+  // Valós cashTx tételek
+  data.cashTx.filter(t=>t.date&&t.date.startsWith(year)&&['coupon','expire'].includes(t.type)).forEach(t=>{
+    const m=parseInt(t.date.split('-')[1])-1;
+    vals[m]+=t.amount;
+    const typeLabel={coupon:'Kamat',expire:'Lejárat'}[t.type]||t.type;
+    details[m].push({label:typeLabel+(t.note?' – '+t.note:''), amount:t.amount, real:true});
   });
-  // projected FixMáP coupons (grouped by series)
+
+  // projected FixMáP coupons
   const cfFixmapMap={};
   data.fixmap.filter(f=>f.active).forEach(f=>{
     const sr=data.fixmapSeries.find(x=>x.id===(f.seriesId||''));
@@ -805,34 +839,71 @@ function renderCashflowChart(){
     let safety=0;
     while(d<=matDate&&safety<20){
       const ds=d.toISOString().split('T')[0];
-      if(ds.startsWith('2026')){
+      if(ds.startsWith(year)){
         const m=parseInt(ds.split('-')[1])-1;
-        const pastFirst=sr.firstCouponAmount&&new Date(ds)<new Date();const amount=isFirst&&sr.firstCouponAmount&&!pastFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
-        vals[m]+=amount;
+        const pastFirst=sr.firstCouponAmount&&new Date(ds)<new Date();
+        const amount=isFirst&&sr.firstCouponAmount&&!pastFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
+        // Csak ha még nem volt rögzítve valós tételként
+        const alreadyReal=details[m].some(d=>d.real&&d.label.includes('Kamat'));
+        if(!alreadyReal){
+          vals[m]+=amount;
+          details[m].push({label:'FixMáP kamat – '+sr.name+' ('+ds+')', amount, real:false});
+        }
       }
       isFirst=false;
       d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+3,d.getUTCDate()));
       safety++;
     }
   });
-  // projected DKJ maturities (grouped)
+
+  // projected DKJ maturities
   const cfDkjMap={};
-  data.dkj.filter(d=>d.active&&d.maturity&&d.maturity.startsWith('2026')).forEach(d=>{
+  data.dkj.filter(d=>d.active&&d.maturity&&d.maturity.startsWith(year)).forEach(d=>{
     if(!cfDkjMap[d.maturity])cfDkjMap[d.maturity]=0;
     cfDkjMap[d.maturity]+=d.faceValue;
   });
   Object.entries(cfDkjMap).forEach(([mat,total])=>{
     const m=parseInt(mat.split('-')[1])-1;
     vals[m]+=total;
+    details[m].push({label:'DKJ lejárat ('+mat+')', amount:total, real:false});
   });
+
   const currentMonth=new Date().getMonth();
   const barColors=months.map((_,i)=>i===currentMonth?'rgba(96,165,250,0.5)':'rgba(96,165,250,0.2)');
-  const barBorders=months.map((_,i)=>i===currentMonth?'#60a5fa':'#60a5fa');
+  const barBorders=months.map((_,i)=>'#60a5fa');
   const tickColors=months.map((_,i)=>i===currentMonth?'#e8e6e0':'#55534f');
+
   charts['cf']=new Chart(document.getElementById('cashflowChart'),{
     type:'bar',
     data:{labels:months,datasets:[{label:'Cashflow',data:vals,backgroundColor:barColors,borderColor:barBorders,borderWidth:1,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:ctx=>tickColors[ctx.index]||'#55534f',font:{size:11}}},y:{ticks:{color:'#55534f',callback:v=>v?fmtM(v):0}}}}
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            title:ctx=>{
+              const m=ctx[0].dataIndex;
+              return months[m]+' '+year+' – összesen: '+fmtM(vals[m]);
+            },
+            label:ctx=>{
+              const m=ctx.dataIndex;
+              if(!details[m].length)return [];
+              return details[m].map(d=>'  '+(d.real?'✓ ':'◦ ')+d.label+': +'+fmt(Math.round(d.amount)));
+            },
+            afterLabel:()=>null,
+          },
+          displayColors:false,
+          padding:10,
+          bodyFont:{family:'monospace',size:11},
+          titleFont:{size:12},
+        }
+      },
+      scales:{
+        x:{ticks:{color:ctx=>tickColors[ctx.index]||'#55534f',font:{size:11}}},
+        y:{ticks:{color:'#55534f',callback:v=>v?fmtM(v):0}}
+      }
+    }
   });
 }
 
