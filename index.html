@@ -2057,6 +2057,16 @@ function toggleBlur(){
   document.getElementById('hideBtn').title=blurOn?'Összegek megjelenítése':'Összegek elrejtése';
   document.getElementById('hideBtn').innerHTML=blurOn?'🙈 <span class="lbl">mutat</span>':'👁 <span class="lbl">elrejt</span>';
   applyBlur();
+  // Chartok újrarajzolása hogy a tengelyek is frissüljenek
+  renderCashflowChart();
+  if(histData){
+    if(document.getElementById('page-history')?.classList.contains('active')){
+      renderHistory();
+    } else {
+      // Ha a historikus fül nem aktív, csak a chart adatait frissítjük
+      Object.values(charts).forEach(c=>{try{c.update();}catch(e){}});
+    }
+  }
 }
 function applyBlur(){
   document.querySelectorAll('.blurable').forEach(el=>el.classList.toggle('blurred',blurOn));
