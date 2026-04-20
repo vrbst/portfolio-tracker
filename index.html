@@ -1883,7 +1883,7 @@ function getFxChangeHtml(){
   const prevFx=window._prevFx||null;
   if(!prevFx||prevFx===liveFx)return '';
   const pct=(liveFx-prevFx)/prevFx*100;
-  const color=pct>=0?'var(--red)':'var(--green)';
+  const color=pct>=0?'var(--green)':'var(--red)';
   return `<span style="color:${color};font-size:11px">${pct>=0?'+':''}${pct.toFixed(2)}%</span>`;
 }
 
@@ -1906,11 +1906,14 @@ function updatePortfolioChange(){
   const chgFt=todayTotal-yesterdayTotal;
   const chgPct=chgFt/yesterdayTotal*100;
 
-  // EUR change – using the fx rate from each day's calculation
-  const todayEur=todayVal.etfEur+(todayVal.ap/todayVal.fx);
-  const yesterdayEur=yesterdayVal.etfEur+(yesterdayVal.ap/yesterdayVal.fx);
+  // EUR change – AP Ft értékét az adott nap fx-ével osztjuk
+  const todayFx=todayVal.fx||liveFx;
+  const yesterdayFx=yesterdayVal.fx||(histData.fxPrices?interpolate(histData.fxPrices,yesterday)||liveFx:liveFx);
+  const todayEur=todayVal.etfEur+(todayVal.ap/todayFx);
+  const yesterdayEur=yesterdayVal.etfEur+(yesterdayVal.ap/yesterdayFx);
   const chgEur=todayEur-yesterdayEur;
   const chgEurPct=yesterdayEur>0?chgEur/yesterdayEur*100:0;
+  console.log('EUR debug: todayFx',todayFx.toFixed(4),'yesterdayFx',yesterdayFx.toFixed(4),'todayAP_EUR',(todayVal.ap/todayFx).toFixed(0),'yesterdayAP_EUR',(yesterdayVal.ap/yesterdayFx).toFixed(0),'todayETF_EUR',todayVal.etfEur.toFixed(0),'yesterdayETF_EUR',yesterdayVal.etfEur.toFixed(0));
 
   const color=chgFt>=0?'var(--green)':'var(--red)';
   const colorEur=chgEur>=0?'var(--green)':'var(--red)';
