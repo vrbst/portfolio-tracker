@@ -697,7 +697,7 @@ function renderDashboard(){
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
-      <div class="stat-value">${liveFx.toFixed(2)} Ft <span id="dashFxChange" style="font-size:12px"></span></div>
+      <div class="stat-value">${liveFx.toFixed(2)} Ft ${getFxChangeHtml()}</div>
       <div class="stat-sub">${liveVwce?'live':'becsült'}</div>
     </div>
   `;
@@ -1015,7 +1015,7 @@ function renderTBSZ(){
   const wbitVal=liveWbit?liveWbit*wbitShares*liveFx:0;
 
   document.getElementById('tbszCards').innerHTML=`
-    <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx.toFixed(2)} Ft <span id="tbszFxChange" style="font-size:11px"></span></div><div class="stat-sub">${liveVwce?'live':'becsült'}</div></div>
+    <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx.toFixed(2)} Ft ${getFxChangeHtml()}</div><div class="stat-sub">${liveVwce?'live':'becsült'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db':'nincs live adat'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub blurable">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
     <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db':'nincs live adat'}</div></div>
@@ -1879,18 +1879,17 @@ async function fetchLive(){
   setTimeout(updatePortfolioChange, 0);
 }
 
+function getFxChangeHtml(){
+  const prevFx=window._prevFx||null;
+  if(!prevFx||prevFx===liveFx)return '';
+  const pct=(liveFx-prevFx)/prevFx*100;
+  const color=pct>=0?'var(--red)':'var(--green)';
+  return `<span style="color:${color};font-size:11px">${pct>=0?'+':''}${pct.toFixed(2)}%</span>`;
+}
+
 function updatePortfolioChange(){
   if(!histData)return;
-  // EUR/HUF % változás
-  const prevFx=window._prevFx||liveFx;
-  const fxChangePct=prevFx&&prevFx!==liveFx?(liveFx-prevFx)/prevFx*100:null;
-  const fxChangeHtml=fxChangePct!==null
-    ?`<span style="color:${fxChangePct>=0?'var(--red)':'var(--green)'};font-size:11px">${fxChangePct>=0?'+':''}${fxChangePct.toFixed(2)}%</span>`
-    :'';
-  ['dashFxChange','tbszFxChange'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el)el.innerHTML=fxChangeHtml;
-  });
+
   const today=new Date().toISOString().split('T')[0];
   const yesterday=new Date(Date.now()-86400000).toISOString().split('T')[0];
 
@@ -1907,13 +1906,11 @@ function updatePortfolioChange(){
   const chgFt=todayTotal-yesterdayTotal;
   const chgPct=chgFt/yesterdayTotal*100;
 
-  // EUR change
-  const todayFx=liveFx;
-  const yesterdayFx=histData.fxPrices?interpolate(histData.fxPrices,yesterday)||liveFx:liveFx;
-  const todayEur=todayTotal/todayFx;
-  const yesterdayEur=yesterdayTotal/yesterdayFx;
+  // EUR change – using the fx rate from each day's calculation
+  const todayEur=todayVal.etfEur+(todayVal.ap/todayVal.fx);
+  const yesterdayEur=yesterdayVal.etfEur+(yesterdayVal.ap/yesterdayVal.fx);
   const chgEur=todayEur-yesterdayEur;
-  const chgEurPct=chgEur/yesterdayEur*100;
+  const chgEurPct=yesterdayEur>0?chgEur/yesterdayEur*100:0;
 
   const color=chgFt>=0?'var(--green)':'var(--red)';
   const colorEur=chgEur>=0?'var(--green)':'var(--red)';
