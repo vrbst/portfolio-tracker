@@ -563,6 +563,8 @@ function showApp(){
   renderAll();
   fetchLive();
   startAutoRefresh();
+  // Háttérben betöltjük a historikus adatokat
+  loadHistoricData(true);
 }
 
 // ═══════════════════════════════════════════════
@@ -574,8 +576,7 @@ function showTab(name,el){
   document.getElementById('page-'+name).classList.add('active');
   el.classList.add('active');
   if(name==='history'){
-    if(!histData) loadHistoricData();
-    else renderHistory();
+    loadHistoricData();
   }
 }
 
@@ -641,6 +642,7 @@ function renderAll(){
   renderTBSZ();
   renderTranzakciok();
   if(document.getElementById('page-history')?.classList.contains('active'))renderHistory();
+  if(histData)setTimeout(updatePortfolioChange,0);
 }
 
 // ═══════════════════════════════════════════════
@@ -675,10 +677,8 @@ function renderDashboard(){
   document.getElementById('dashCards').innerHTML=`
     <div class="stat-card">
       <div class="stat-label">teljes portfólió</div>
-      <div class="stat-value blurable">${fmtM(total)}</div>
-      <div class="stat-sub blurable">${hasLive?'≈ '+fmtEur(totalEur,0):'EUR: nincs live adat'}</div>
-      <div id="portfolioChgFt" style="font-size:11px;margin-top:2px"></div>
-      <div id="portfolioChgEur" style="font-size:11px"></div>
+      <div class="stat-value blurable">${fmtM(total)} <span id="portfolioChgFt" style="font-size:13px;font-weight:400"></span></div>
+      <div class="stat-sub blurable">${hasLive?'≈ '+fmtEur(totalEur,0):'EUR: nincs live adat'} <span id="portfolioChgEur" style="font-size:11px"></span></div>
     </div>
     <div class="stat-card">
       <div class="stat-label">összes befektetett tőke</div>
@@ -1869,24 +1869,28 @@ async function fetchLive(){
     }catch(e){}
   }catch(e){}
 
-  // EUR/HUF % változás megjelenítése a dashboardon és tbsz-en
+  // Store prevFx for % calculation
+  window._prevFx=prevFx;
+
+  await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
+  await fetchETFPrice('WBIT-DE','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
+  renderTBSZ(); renderDashboard();
+  // updatePortfolioChange after renderDashboard so spans exist in DOM
+  setTimeout(updatePortfolioChange, 0);
+}
+
+function updatePortfolioChange(){
+  if(!histData)return;
+  // EUR/HUF % változás
+  const prevFx=window._prevFx||liveFx;
   const fxChangePct=prevFx&&prevFx!==liveFx?(liveFx-prevFx)/prevFx*100:null;
   const fxChangeHtml=fxChangePct!==null
-    ?` <span style="color:${fxChangePct>=0?'var(--red)':'var(--green)'};font-size:11px">${fxChangePct>=0?'+':''}${fxChangePct.toFixed(2)}%</span>`
+    ?`<span style="color:${fxChangePct>=0?'var(--red)':'var(--green)'};font-size:11px">${fxChangePct>=0?'+':''}${fxChangePct.toFixed(2)}%</span>`
     :'';
   ['dashFxChange','tbszFxChange'].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.innerHTML=fxChangeHtml;
   });
-
-  await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',p=>{liveVwce=p;});
-  await fetchETFPrice('WBIT-DE','wbitPill','wbitPriceLabel',p=>{liveWbit=p;});
-  renderTBSZ(); renderDashboard();
-  updatePortfolioChange();
-}
-
-function updatePortfolioChange(){
-  if(!histData)return;
   const today=new Date().toISOString().split('T')[0];
   const yesterday=new Date(Date.now()-86400000).toISOString().split('T')[0];
 
@@ -1916,8 +1920,8 @@ function updatePortfolioChange(){
 
   const ftEl=document.getElementById('portfolioChgFt');
   const eurEl=document.getElementById('portfolioChgEur');
-  if(ftEl)ftEl.innerHTML=`<span style="color:${color};font-size:11px">${chgFt>=0?'+':''}${fmtM(chgFt)} (${chgFt>=0?'+':''}${chgPct.toFixed(2)}%)</span>`;
-  if(eurEl)eurEl.innerHTML=`<span style="color:${colorEur};font-size:11px">${chgEur>=0?'+':''}${fmtEur(chgEur,0)} (${chgEur>=0?'+':''}${chgEurPct.toFixed(2)}%)</span>`;
+  if(ftEl)ftEl.innerHTML=`<span style="color:${color}">${chgFt>=0?'+':''}${chgPct.toFixed(2)}%</span>`;
+  if(eurEl)eurEl.innerHTML=`<span style="color:${colorEur}">${chgEur>=0?'+':''}${chgEurPct.toFixed(2)}%</span>`;
 }
 
 async function fetchETFPrice(symbol,pillId,labelId,cb){
@@ -2272,26 +2276,30 @@ function interpolate(prices, date){
   return last;
 }
 
-async function loadHistoricData(){
+async function loadHistoricData(silent=false){
   const btn=document.getElementById('histLoadBtn');
   const status=document.getElementById('histStatus');
-  btn.disabled=true; btn.textContent='betöltés...';
-  status.style.display='block'; status.textContent='Historikus adatok lekérése...';
+  if(!silent){
+    if(btn){btn.disabled=true; btn.textContent='betöltés...';}
+    if(status){status.style.display='block'; status.textContent='Historikus adatok lekérése...';}
+  }
 
   const firstDate=getFirstTransactionDate();
 
-  status.textContent='VWCE árfolyam lekérése...';
+  if(!silent&&status)status.textContent='VWCE árfolyam lekérése...';
   const vwcePrices=await fetchHistoricalPrices('VWCE.DE', firstDate);
 
-  status.textContent='WBIT árfolyam lekérése...';
+  if(!silent&&status)status.textContent='WBIT árfolyam lekérése...';
   const wbitPrices=await fetchHistoricalPrices('WBIT.DE', firstDate);
 
-  status.textContent='EUR/HUF árfolyam lekérése...';
+  if(!silent&&status)status.textContent='EUR/HUF árfolyam lekérése...';
   const fxPrices=await fetchHistoricalFX(firstDate);
 
   if(!vwcePrices&&!fxPrices){
-    status.textContent='Nem sikerült az adatok lekérése. Próbáld újra!';
-    btn.disabled=false; btn.textContent='újra próbál';
+    if(!silent){
+      if(status)status.textContent='Nem sikerült az adatok lekérése. Próbáld újra!';
+      if(btn){btn.disabled=false; btn.textContent='újra próbál';}
+    }
     return;
   }
 
@@ -2301,9 +2309,15 @@ async function loadHistoricData(){
     fxPrices:fxPrices||{},
     firstDate
   };
-  status.textContent='';status.style.display='none';
-  btn.disabled=false; btn.textContent='frissítés';
-  renderHistory();
+  if(!silent){
+    if(status){status.textContent='';status.style.display='none';}
+    if(btn){btn.disabled=false; btn.textContent='frissítés';}
+    renderHistory();
+  } else {
+    // Háttérben betöltve – frissítsük a dashboard változást
+    if(btn){btn.disabled=false; btn.textContent='frissítés';}
+    updatePortfolioChange();
+  }
 }
 
 function calcPortfolioOnDate(date){
