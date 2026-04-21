@@ -2004,6 +2004,11 @@ function updatePortfolioChange(){
 
   if(!yesterdayTotal||yesterdayTotal===0)return;
 
+  console.log('PORT DEBUG today:',Math.round(todayTotal),'yesterday:',Math.round(yesterdayTotal),
+    'todayAP:',Math.round(todayVal.ap),'yesterdayAP:',Math.round(yesterdayVal.ap),
+    'todayETF_EUR:',todayVal.etfEur?.toFixed(2),'yesterdayETF_EUR:',yesterdayVal.etfEur?.toFixed(2),
+    'todayFx:',todayVal.fx?.toFixed(2),'yesterdayFx:',yesterdayVal.fx?.toFixed(2));
+
   const chgFt=todayTotal-yesterdayTotal;
   const chgPct=chgFt/yesterdayTotal*100;
 
