@@ -869,40 +869,68 @@ function renderCashflowChart(){
     details[m].push({label:'DKJ lejárat ('+mat+')', amount:total, real:false});
   });
 
+  // Típusonkénti bontás
+  const valsReal=new Array(12).fill(0);
+  const valsFixmap=new Array(12).fill(0);
+  const valsDkj=new Array(12).fill(0);
+  details.forEach((monthDetails,m)=>{
+    monthDetails.forEach(d=>{
+      if(d.real)valsReal[m]+=d.amount;
+      else if(d.label.startsWith('FixMáP'))valsFixmap[m]+=d.amount;
+      else if(d.label.startsWith('DKJ'))valsDkj[m]+=d.amount;
+    });
+  });
+
   const currentMonth=new Date().getMonth();
-  const barColors=months.map((_,i)=>i===currentMonth?'rgba(96,165,250,0.5)':'rgba(96,165,250,0.2)');
-  const barBorders=months.map((_,i)=>'#60a5fa');
   const tickColors=months.map((_,i)=>i===currentMonth?'#e8e6e0':'#55534f');
+  const highlight=i=>i===currentMonth;
 
   charts['cf']=new Chart(document.getElementById('cashflowChart'),{
     type:'bar',
-    data:{labels:months,datasets:[{label:'Cashflow',data:vals,backgroundColor:barColors,borderColor:barBorders,borderWidth:1,borderRadius:4}]},
+    data:{
+      labels:months,
+      datasets:[
+        {label:'Rögzített',data:valsReal,stack:'cf',
+          backgroundColor:months.map((_,i)=>highlight(i)?'rgba(251,191,36,0.75)':'rgba(251,191,36,0.4)'),
+          borderColor:'#fbbf24',borderWidth:1,borderRadius:2},
+        {label:'FixMáP kamat',data:valsFixmap,stack:'cf',
+          backgroundColor:months.map((_,i)=>highlight(i)?'rgba(96,165,250,0.65)':'rgba(96,165,250,0.35)'),
+          borderColor:'#60a5fa',borderWidth:1,borderRadius:2},
+        {label:'DKJ lejárat',data:valsDkj,stack:'cf',
+          backgroundColor:months.map((_,i)=>highlight(i)?'rgba(74,222,154,0.65)':'rgba(74,222,154,0.35)'),
+          borderColor:'#4ade9a',borderWidth:1,borderRadius:2},
+      ]
+    },
     options:{
       responsive:true,maintainAspectRatio:false,
       plugins:{
-        legend:{display:false},
+        legend:{
+          display:true,position:'top',
+          labels:{color:'#908d86',font:{size:10},boxWidth:12,padding:14,
+            filter:item=>[valsReal,valsFixmap,valsDkj][item.datasetIndex].some(v=>v>0)
+          }
+        },
         tooltip:{
           callbacks:{
             title:ctx=>{
               const m=ctx[0].dataIndex;
-              return months[m]+' '+year+' – összesen: '+fmtM(vals[m]);
+              return months[m]+' '+year+' – összesen: '+(blurOn?'···':fmtM(vals[m]));
             },
             label:ctx=>{
               const m=ctx.dataIndex;
+              if(blurOn)return '  ···';
               if(!details[m].length)return [];
               return details[m].map(d=>'  '+(d.real?'✓ ':'◦ ')+d.label+': +'+fmt(Math.round(d.amount)));
             },
             afterLabel:()=>null,
           },
-          displayColors:false,
-          padding:10,
-          bodyFont:{family:'monospace',size:11},
-          titleFont:{size:12},
+          displayColors:false,padding:10,
+          bodyFont:{family:'monospace',size:11},titleFont:{size:12},
         }
       },
       scales:{
-        x:{ticks:{color:ctx=>tickColors[ctx.index]||'#55534f',font:{size:11}}},
-        y:{ticks:{color:'#55534f',callback:v=>v?fmtM(v):0}}
+        x:{stacked:true,ticks:{color:ctx=>tickColors[ctx.index]||'#55534f',font:{size:11}}},
+        y:{stacked:true,ticks:{color:'#55534f',callback:v=>blurOn?'···':(v?fmtM(v):0)}}
       }
     }
   });
