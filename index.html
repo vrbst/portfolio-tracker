@@ -1991,34 +1991,28 @@ function getFxChangeHtml(){
 function updatePortfolioChange(){
   if(!histData)return;
 
-  const today=new Date().toISOString().split('T')[0];
   const yesterday=new Date(Date.now()-86400000).toISOString().split('T')[0];
 
-  // Today's value (live)
-  const todayVal=calcPortfolioOnDate(today);
-  const todayTotal=todayVal.total;
+  // Mai érték – LIVE árakból (nem historikusból!)
+  const apValue=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
+               +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  const todayETFeur=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
+  const todayTotal=apValue+todayETFeur*liveFx;
+  const todayEur=todayETFeur+(apValue/liveFx);
 
-  // Yesterday's value (from histData)
+  // Tegnapi érték – historikus adatokból
   const yesterdayVal=calcPortfolioOnDate(yesterday);
   const yesterdayTotal=yesterdayVal.total;
+  const yesterdayFx=yesterdayVal.fx||liveFx;
+  const yesterdayEur=yesterdayVal.etfEur+(yesterdayVal.ap/yesterdayFx);
 
   if(!yesterdayTotal||yesterdayTotal===0)return;
 
-  console.log('PORT DEBUG today:',Math.round(todayTotal),'yesterday:',Math.round(yesterdayTotal),
-    'todayAP:',Math.round(todayVal.ap),'yesterdayAP:',Math.round(yesterdayVal.ap),
-    'todayETF_EUR:',todayVal.etfEur?.toFixed(2),'yesterdayETF_EUR:',yesterdayVal.etfEur?.toFixed(2),
-    'todayFx:',todayVal.fx?.toFixed(2),'yesterdayFx:',yesterdayVal.fx?.toFixed(2));
-
   const chgFt=todayTotal-yesterdayTotal;
   const chgPct=chgFt/yesterdayTotal*100;
-
-  // EUR change – AP Ft értékét az adott nap fx-ével osztjuk
-  const todayFx=todayVal.fx||liveFx;
-  const yesterdayFx=yesterdayVal.fx||(histData.fxPrices?interpolate(histData.fxPrices,yesterday)||liveFx:liveFx);
-  const todayEur=todayVal.etfEur+(todayVal.ap/todayFx);
-  const yesterdayEur=yesterdayVal.etfEur+(yesterdayVal.ap/yesterdayFx);
   const chgEur=todayEur-yesterdayEur;
   const chgEurPct=yesterdayEur>0?chgEur/yesterdayEur*100:0;
+
 
 
   const color=chgFt>=0?'var(--green)':'var(--red)';
