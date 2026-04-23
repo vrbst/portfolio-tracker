@@ -470,7 +470,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 // ═══════════════════════════════════════════════
 const GIST_FILE = 'portfolio-tracker-v2.json';
 let token='', gistId='', blurOn=false;
-let liveVwce=null, liveWbit=null, liveFx=395, liveVwcePct=null, liveWbitPct=null;
+let liveVwce=null, liveWbit=null, liveFx=null, liveVwcePct=null, liveWbitPct=null;
 let charts={};
 
 const DEFAULT_DATA = {
@@ -661,13 +661,13 @@ function renderDashboard(){
   const vwceEur=(liveVwce||0)*vwceShares;
   const wbitEur=(liveWbit||0)*wbitShares;
   const tbszEur=vwceEur+wbitEur;
-  const tbszVal=tbszEur*liveFx;
+  const tbszVal=tbszEur*(liveFx||395);
   const total=cb+apValue+tbszVal;
   const annualYield=fixmapAnnualCoupon();
-  const apEur=liveFx>0?apValue/liveFx:0;
-  const cbEur=liveFx>0?cb/liveFx:0;
+  const apEur=liveFx>0?apValue/(liveFx||395):0;
+  const cbEur=liveFx>0?cb/(liveFx||395):0;
   const totalEur=cbEur+apEur+tbszEur;
-  const hasLive=liveVwce||liveWbit;
+  const hasLive=liveVwce&&liveFx;
 
   // Összes befektetett tőke: nettó befizetések + állampapír vételárak + ETF befektetett összegek
   // Összes befektetett tőke = nettó befizetések + ETF
@@ -687,21 +687,21 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">összes befektetett tőke</div>
       <div class="stat-value blurable">${fmtM(totalInvested)}</div>
-
+      ${totalInvested>0?(()=>{const diff=total-totalInvested;const pct=diff/totalInvested*100;const col=diff>=0?'var(--green)':'var(--red)';return '<div class="blurable" style="font-size:11px;margin-top:2px;color:'+col+'">'+(diff>=0?'+':'')+fmtM(diff)+' ('+(diff>=0?'+':'')+pct.toFixed(2)+'%)</div>';})():''}
     </div>
     <div class="stat-card">
       <div class="stat-label">állampapír</div>
       <div class="stat-value blurable">${fmtM(apValue)}</div>
-      <div class="stat-sub blurable">≈ ${fmtEur(apEur,0)}</div>
+      <div class="stat-sub blurable">${liveFx?'≈ '+fmtEur(apEur,0):'–'}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">tbsz (etf)</div>
       <div class="stat-value blurable">${tbszVal>0?fmtM(tbszVal):'–'}</div>
-      <div class="stat-sub blurable">${tbszEur>0?fmtEur(tbszEur,0):'nincs live adat'}</div>
+      <div class="stat-sub blurable">${(liveFx&&tbszEur>0)?fmtEur(tbszEur,0):'–'}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
-      <div class="stat-value">${liveFx.toFixed(2)} Ft ${getFxChangeHtml()}</div>
+      <div class="stat-value">${(liveFx||395).toFixed(2)} Ft ${getFxChangeHtml()}</div>
       <div class="stat-sub">${liveVwce?'live':'becsült'}</div>
     </div>
   `;
@@ -715,8 +715,8 @@ function renderPie(cb,ap,tbsz){
   destroyChart('pie');
   const vwceShares=etfShares('VWCE');
   const wbitShares=etfShares('WBIT');
-  const vwceVal=(liveVwce||0)*vwceShares*liveFx;
-  const wbitVal=(liveWbit||0)*wbitShares*liveFx;
+  const vwceVal=(liveVwce||0)*vwceShares*(liveFx||395);
+  const wbitVal=(liveWbit||0)*wbitShares*(liveFx||395);
   const labels=['Állampapír','VWCE','WBIT'];
   const vals=[ap,vwceVal,wbitVal];
   const colors=['#60a5fa','#4ade9a','#f59e0b'];
@@ -729,7 +729,7 @@ function renderPie(cb,ap,tbsz){
   });
   document.getElementById('pieLegend').innerHTML=labels.map((l,i)=>{
     const pct=total>0?(vals[i]/total*100).toFixed(1):'0.0';
-    const eur=liveFx>0?vals[i]/liveFx:0;
+    const eur=liveFx>0?vals[i]/(liveFx||395):0;
     return `
     <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
       <div style="width:10px;height:10px;border-radius:2px;background:${colors[i]};flex-shrink:0"></div>
@@ -1123,7 +1123,7 @@ function renderTBSZ(){
   const wbitVal=liveWbit?liveWbit*wbitShares*liveFx:0;
 
   document.getElementById('tbszCards').innerHTML=`
-    <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx.toFixed(2)} Ft ${getFxChangeHtml()}</div><div class="stat-sub">${liveVwce?'live':'becsült'}</div></div>
+    <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx?liveFx.toFixed(2)+' Ft':'–'} ${getFxChangeHtml()}</div><div class="stat-sub">${liveFx?'live':'betöltés...'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db'+(liveVwcePct!==null?' <span style="color:'+(liveVwcePct>=0?'var(--green)':'var(--red)')+'">'+(liveVwcePct>=0?'+':'')+liveVwcePct.toFixed(2)+'%</span>':''):'nincs live adat'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub blurable">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
     <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db'+(liveWbitPct!==null?' <span style="color:'+(liveWbitPct>=0?'var(--green)':'var(--red)')+'">'+(liveWbitPct>=0?'+':'')+liveWbitPct.toFixed(2)+'% (BTC)</span>':''):'nincs live adat'}</div></div>
@@ -2014,8 +2014,8 @@ function updatePortfolioChange(){
   const apValue=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
                +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
   const todayETFeur=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
-  const todayTotal=apValue+todayETFeur*liveFx;
-  const todayEur=todayETFeur+(apValue/liveFx);
+  const todayTotal=apValue+todayETFeur*(liveFx||395);
+  const todayEur=todayETFeur+(apValue/(liveFx||395));
 
   // Tegnapi érték – historikus adatokból
   const yesterdayVal=calcPortfolioOnDate(yesterday);
@@ -2084,7 +2084,7 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
         : '';
       document.getElementById(labelId).innerHTML=fmtEur(price)+pctHtml;
       const hufEl=document.getElementById(pillId.replace('Pill','PriceHuf'));
-      if(hufEl)hufEl.textContent='= '+fmt(Math.round(price*liveFx));
+      if(hufEl)hufEl.textContent='= '+fmt(Math.round(price*(liveFx||395)));
       return;
     }
   }catch(e){}
@@ -2617,7 +2617,7 @@ async function manualRefresh(){
     if(label)label.innerHTML='<span class="spin"></span>betöltés';
     if(huf)huf.textContent='';
   });
-  liveVwce=null; liveWbit=null;
+  liveVwce=null; liveWbit=null; liveFx=null;
   renderDashboard(); renderTBSZ();
   await fetchLive();
   if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
