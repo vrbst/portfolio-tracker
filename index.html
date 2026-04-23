@@ -1309,7 +1309,7 @@ function renderTranzakciok(){
     editCall:`editTx('etf','${t.id}')`
   }));
 
-  const typeOrder={deposit:6,buy:5,sell:4,withdraw:3,coupon:2,expire:1};
+  const typeOrder={deposit:6,buy:5,sell:4,coupon:3,withdraw:2,expire:1};
   all.sort((a,b)=>b.date.localeCompare(a.date)||(typeOrder[a.type]||9)-(typeOrder[b.type]||9));
 
   document.getElementById('txBody').innerHTML=all.map(t=>`<tr>
