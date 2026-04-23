@@ -762,7 +762,7 @@ function renderUpcoming(){
     let safety=0;
     while(d<=matDate&&safety<20){
       const ds=d.toISOString().split('T')[0];
-      if(new Date(ds)>now){
+      if(new Date(ds)>new Date()){
         const pastFirst=sr.firstCouponAmount&&new Date(ds)<new Date();const amount=isFirst&&sr.firstCouponAmount&&!pastFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
         events.push({date:ds,label:'FixMáP kamat ('+sr.name+')',amount,color:'var(--blue)'});
       }
@@ -1622,10 +1622,20 @@ function submitCoupon(){
   const note=document.getElementById('f-note').value;
   const withdraw=document.getElementById('f-withdraw')?.checked;
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
-  data.cashTx.push({id:uid(),date,type:'coupon',amount,note:note||'Kamatfizetés'});
   if(withdraw){
     data.cashTx.push({id:uid(),date,type:'withdraw',amount,note:(note||'Kamatfizetés')+' – kiutalás'});
   }
+  data.cashTx.push({id:uid(),date,type:'coupon',amount,note:note||'Kamatfizetés'});
+  // Auto-advance nextCoupon date on all active fixmap series where nextCoupon <= date
+  data.fixmapSeries.forEach(sr=>{
+    if(sr.nextCoupon&&sr.nextCoupon<=date){
+      const d=new Date(sr.nextCoupon+'T00:00:00Z');
+      d.setUTCMonth(d.getUTCMonth()+3);
+      sr.nextCoupon=d.toISOString().split('T')[0];
+      // Clear firstCouponAmount since first coupon is now paid
+      sr.firstCouponAmount=null;
+    }
+  });
   closeModal(); renderAll(); saveData();
   toast(withdraw?'Kamat rögzítve és kiutalva: '+fmt(amount):'Kamatfizetés rögzítve: +'+fmt(amount));
 }
@@ -1636,7 +1646,7 @@ function submitDeposit(){
   const note=document.getElementById('f-note').value;
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
   data.cashTx.push({id:uid(),date,type:'deposit',amount,note});
-  closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); toast('Befizetés rögzítve');
+  closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); saveData(); toast('Befizetés rögzítve');
 }
 function submitWithdraw(){
   const date=document.getElementById('f-date').value;
@@ -1644,7 +1654,7 @@ function submitWithdraw(){
   const note=document.getElementById('f-note').value;
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
   data.cashTx.push({id:uid(),date,type:'withdraw',amount,note});
-  closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); toast('Kiutalás rögzítve');
+  closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); saveData(); toast('Kiutalás rögzítve');
 }
 function submitNewFixmapSeries(){
   const name=document.getElementById('f-name').value.trim();
