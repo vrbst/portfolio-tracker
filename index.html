@@ -1153,6 +1153,7 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
       costHuf:[a.costHuf,b.costHuf],
       shares:[a.shares,b.shares],
       priceEur:[a.priceEur,b.priceEur],
+      priceHuf:[a.priceEur*a.fxRate,b.priceEur*b.fxRate],
       fxRate:[a.fxRate,b.fxRate],
       costEur:[a.shares*a.priceEur,b.shares*b.priceEur],
       valEur:[a.shares*lp,b.shares*lp],
@@ -1186,7 +1187,8 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
     {key:'date',label:'dátum',r:false},
     {key:'costHuf',label:'befekt. Ft',r:true},
     {key:'shares',label:'db',r:true},
-    {key:'priceEur',label:'vételi ár',r:true},
+    {key:'priceEur',label:'vételi ár (EUR)',r:true},
+    {key:'priceHuf',label:'vételi ár (Ft)',r:true},
     {key:'fxRate',label:'HUF/EUR',r:true},
     {key:'costEur',label:'befekt. EUR',r:true},
     {key:'valEur',label:'akt. EUR',r:true},
@@ -1209,6 +1211,7 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
     <td class="r blurable">${fmtM(totCostHuf)}</td>
     <td class="r blurable">${totShares.toFixed(2)}</td>
     <td class="r blurable" style="font-size:11px;color:var(--text2)">∅ ${fmtEur(wavgPriceEur)}</td>
+    <td class="r blurable" style="font-size:11px;color:var(--text2)">∅ ${fmt(Math.round(wavgPriceEur*wavgFx))}</td>
     <td class="r" style="font-size:11px;color:var(--text2)">∅ ${Math.round(wavgFx)}</td>
     <td class="r blurable">${fmtEur(totCostEur,0)}</td>
     <td class="r blurable">${totValEur!==null?fmtEur(totValEur,0):'–'}</td>
@@ -1234,6 +1237,7 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
       <td class="r blurable">${fmtM(b.costHuf)}</td>
       <td class="r blurable">${b.shares.toFixed(2)}</td>
       <td class="r blurable">${fmtEur(b.priceEur)}</td>
+      <td class="r blurable">${fmt(Math.round(b.priceEur*b.fxRate))}</td>
       <td class="r">${Math.round(b.fxRate)}</td>
       <td class="r blurable">${fmtEur(costEur,0)}</td>
       <td class="r blurable">${currentValEur!==null?fmtEur(currentValEur,0):'–'}</td>
