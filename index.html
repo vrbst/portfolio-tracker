@@ -2516,11 +2516,13 @@ function calcPortfolioOnDate(date){
 }
 
 function calcInvestedOnDate(date){
-  // FixMáP névérték az adott dátumon aktív pozíciók
+  // Befektetett tőke az adott dátumon: csak az addig megvett és még le nem járt pozíciók
   let invested=0;
-  data.fixmap.filter(f=>f.date<=date&&f.active).forEach(f=>invested+=f.faceValue);
-  data.dkj.filter(d=>d.date<=date&&d.active).forEach(d=>invested+=d.faceValue);
-  // ETF: az adott dátumig vett tételek costHuf-ja (FIFO alapon ami még megvan)
+  // FixMáP: megvett az adott dátumig, és vagy aktív, vagy lejárata a dátum után van
+  data.fixmap.filter(f=>f.date<=date&&(f.active||(f.maturity&&f.maturity>date))).forEach(f=>invested+=f.faceValue);
+  // DKJ: megvett az adott dátumig, és lejárata a dátum után van (vagy még aktív)
+  data.dkj.filter(d=>d.date<=date&&(d.active||(d.maturity&&d.maturity>date))).forEach(d=>invested+=d.faceValue);
+  // ETF
   data.etfTx.filter(t=>t.date<=date&&t.type==='buy').forEach(t=>invested+=t.shares*t.priceEur*t.fxRate);
   data.etfTx.filter(t=>t.date<=date&&t.type==='sell').forEach(t=>invested-=t.shares*t.priceEur*t.fxRate);
   return invested;
