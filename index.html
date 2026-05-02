@@ -430,7 +430,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       <div class="card-row cards-3" id="histCards" style="margin-bottom:14px"></div>
       <div class="panel">
         <div class="panel-header">
-          <div class="panel-title">portfólió értéke időben</div>
+          <div class="panel-title">befektetett tőke vs. portfólió érték</div>
           <div style="display:flex;gap:8px;align-items:center">
             <select class="form-select" id="histRange" onchange="renderHistory()" style="padding:5px 10px;font-size:11px;width:auto">
               <option value="all">teljes időszak</option>
@@ -439,16 +439,13 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
               <option value="180">6 hónap</option>
               <option value="365">1 év</option>
             </select>
-            <button class="btn btn-primary btn-sm" id="histLoadBtn" onclick="loadHistoricData()">adatok betöltése</button>
+            <button class="btn btn-primary btn-sm" id="histLoadBtn" onclick="loadHistoricData()">frissítés</button>
           </div>
         </div>
         <div id="histStatus" style="font-size:12px;color:var(--text2);margin-bottom:10px;display:none"></div>
-        <div class="chart-wrap" style="height:320px"><canvas id="histChart" class="blurable" role="img" aria-label="Historikus portfólió érték"></canvas></div>
+        <div class="chart-wrap" style="height:380px"><canvas id="histChart2" class="blurable" role="img" aria-label="Befektetett vs portfólió"></canvas></div>
       </div>
-      <div class="panel">
-        <div class="panel-header"><div class="panel-title">befektetett tőke vs. portfólió érték</div></div>
-        <div class="chart-wrap" style="height:240px"><canvas id="histChart2" class="blurable" role="img" aria-label="Befektetett vs portfólió"></canvas></div>
-      </div>
+
     </div>
 
   </div>
@@ -2575,23 +2572,34 @@ function renderHistory(){
   `;
   if(blurOn)applyBlur();
 
-  // Main chart
-  charts['hist']=new Chart(document.getElementById('histChart'),{
+  // Portfolio vs Invested chart
+  charts['hist2']=new Chart(document.getElementById('histChart2'),{
     type:'line',
     data:{
       labels:filtered,
-      datasets:[{
-        label:'Portfólió értéke',
-        data:portfolioVals,
-        borderColor:'#4ade9a',
-        backgroundColor:'rgba(74,222,154,0.08)',
-        fill:true, tension:.3, pointRadius:0, borderWidth:2
-      }]
+      datasets:[
+        {label:'Portfólió értéke',data:portfolioVals,borderColor:'#4ade9a',backgroundColor:'rgba(74,222,154,0.06)',fill:true,tension:.3,pointRadius:0,borderWidth:2},
+        {label:'Befektetett tőke',data:investedVals,borderColor:'#60a5fa',backgroundColor:'transparent',borderDash:[4,4],tension:.3,pointRadius:0,borderWidth:1.5}
+      ]
     },
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>blurOn?'···':` ${fmtM(c.parsed.y)}`}}},
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#908d86',font:{size:10},boxWidth:12,padding:14}},
+        tooltip:{callbacks:{
+            title:ctx=>filtered[ctx[0].dataIndex],
+            label:c=>blurOn?'···':` ${c.dataset.label}: ${fmtM(c.parsed.y)}`,
+            afterBody:ctx=>{
+              if(blurOn)return[];
+              const i=ctx[0].dataIndex;
+              const pl=portfolioVals[i]-investedVals[i];
+              const pct=investedVals[i]>0?pl/investedVals[i]*100:0;
+              const sign=pl>=0?'+':'';
+              return[` P&L: ${sign}${fmtM(pl)} (${sign}${pct.toFixed(2)}%)`];
+            }
+          }}
+      },
       scales:{
         x:{ticks:{color:'#55534f',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.03)'}},
         y:{ticks:{color:'#55534f',callback:v=>blurOn?'···':fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
@@ -2599,26 +2607,7 @@ function renderHistory(){
     }
   });
 
-  // Invested vs portfolio chart
-  charts['hist2']=new Chart(document.getElementById('histChart2'),{
-    type:'line',
-    data:{
-      labels:filtered,
-      datasets:[
-        {label:'Portfólió értéke',data:portfolioVals,borderColor:'#4ade9a',backgroundColor:'transparent',tension:.3,pointRadius:0,borderWidth:2},
-        {label:'Befektetett tőke',data:investedVals,borderColor:'#60a5fa',backgroundColor:'transparent',borderDash:[4,4],tension:.3,pointRadius:0,borderWidth:1.5}
-      ]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>blurOn?'···':` ${c.dataset.label}: ${fmtM(c.parsed.y)}`}}},
-      scales:{
-        x:{ticks:{color:'#55534f',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.03)'}},
-        y:{ticks:{color:'#55534f',callback:v=>blurOn?'···':fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
-      }
-    }
-  });
+  destroyChart('hist');
   // Reapply blur if active
   if(blurOn)setTimeout(applyBlur,50);
 }
