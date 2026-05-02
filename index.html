@@ -2523,10 +2523,10 @@ function calcPortfolioOnDate(date){
 function calcInvestedOnDate(date){
   // Befektetett tőke = aktív AP vételárak + ETF befektetett összegek
   let invested=0;
-  // FixMáP – aktív pozíciók vételára
-  data.fixmap.filter(f=>f.date<=date&&f.active).forEach(f=>invested+=(f.buyPrice||f.faceValue));
-  // DKJ – aktív pozíciók vételára
-  data.dkj.filter(d=>d.date<=date&&d.active).forEach(d=>invested+=d.buyPrice);
+  // FixMáP – névértéken (mert a portfólió értékben is névértéken szerepel)
+  data.fixmap.filter(f=>f.date<=date&&f.active).forEach(f=>invested+=f.faceValue);
+  // DKJ – névértéken
+  data.dkj.filter(d=>d.date<=date&&d.active).forEach(d=>invested+=d.faceValue);
   // ETF vételek (nettó: vétel - eladás értéke)
   data.etfTx.filter(t=>t.date<=date&&t.type==='buy').forEach(t=>invested+=t.shares*t.priceEur*t.fxRate);
   data.etfTx.filter(t=>t.date<=date&&t.type==='sell').forEach(t=>invested-=t.shares*t.priceEur*t.fxRate);
