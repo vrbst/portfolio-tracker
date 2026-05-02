@@ -2548,18 +2548,18 @@ function renderHistory(){
 
   const todayStr=new Date().toISOString().split('T')[0];
   // Live portfolio value for today
-  const apValueNow=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
-                  +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  // Same as dashboard totalInvested
+  const fmInvestedNow=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+  const dkjInvestedNow=data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  const etfInvestedNow=etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0)
+                      +etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
+  const liveInvestedNow=fmInvestedNow+dkjInvestedNow+etfInvestedNow;
+  const apValueNow=fmInvestedNow+dkjInvestedNow;
   const etfEurNow=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
   const liveTotalNow=apValueNow+etfEurNow*(liveFx||395);
-  const liveInvestedNow=apValueNow+etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0)
-                       +etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
 
   const portfolioVals=filtered.map(d=>d===todayStr&&liveVwce?Math.round(liveTotalNow):Math.round(calcPortfolioOnDate(d).total));
   const investedVals=filtered.map(d=>d===todayStr&&liveVwce?Math.round(liveInvestedNow):Math.round(calcInvestedOnDate(d)));
-  const lastInv=investedVals[investedVals.length-1];
-  const lastPort=portfolioVals[portfolioVals.length-1];
-  console.log('HIST DEBUG invested:',lastInv,'portfolio:',lastPort,'liveInvestedNow:',Math.round(liveInvestedNow));
   const labels=filtered.map(d=>d.slice(0,7)); // YYYY-MM
 
   // Summary cards
