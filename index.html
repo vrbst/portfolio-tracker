@@ -669,14 +669,12 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce&&liveFx;
 
-  // Összes befektetett tőke: nettó befizetések + állampapír vételárak + ETF befektetett összegek
-  // Összes befektetett tőke = nettó befizetések + ETF
-  // (az állampapír a befizetésekből ment, nem adjuk hozzá kétszer)
-  const netDeposits=data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
-    -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0);
+  // Összes befektetett tőke = FixMáP névérték + DKJ névérték + ETF befektetett Ft
+  const fmInvested=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+  const dkjInvested=data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
   const etfInvested=etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0)
     +etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
-  const totalInvested=netDeposits+etfInvested;
+  const totalInvested=fmInvested+dkjInvested+etfInvested;
 
   document.getElementById('dashCards').innerHTML=`
     <div class="stat-card">
@@ -2521,13 +2519,11 @@ function calcPortfolioOnDate(date){
 }
 
 function calcInvestedOnDate(date){
-  // Befektetett tőke = aktív AP vételárak + ETF befektetett összegek
+  // FixMáP névérték az adott dátumon aktív pozíciók
   let invested=0;
-  // FixMáP – névértéken (mert a portfólió értékben is névértéken szerepel)
   data.fixmap.filter(f=>f.date<=date&&f.active).forEach(f=>invested+=f.faceValue);
-  // DKJ – névértéken
   data.dkj.filter(d=>d.date<=date&&d.active).forEach(d=>invested+=d.faceValue);
-  // ETF vételek (nettó: vétel - eladás értéke)
+  // ETF: az adott dátumig vett tételek costHuf-ja (FIFO alapon ami még megvan)
   data.etfTx.filter(t=>t.date<=date&&t.type==='buy').forEach(t=>invested+=t.shares*t.priceEur*t.fxRate);
   data.etfTx.filter(t=>t.date<=date&&t.type==='sell').forEach(t=>invested-=t.shares*t.priceEur*t.fxRate);
   return invested;
@@ -2553,8 +2549,17 @@ function renderHistory(){
   // Filter by range
   const filtered=range?dates.filter(d=>d>=new Date(Date.now()-range*86400000).toISOString().split('T')[0]):dates;
 
-  const portfolioVals=filtered.map(d=>Math.round(calcPortfolioOnDate(d).total));
-  const investedVals=filtered.map(d=>Math.round(calcInvestedOnDate(d)));
+  const today=new Date().toISOString().split('T')[0];
+  // Live portfolio value for today
+  const apValueNow=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
+                  +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  const etfEurNow=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
+  const liveTotalNow=apValueNow+etfEurNow*(liveFx||395);
+  const liveInvestedNow=apValueNow+etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0)
+                       +etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
+
+  const portfolioVals=filtered.map(d=>d===today&&liveVwce?Math.round(liveTotalNow):Math.round(calcPortfolioOnDate(d).total));
+  const investedVals=filtered.map(d=>d===today&&liveVwce?Math.round(liveInvestedNow):Math.round(calcInvestedOnDate(d)));
   const labels=filtered.map(d=>d.slice(0,7)); // YYYY-MM
 
   // Summary cards
