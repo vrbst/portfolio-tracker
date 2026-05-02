@@ -2557,6 +2557,9 @@ function renderHistory(){
 
   const portfolioVals=filtered.map(d=>d===todayStr&&liveVwce?Math.round(liveTotalNow):Math.round(calcPortfolioOnDate(d).total));
   const investedVals=filtered.map(d=>d===todayStr&&liveVwce?Math.round(liveInvestedNow):Math.round(calcInvestedOnDate(d)));
+  const lastInv=investedVals[investedVals.length-1];
+  const lastPort=portfolioVals[portfolioVals.length-1];
+  console.log('HIST DEBUG invested:',lastInv,'portfolio:',lastPort,'liveInvestedNow:',Math.round(liveInvestedNow));
   const labels=filtered.map(d=>d.slice(0,7)); // YYYY-MM
 
   // Summary cards
