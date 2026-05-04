@@ -666,13 +666,10 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce&&liveFx;
 
-  // Összes befektetett tőke = FixMáP névérték + DKJ névérték + ETF befektetett Ft
-  const fmInvested=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
-  const dkjInvested=data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
-  const etfInvested=etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0)
-    +etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
-  const totalInvested=fmInvested+dkjInvested+etfInvested;
-  console.log('INVESTED DEBUG fm:',fmInvested,'dkj:',dkjInvested,'etf:',Math.round(etfInvested),'total:',Math.round(totalInvested));
+  // Összes befektetett tőke = befizetések + ETF vételek - kiutalások
+  const totalInvested=data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
+    -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
+    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate,0);
 
   document.getElementById('dashCards').innerHTML=`
     <div class="stat-card">
@@ -2517,15 +2514,10 @@ function calcPortfolioOnDate(date){
 }
 
 function calcInvestedOnDate(date){
-  // Befektetett tőke az adott dátumon: csak az addig megvett és még le nem járt pozíciók
   let invested=0;
-  // FixMáP: megvett az adott dátumig, és vagy aktív, vagy lejárata a dátum után van
-  data.fixmap.filter(f=>f.date<=date&&f.active).forEach(f=>invested+=f.faceValue);
-  // DKJ: megvett az adott dátumig, és lejárata a dátum után van (vagy még aktív)
-  data.dkj.filter(d=>d.date<=date&&d.active).forEach(d=>invested+=d.faceValue);
-  // ETF
+  data.cashTx.filter(t=>t.date<=date&&t.type==='deposit').forEach(t=>invested+=t.amount);
+  data.cashTx.filter(t=>t.date<=date&&t.type==='withdraw').forEach(t=>invested-=t.amount);
   data.etfTx.filter(t=>t.date<=date&&t.type==='buy').forEach(t=>invested+=t.shares*t.priceEur*t.fxRate);
-  data.etfTx.filter(t=>t.date<=date&&t.type==='sell').forEach(t=>invested-=t.shares*t.priceEur*t.fxRate);
   return invested;
 }
 
@@ -2551,13 +2543,11 @@ function renderHistory(){
 
   const todayStr=new Date().toISOString().split('T')[0];
   // Live portfolio value for today
-  // Same as dashboard totalInvested
-  const fmInvestedNow=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
-  const dkjInvestedNow=data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
-  const etfInvestedNow=etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0)
-                      +etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
-  const liveInvestedNow=fmInvestedNow+dkjInvestedNow+etfInvestedNow;
-  const apValueNow=fmInvestedNow+dkjInvestedNow;
+  const liveInvestedNow=data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
+    -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
+    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate,0);
+  const apValueNow=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
+                  +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
   const etfEurNow=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
   const liveTotalNow=apValueNow+etfEurNow*(liveFx||395);
 
