@@ -1741,13 +1741,14 @@ function submitFixmapSeriesSell(){
   const items=data.fixmap.filter(f=>f.active&&(f.seriesId||'legacy')===sid).sort((a,b)=>a.date.localeCompare(b.date));
   for(const item of items){
     if(remaining<=0)break;
-    if(item.faceValue<=remaining){item.active=false;remaining-=item.faceValue;}
+    if(item.faceValue<=remaining){item.active=false;item.soldDate=date;remaining-=item.faceValue;}
     else{
       const ratio=remaining/item.faceValue;
       data.fixmap.push({...item,id:uid(),faceValue:item.faceValue-remaining,buyPrice:(item.buyPrice||item.faceValue)*(1-ratio)});
       item.faceValue=remaining;
       item.buyPrice=(item.buyPrice||item.faceValue)*ratio;
       item.active=false;
+      item.soldDate=date;
       remaining=0;
     }
   }
@@ -2479,19 +2480,37 @@ function calcPortfolioOnDate(date){
 
   // 2. FixMáP – névértéken, csak azok amik vásárolva lettek és még nem lezárva az adott dátumon
   let ap=0;
+  // FixMáP eladások dátuma cashTx-ből (legacy, ha nincs soldDate)
+  const fmSellDates=data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP'))
+    .map(t=>t.date).sort();
   data.fixmap.forEach(f=>{
     if(f.date>date)return;
-    // Csak akkor aktív az adott dátumon, ha:
-    // - most is aktív (f.active=true) ÉS a lejárat még nem jött el
-    // - VAGY ha az adott dátumon még nem volt eladva (de ezt nehéz tudni visszamenőleg)
-    // Konzervatív megközelítés: csak az f.active=true tételeket számítjuk
-    if(f.active)ap+=f.faceValue;
+    if(f.active){ap+=f.faceValue;return;}
+    // Ha van soldDate, azt használjuk
+    if(f.soldDate){if(f.soldDate>date)ap+=f.faceValue;return;}
+    // Legacy: nincs soldDate, az első FixMáP eladás dátumát használjuk
+    const inferredSoldDate=fmSellDates[0]||'9999-99-99';
+    if(inferredSoldDate>date)ap+=f.faceValue;
   });
 
-  // 3. DKJ – névértéken, csak aktív pozíciók az adott dátumon
+  // 3. DKJ – névértéken, aktív + eladott de az adott dátum előtt eladott
+  // Eladott DKJ tételek dátuma: a cashTx sell/expire típusból következtetve
+  const dkjSellMap={};
+  data.cashTx.filter(t=>['sell','expire'].includes(t.type)&&t.note&&t.note.includes('DKJ')).forEach(t=>{
+    // Maturity dátumot keressük a note-ban
+    const m=t.note.match(/D(\d{6})/);
+    if(m){
+      const mat='20'+m[1].slice(0,2)+'-'+m[1].slice(2,4)+'-'+m[1].slice(4,6);
+      if(!dkjSellMap[mat]||t.date<dkjSellMap[mat])dkjSellMap[mat]=t.date;
+    }
+  });
   data.dkj.forEach(d=>{
     if(d.date>date)return;
-    if(d.active)ap+=d.faceValue;
+    if(d.active){ap+=d.faceValue;return;}
+    if(d.soldDate){if(d.soldDate>date)ap+=d.faceValue;return;}
+    // Legacy: nincs soldDate, a cashTx-ből következtetjük
+    const inferredSell=dkjSellMap[d.maturity];
+    if(!inferredSell||inferredSell>date)ap+=d.faceValue;
   });
 
   // 4. ETF – historikus árfolyamon
@@ -2503,17 +2522,20 @@ function calcPortfolioOnDate(date){
     if(t.type==='sell')etfHoldings[t.ticker]-=t.shares;
   });
 
-  const fx=(histData&&histData.fxPrices)?interpolate(histData.fxPrices,date)||liveFx:liveFx;
+  const fx=(histData&&histData.fxPrices)?interpolate(histData.fxPrices,date)||(liveFx||395):(liveFx||395);
   if(histData){
+    // interpolate visszafelé keres – ha nincs adat az adott napra, a legközelebbi korábbi napot adja
     const vp=(histData.vwcePrices?interpolate(histData.vwcePrices,date):null)||liveVwce||0;
     const wp=(histData.wbitPrices?interpolate(histData.wbitPrices,date):null)||liveWbit||0;
     etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
   }
 
-  return {cash, ap, etf:etfEur*fx, etfEur, fx, total:ap+etfEur*fx};
+  // Portfólió = AP + ETF (cash nem számít bele, mert a tranzakcióknál duplikálódna)
+  return {cash, ap, etf:etfEur*fx, etfEur, fx, total:cash+ap+etfEur*fx};
 }
 
 function calcInvestedOnDate(date){
+  // Befektetett tőke = deposit - withdraw + ETF vételek (ugyanaz mint dashboard)
   let invested=0;
   data.cashTx.filter(t=>t.date<=date&&t.type==='deposit').forEach(t=>invested+=t.amount);
   data.cashTx.filter(t=>t.date<=date&&t.type==='withdraw').forEach(t=>invested-=t.amount);
@@ -2538,8 +2560,25 @@ function renderHistory(){
   }
   if(dates[dates.length-1]!==today)dates.push(today);
 
-  // Filter by range
-  const filtered=range?dates.filter(d=>d>=new Date(Date.now()-range*86400000).toISOString().split('T')[0]):dates;
+  // Filter by range, skip leading dates with zero portfolio value
+  const rangeDate=range?new Date(Date.now()-range*86400000).toISOString().split('T')[0]:null;
+  let allDates=rangeDate?dates.filter(d=>d>=rangeDate):dates;
+  // Remove leading zeros (days before first actual investment shows up)
+  let skipLeading=true;
+  allDates=allDates.filter(d=>{
+    if(!skipLeading)return true;
+    const r=calcPortfolioOnDate(d);
+    if(r&&r.total>10000){skipLeading=false;return true;}
+    return false;
+  });
+  const filtered=allDates;
+  const testDate='2026-03-01';
+  const r=calcPortfolioOnDate(testDate);
+  const inv=calcInvestedOnDate(testDate);
+  console.log('TEST 03-01: port:',Math.round(r?.total||0),'cash:',Math.round(r?.cash||0),'ap:',Math.round(r?.ap||0),'etf:',Math.round(r?.etf||0),'inv:',Math.round(inv));
+  console.log('FIXMAP items:', data.fixmap.map(f=>({date:f.date,face:f.faceValue,active:f.active,soldDate:f.soldDate})));
+
+
 
   const todayStr=new Date().toISOString().split('T')[0];
   // Live portfolio value for today
@@ -2549,8 +2588,9 @@ function renderHistory(){
   const apValueNow=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
                   +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
   const etfEurNow=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
-  const liveTotalNow=apValueNow+etfEurNow*(liveFx||395);
+  const liveTotalNow=cashBalance()+apValueNow+etfEurNow*(liveFx||395);
 
+  const filteredDates=filtered;
   const portfolioVals=filtered.map(d=>d===todayStr&&liveVwce?Math.round(liveTotalNow):Math.round(calcPortfolioOnDate(d).total));
   const investedVals=filtered.map(d=>d===todayStr&&liveVwce?Math.round(liveInvestedNow):Math.round(calcInvestedOnDate(d)));
   const labels=filtered.map(d=>d.slice(0,7)); // YYYY-MM
