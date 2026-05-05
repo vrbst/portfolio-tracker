@@ -193,6 +193,9 @@ input[type=range]::-webkit-slider-runnable-track{
   height:4px;border-radius:2px;
 }
 
+/* TABLE NOWRAP */
+#fixmapBody td, #dkjBody td{white-space:nowrap}
+
 /* SORTABLE HEADERS */
 th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
 th.sortable:hover{color:var(--text)}
@@ -202,7 +205,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 /* EXPAND ROWS */
 .detail-row{display:none;background:var(--bg3)}
 .detail-row.open{display:table-row}
-.detail-row td{padding:6px 10px 6px 24px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)}
+.detail-row td{padding:6px 10px 6px 24px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);white-space:nowrap}
 .expand-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:0 4px;transition:transform .15s}
 .expand-btn.open{transform:rotate(90deg)}
 
@@ -324,7 +327,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
           </div>
         </div>
-        <div class="card-row cards-3" id="apCards" style="margin-bottom:0"></div>
+        <div class="card-row cards-4" id="apCards" style="margin-bottom:0"></div>
       </div>
 
       <div class="section-title">
@@ -337,7 +340,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">köv. kamat</th><th class="r">lejárat</th><th class="r">státusz</th><th></th></tr></thead>
+          <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">köv. kamat</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r">várható kamat</th><th>státusz</th><th></th></tr></thead>
           <tbody id="fixmapBody"></tbody>
         </table></div>
         <div class="empty" id="fixmapEmpty" style="display:none">Még nincs FixMáP pozíció. Előbb hozz létre sorozatot!</div>
@@ -353,7 +356,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       </div>
       <div class="panel" style="margin-top:0">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>sorozat</th><th class="r">névérték összesen</th><th class="r">átl. vétel ár</th><th class="r">várható hozam</th><th class="r">lejárat</th><th class="r">státusz</th><th></th></tr></thead>
+          <thead><tr><th>sorozat</th><th class="r">névérték összesen</th><th class="r">átl. vétel ár</th><th class="r">várható hozam</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r">státusz</th><th></th></tr></thead>
           <tbody id="dkjBody"></tbody>
         </table></div>
         <div class="empty" id="dkjEmpty" style="display:none">Még nincs DKJ pozíció.</div>
@@ -994,6 +997,7 @@ function renderAllampapir(){
   const dkjSeriesCount=data.dkjSeries.filter(ds=>data.dkj.some(d=>d.active&&d.seriesId===ds.id)).length||[...new Set(data.dkj.filter(d=>d.active).map(d=>d.maturity))].length;
   document.getElementById('apCards').innerHTML=`
     <div class="stat-card"><div class="stat-label">FixMáP névérték</div><div class="stat-value blurable">${fmtM(fmValue)}</div><div class="stat-sub">${fmSeriesCount} sorozat</div></div>
+    <div class="stat-card" id="fmFutureCard"><div class="stat-label">kamat lejáratig</div><div class="stat-value pos blurable">–</div><div class="stat-sub">számítás folyamatban...</div></div>
     <div class="stat-card"><div class="stat-label">DKJ névérték</div><div class="stat-value blurable">${fmtM(dkjValue)}</div><div class="stat-sub">${dkjSeriesCount} aktív sorozat</div></div>
     <div class="stat-card"><div class="stat-label">éves kamatbevétel</div><div class="stat-value pos blurable">${fmtM(annualCoupon)}</div><div class="stat-sub blurable">${fmt(annualCoupon/12)}/hó</div></div>
   `;
@@ -1007,6 +1011,31 @@ function renderAllampapir(){
     if(f.active){fmSeriesMap[sid].totalFace+=f.faceValue;fmSeriesMap[sid].totalBuy+=(f.buyPrice||f.faceValue);fmSeriesMap[sid].active=true;}
   });
   const fmSeriesList=Object.values(fmSeriesMap);
+  // Várható össz kamat számítása lejáratig (összesített kártyához)
+  let totalFutureInterest=0;
+  fmSeriesList.filter(s=>s.active).forEach(s=>{
+    const sr=data.fixmapSeries.find(x=>x.id===s.seriesId);
+    if(!sr||!sr.maturity||!sr.couponRate)return;
+    const now=new Date();
+    const mat=new Date(sr.maturity+'T00:00:00Z');
+    if(mat<=now)return;
+    // Első jövőbeli kamatfizetés dátuma
+    let d=new Date((sr.nextCoupon||sr.maturity)+'T00:00:00Z');
+    // Ha a nextCoupon múltban van, lépjük előre
+    while(d<=now){d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+3,d.getUTCDate()));}
+    // Hátralévő negyedévek száma (csak jövőbeli)
+    let quarters=0;
+    let d2=new Date(d);
+    while(d2<=mat){quarters++;d2=new Date(Date.UTC(d2.getUTCFullYear(),d2.getUTCMonth()+3,d2.getUTCDate()));}
+    const qAmt=s.totalFace*sr.couponRate/100/4;
+    totalFutureInterest+=quarters*qAmt;
+  });
+
+  // Összesítő kártya a várható kamatról – beillesztjük az apCards elé
+
+  const fcEl=document.getElementById('fmFutureCard');
+  if(fcEl)fcEl.innerHTML=`<div class="stat-label">kamat lejáratig</div><div class="stat-value pos blurable">+${fmtM(totalFutureInterest)}</div><div class="stat-sub">aktív FixMáP sorozatok</div>`;
+
   document.getElementById('fixmapBody').innerHTML=fmSeriesList.map(s=>{
     const sr=data.fixmapSeries.find(x=>x.id===s.seriesId);
     const name=sr?sr.name:(s.seriesId==='legacy'?'FixMáP (régi)':'Ismeretlen');
@@ -1017,6 +1046,26 @@ function renderAllampapir(){
     const isFirstCoupon=sr&&sr.firstCouponAmount&&!nextCouponPast;
     const qCoupon=s.active&&couponRate?(isFirstCoupon?sr.firstCouponAmount:s.totalFace*couponRate/100/4):0;
     const rowId='fm-'+s.seriesId.replace(/[^a-z0-9]/gi,'');
+
+    // Hátralévő hónapok és várható kamat lejáratig
+    let monthsLeft='–', futureInterest='–';
+    if(sr&&sr.maturity&&s.active){
+      const now=new Date();
+      const mat=new Date(sr.maturity+'T00:00:00Z');
+      const months=Math.max(0,Math.round((mat-now)/(1000*60*60*24*30.44)));
+      monthsLeft=months+' hó';
+      if(sr.couponRate){
+        // Első jövőbeli kamatfizetés
+        let d=new Date((sr.nextCoupon||sr.maturity)+'T00:00:00Z');
+        while(d<=now){d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+3,d.getUTCDate()));}
+        let quarters=0;
+        let d2=new Date(d);
+        while(d2<=mat){quarters++;d2=new Date(Date.UTC(d2.getUTCFullYear(),d2.getUTCMonth()+3,d2.getUTCDate()));}
+        const qAmt=s.totalFace*couponRate/100/4;
+        futureInterest='+'+fmtM(quarters*qAmt);
+      }
+    }
+
     const detailRows=s.items.map(f=>`<tr class="detail-row" id="d-${rowId}-${f.id}">
       <td colspan="2" style="color:var(--text3)">${f.date}</td>
       <td class="r blurable" style="color:var(--text)">${fmt(f.faceValue)}</td>
@@ -1030,6 +1079,8 @@ function renderAllampapir(){
       <td class="r">${couponRate?couponRate+'%':'–'}</td>
       <td class="r pos blurable">${qCoupon?'+'+fmt(qCoupon):'–'}<div style="font-size:10px;color:var(--text3)">${nextCoupon!=='–'?nextCoupon:''}</div></td>
       <td class="r">${maturity}</td>
+      <td class="r" style="color:var(--text2);font-size:11px">${monthsLeft}</td>
+      <td class="r pos blurable" style="font-size:11px">${futureInterest}</td>
       <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
       <td style="white-space:nowrap" onclick="event.stopPropagation()">
         ${sr?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-fixmap-series','${s.seriesId}')" style="margin-right:4px">✎</button>`:''}
@@ -1064,12 +1115,14 @@ function renderAllampapir(){
       <td class="r blurable" style="color:var(--text)">${fmt(d.buyPrice)}</td>
       <td colspan="3" style="color:var(--green)">+${fmt(Math.round(d.faceValue-d.buyPrice))}</td>
     </tr>`).join('');
+    const daysLeft=Math.max(0,Math.round((new Date(s.maturity)-new Date())/(1000*60*60*24)));
     return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
       <td><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${s.name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.filter(d=>d.active).length} tétel</span></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
       <td class="r pos blurable">+${fmt(Math.round(expectedReturn))}</td>
       <td class="r">${s.maturity}</td>
+      <td class="r" style="font-size:11px;color:${daysLeft<=30?'var(--amber)':'var(--text2)'}">${daysLeft} nap</td>
       <td><span class="badge b-etf">aktív</span></td>
       <td style="white-space:nowrap" onclick="event.stopPropagation()">
         ${!isLegacy?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-dkj-series','${s.id}')" style="margin-right:4px">✎</button>`:`<button class="btn btn-ghost btn-sm" onclick="openModal('reassign-dkj','${s.id}')" style="margin-right:4px">✎</button>`}
@@ -2572,11 +2625,7 @@ function renderHistory(){
     return false;
   });
   const filtered=allDates;
-  const testDate='2026-03-01';
-  const r=calcPortfolioOnDate(testDate);
-  const inv=calcInvestedOnDate(testDate);
-  console.log('TEST 03-01: port:',Math.round(r?.total||0),'cash:',Math.round(r?.cash||0),'ap:',Math.round(r?.ap||0),'etf:',Math.round(r?.etf||0),'inv:',Math.round(inv));
-  console.log('FIXMAP items:', data.fixmap.map(f=>({date:f.date,face:f.faceValue,active:f.active,soldDate:f.soldDate})));
+
 
 
 
