@@ -70,6 +70,7 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 .cards-3{grid-template-columns:repeat(3,1fr)}
 .cards-2{grid-template-columns:repeat(2,1fr)}
 .cards-5{grid-template-columns:repeat(5,1fr)}
+.cards-6{grid-template-columns:repeat(6,1fr)}
 .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;transition:border-color .2s}
 .stat-card:hover{border-color:var(--border2)}
 .stat-label{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
@@ -191,6 +192,15 @@ input[type=range]::-webkit-slider-thumb:hover{
 }
 input[type=range]::-webkit-slider-runnable-track{
   height:4px;border-radius:2px;
+}
+
+/* STICKY TH */
+#vwceBody th, #wbitBody th,
+thead[style*="sticky"] th {
+  background:var(--bg2);
+}
+#vwceBody tr[style*="sticky"], #wbitBody tr[style*="sticky"] {
+  background:var(--bg3);
 }
 
 /* TABLE NOWRAP */
@@ -376,7 +386,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
     <!-- TBSZ -->
     <div id="page-tbsz" class="page">
-      <div class="card-row cards-5" id="tbszCards"></div>
+      <div class="card-row cards-6" id="tbszCards"></div>
 
       <div class="section-title">
         VWCE pozíciók
@@ -388,7 +398,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
       </div>
       <div class="panel" style="margin-top:0">
-        <div class="tbl-wrap" style="max-height:450px;overflow-y:auto"><table>
+        <div class="tbl-wrap" style="max-height:320px;overflow-y:auto;overflow-x:auto;background:var(--bg2);border-radius:0 0 8px 8px"><table>
           <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr id="vwce-thead"></tr></thead>
           <tbody id="vwceBody"></tbody>
         </table></div>
@@ -405,7 +415,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
       </div>
       <div class="panel" style="margin-top:0">
-        <div class="tbl-wrap" style="max-height:450px;overflow-y:auto"><table>
+        <div class="tbl-wrap" style="max-height:320px;overflow-y:auto;overflow-x:auto;background:var(--bg2);border-radius:0 0 8px 8px"><table>
           <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr id="wbit-thead"></tr></thead>
           <tbody id="wbitBody"></tbody>
         </table></div>
@@ -672,7 +682,7 @@ function renderDashboard(){
   // Összes befektetett tőke = befizetések + ETF vételek - kiutalások
   const totalInvested=data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
     -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
-    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate,0);
+    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.fee||0),0);
 
   document.getElementById('dashCards').innerHTML=`
     <div class="stat-card">
@@ -1168,12 +1178,14 @@ function renderTBSZ(){
   const vwceVal=liveVwce?liveVwce*vwceShares*liveFx:0;
   const wbitVal=liveWbit?liveWbit*wbitShares*liveFx:0;
 
+  const totalFees=data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+(t.fee||0),0);
   document.getElementById('tbszCards').innerHTML=`
     <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx?liveFx.toFixed(2)+' Ft':'–'} ${getFxChangeHtml()}</div><div class="stat-sub">${liveFx?'live':'betöltés...'}</div></div>
-    <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db'+(liveVwcePct!==null?' <span style="color:'+(liveVwcePct>=0?'var(--green)':'var(--red)')+'">'+(liveVwcePct>=0?'+':'')+liveVwcePct.toFixed(2)+'%</span>':''):'nincs live adat'}</div></div>
+    <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db'+(liveVwcePct!==null?' <span style="color:'+(liveVwcePct>=0?'var(--green)':'var(--red)')+'">'+(liveVwcePct>=0?'+':'')+liveVwcePct.toFixed(2)+'%</span>':''): 'nincs live adat'}</div></div>
     <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub blurable">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
-    <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db'+(liveWbitPct!==null?' <span style="color:'+(liveWbitPct>=0?'var(--green)':'var(--red)')+'">'+(liveWbitPct>=0?'+':'')+liveWbitPct.toFixed(2)+'% (BTC)</span>':''):'nincs live adat'}</div></div>
+    <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db'+(liveWbitPct!==null?' <span style="color:'+(liveWbitPct>=0?'var(--green)':'var(--red)')+'">'+(liveWbitPct>=0?'+':'')+liveWbitPct.toFixed(2)+'% (BTC)</span>':''): 'nincs live adat'}</div></div>
     <div class="stat-card"><div class="stat-label">WBIT aktuális érték</div><div class="stat-value blurable">${wbitVal>0?fmtM(wbitVal):'–'}</div><div class="stat-sub blurable">${wbitCost>0?'befektetett: '+fmtM(wbitCost):'–'}</div></div>
+    <div class="stat-card"><div class="stat-label">váltási díjak</div><div class="stat-value blurable">${fmtM(totalFees)}</div><div class="stat-sub">${data.etfTx.filter(t=>t.fee>0).length} tranzakció</div></div>
   `;
 
   renderETFTable('VWCE','vwceBody','vwceEmpty',liveVwce);
@@ -1246,8 +1258,8 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
   ];
   const theadEl=document.getElementById(ticker.toLowerCase()+'-thead');
   if(theadEl) theadEl.innerHTML=cols.map(c=>c.key?
-    `<th class="sortable ${c.r?'r':''} ${col===c.key?(dir===-1?'sort-desc':'sort-asc'):''}" onclick="sortETF('${ticker}','${c.key}')">${c.label}</th>`
-    :`<th></th>`
+    `<th class="sortable ${c.r?'r':''} ${col===c.key?(dir===-1?'sort-desc':'sort-asc'):''}" onclick="sortETF('${ticker}','${c.key}')" style="background:var(--bg2)">${c.label}</th>`
+    :`<th style="background:var(--bg2)"></th>`
   ).join('');
 
   const summaryRow=`<tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--green);font-weight:500;background:var(--bg3)">
@@ -2679,7 +2691,7 @@ function renderHistory(){
   // Live portfolio value for today
   const liveInvestedNow=data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
     -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
-    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate,0);
+    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.fee||0),0);
   const apValueNow=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
                   +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
   const etfEurNow=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
