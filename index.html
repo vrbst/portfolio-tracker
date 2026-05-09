@@ -60,7 +60,7 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 .tab.active{color:var(--green);border-bottom-color:var(--green)}
 
 /* CONTENT */
-.content{padding:20px 24px;max-width:1200px;margin:0 auto}
+.content{padding:20px 24px;max-width:1440px;margin:0 auto}
 .page{display:none}
 .page.active{display:block}
 
@@ -194,7 +194,7 @@ input[type=range]::-webkit-slider-runnable-track{
 }
 
 /* TABLE NOWRAP */
-#fixmapBody td, #dkjBody td{white-space:nowrap}
+#fixmapBody td, #dkjBody td, #vwceBody td, #wbitBody td{white-space:nowrap}
 
 /* SORTABLE HEADERS */
 th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
@@ -614,7 +614,7 @@ function etfCostBasis(ticker){
   }
   return buys.filter(b=>b.remaining>0).map(b=>({
     ...b, shares:b.remaining,
-    costHuf: b.remaining*b.priceEur*b.fxRate
+    costHuf: b.remaining*b.priceEur*b.fxRate+(b.fee||0)*(b.remaining/b.shares)
   }));
 }
 
@@ -1230,17 +1230,17 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
   // Render sortable header
   const cols=[
     {key:'date',label:'dátum',r:false},
-    {key:'costHuf',label:'befekt. Ft',r:true},
     {key:'shares',label:'db',r:true},
     {key:'priceEur',label:'vételi ár',r:true},
     {key:'fxRate',label:'HUF/EUR',r:true},
+    {key:'costHuf',label:'befekt. Ft',r:true},
+    {key:'valFt',label:'akt. Ft',r:true},
+    {key:'plFt',label:'P&L Ft',r:true},
+    {key:'plPct',label:'P&L Ft %',r:true},
     {key:'costEur',label:'befekt. EUR',r:true},
     {key:'valEur',label:'akt. EUR',r:true},
     {key:'plEur',label:'P&L EUR',r:true},
     {key:'plEurPct',label:'P&L EUR %',r:true},
-    {key:'valFt',label:'akt. Ft',r:true},
-    {key:'plFt',label:'P&L Ft',r:true},
-    {key:'plPct',label:'P&L Ft %',r:true},
     {key:'tbsz',label:'TBSZ',r:true},
     {key:null,label:'',r:false},
   ];
@@ -1252,17 +1252,17 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
 
   const summaryRow=`<tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--green);font-weight:500;background:var(--bg3)">
     <td style="font-size:11px;color:var(--text2)">összesítés</td>
-    <td class="r blurable">${fmtM(totCostHuf)}</td>
     <td class="r blurable">${totShares.toFixed(2)}</td>
     <td class="r blurable" style="font-size:11px"><div style="color:var(--text2)">∅ ${fmtEur(wavgPriceEur)}</div><div style="color:var(--text3);font-size:10px">∅ ${fmt(Math.round(wavgPriceEur*wavgFx))}</div></td>
-    <td class="r" style="font-size:11px;color:var(--text2)">∅ ${Math.round(wavgFx)}</td>
+    <td class="r" style="font-size:11px;color:var(--text2)">∅ ${wavgFx.toFixed(1)}</td>
+    <td class="r blurable">${fmtM(totCostHuf)}</td>
+    <td class="r blurable">${totValFt!==null?fmtM(totValFt):'–'}</td>
+    <td class="r blurable ${totPlFt===null?'':totPlFt>=0?'pos':'neg'}">${totPlFt!==null?fmtSign(totPlFt):'–'}</td>
+    <td class="r ${totPlPct===null?'':totPlPct>=0?'pos':'neg'}">${totPlPct!==null?fmtSignPct(totPlPct):'–'}</td>
     <td class="r blurable">${fmtEur(totCostEur,0)}</td>
     <td class="r blurable">${totValEur!==null?fmtEur(totValEur,0):'–'}</td>
     <td class="r blurable ${totPlEur===null?'':totPlEur>=0?'pos':'neg'}">${totPlEur!==null?(totPlEur>=0?'+':'')+fmtEur(Math.abs(totPlEur),0):'–'}</td>
     <td class="r ${totPlEurPct===null?'':totPlEurPct>=0?'pos':'neg'}">${totPlEurPct!==null?fmtSignPct(totPlEurPct):'–'}</td>
-    <td class="r blurable">${totValFt!==null?fmtM(totValFt):'–'}</td>
-    <td class="r blurable ${totPlFt===null?'':totPlFt>=0?'pos':'neg'}">${totPlFt!==null?fmtSign(totPlFt):'–'}</td>
-    <td class="r ${totPlPct===null?'':totPlPct>=0?'pos':'neg'}">${totPlPct!==null?fmtSignPct(totPlPct):'–'}</td>
     <td class="r">–</td>
     <td></td>
   </tr>`;
@@ -1277,19 +1277,22 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
     const plEurPct=plEur!==null?plEur/costEur*100:null;
     return `<tr>
       <td>${b.date}</td>
-      <td class="r blurable">${fmtM(b.costHuf)}</td>
       <td class="r blurable">${b.shares.toFixed(2)}</td>
       <td class="r blurable"><div>${fmtEur(b.priceEur)}</div><div style="color:var(--text3);font-size:10px">${fmt(Math.round(b.priceEur*b.fxRate))}</div></td>
-      <td class="r">${Math.round(b.fxRate)}</td>
+      <td class="r"><div>${b.fxRate.toFixed(1)}</div><div style="font-size:10px;color:${(liveFx||395)>=b.fxRate?'var(--green)':'var(--red)'};">${(((liveFx||395)-b.fxRate)/b.fxRate*100).toFixed(1)}%</div></td>
+      <td class="r blurable">${fmtM(b.costHuf)}</td>
+      <td class="r blurable">${currentValFt!==null?fmtM(currentValFt):'–'}</td>
+      <td class="r blurable ${plFt===null?'':plFt>=0?'pos':'neg'}">${plFt!==null?fmtSign(plFt):'–'}</td>
+      <td class="r ${plPct===null?'':plPct>=0?'pos':'neg'}">${plPct!==null?fmtSignPct(plPct):'–'}</td>
       <td class="r blurable">${fmtEur(costEur,0)}</td>
       <td class="r blurable">${currentValEur!==null?fmtEur(currentValEur,0):'–'}</td>
       <td class="r blurable ${plEur===null?'':plEur>=0?'pos':'neg'}">${plEur!==null?(plEur>=0?'+':'')+fmtEur(Math.abs(plEur),0):'–'}</td>
       <td class="r ${plEurPct===null?'':plEurPct>=0?'pos':'neg'}">${plEurPct!==null?fmtSignPct(plEurPct):'–'}</td>
-      <td class="r blurable">${currentValFt!==null?fmtM(currentValFt):'–'}</td>
-      <td class="r blurable ${plFt===null?'':plFt>=0?'pos':'neg'}">${plFt!==null?fmtSign(plFt):'–'}</td>
-      <td class="r ${plPct===null?'':plPct>=0?'pos':'neg'}">${plPct!==null?fmtSignPct(plPct):'–'}</td>
       <td class="r">${b.tbszYear||'–'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteEtfTx('${b.id}')">×</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="editTx('etf','${b.id}')">✎</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEtfTx('${b.id}')">×</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -1596,9 +1599,13 @@ function openModal(type, param){
       <div class="form-group"><div class="form-label">össz. vételár (Ft)</div>
         <input class="form-input" id="f-huf" type="number" step="1" placeholder="pl. 5 600 000" oninput="recalcETFModalFromHuf()">
       </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">váltási díj (Ft)</div>
+        <input class="form-input" id="f-fee" type="number" step="1" placeholder="0" value="0" oninput="onFeeChange(false)">
+      </div>
+      <div class="form-group"></div></div>
       <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between">
-        <span>EUR/HUF: <input id="f-fx" type="number" step="0.01" value="${Math.round(liveFx)}" oninput="recalcETFModal()" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;padding:0 2px"></span>
-        <span>Befektetett: <strong id="calcHuf" style="color:var(--text)">–</strong></span>
+        <span>EUR/HUF (díj nélkül): <input id="f-fx" type="number" step="0.01" value="${Math.round(liveFx||395)}" oninput="recalcETFModal()" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;padding:0 2px"></span>
+        <span>Tényleges fx: <strong id="calcFxReal" style="color:var(--amber)">–</strong> | Befektetett: <strong id="calcHuf" style="color:var(--text)">–</strong></span>
       </div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div>
         <input class="form-input" id="f-note" placeholder="opcionális">
@@ -1971,18 +1978,37 @@ function submitDKJ(){
   data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel – '+ds.name});
   closeModal(); renderAll(); saveData(); toast('DKJ vétel rögzítve');
 }
+function onFeeChange(isEdit){
+  const prefix=isEdit?'e':'f';
+  const hufEl=document.getElementById(prefix+'-huf');
+  if(hufEl&&hufEl.value){
+    isEdit?recalcEditETFFromHuf():recalcETFModalFromHuf();
+  } else {
+    isEdit?recalcEditETF():recalcETFModal();
+  }
+}
+
 function recalcETFModal(){
   const s=parseFloat(document.getElementById('f-shares')?.value)||0;
   const p=parseFloat(document.getElementById('f-price')?.value)||0;
-  const fx=parseFloat(document.getElementById('f-fx')?.value)||liveFx;
+  const fx=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
+  const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
   const hufEl=document.getElementById('f-huf');
+  const hufManual=parseFloat(hufEl?.value)||0;
   const calcEl=document.getElementById('calcHuf');
+  const fxRealEl=document.getElementById('calcFxReal');
   if(s&&p&&fx){
-    const huf=Math.round(s*p*fx);
-    if(hufEl&&!hufEl.matches(':focus'))hufEl.value=huf;
-    if(calcEl)calcEl.textContent=fmt(huf);
+    // Teljes kifizetés = ETF ár + díj
+    const totalHuf=Math.round(s*p*fx)+fee;
+    // Ha nincs kézzel megadott összeg, frissítjük
+    if(!hufManual&&hufEl)hufEl.value=totalHuf;
+    if(calcEl)calcEl.textContent=fmt(hufManual||totalHuf);
+    // Tényleges fx = (kézzel megadott - díj) / (db × EUR), vagy alap fx
+    const fxReal=hufManual?((hufManual-fee)/(s*p)):fx;
+    if(fxRealEl)fxRealEl.textContent=fxReal.toFixed(2);
   } else {
     if(calcEl)calcEl.textContent='–';
+    if(fxRealEl)fxRealEl.textContent='–';
   }
 }
 
@@ -1990,11 +2016,15 @@ function recalcETFModalFromHuf(){
   const s=parseFloat(document.getElementById('f-shares')?.value)||0;
   const p=parseFloat(document.getElementById('f-price')?.value)||0;
   const huf=parseFloat(document.getElementById('f-huf')?.value)||0;
+  const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
   const fxEl=document.getElementById('f-fx');
   const calcEl=document.getElementById('calcHuf');
+  const fxRealEl=document.getElementById('calcFxReal');
   if(huf&&s&&p){
-    const fx=huf/s/p;
-    if(fxEl&&!fxEl.matches(':focus'))fxEl.value=fx.toFixed(2);
+    const fxReal=(huf-fee)/(s*p); // tényleges fx díj nélkül
+    const fxBase=(huf-fee)/(s*p); // alap fx díj nélkül
+    if(fxEl&&!fxEl.matches(':focus'))fxEl.value=fxBase.toFixed(2);
+    if(fxRealEl)fxRealEl.textContent=fxReal.toFixed(2);
   }
   if(calcEl&&huf)calcEl.textContent=fmt(Math.round(huf));
 }
@@ -2004,12 +2034,15 @@ function submitETFBuy(ticker){
   const shares=parseFloat(document.getElementById('f-shares').value);
   const priceEur=parseFloat(document.getElementById('f-price').value);
   const hufInput=parseFloat(document.getElementById('f-huf')?.value)||0;
-  const fxRate=hufInput&&shares&&priceEur?hufInput/shares/priceEur:(parseFloat(document.getElementById('f-fx')?.value)||liveFx);
+  const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
   const tbszYear=parseInt(document.getElementById('f-tbsz').value)||new Date().getFullYear();
   const note=document.getElementById('f-note').value;
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
-  const huf=hufInput||Math.round(shares*priceEur*fxRate);
-  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,tbszYear,note});
+  // fxRate = alap árfolyam díj nélkül (parseFloat(f-fx))
+  const fxBase=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
+  // fxRate = tényleges alap árfolyam = (teljes Ft - díj) / (db × EUR)
+  const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
+  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,tbszYear,note});
   closeModal(); renderAll(); saveData(); toast(ticker+' vétel rögzítve');
 }
 function submitETFSell(ticker){
@@ -2297,9 +2330,12 @@ function editTx(kind, id){
       <div class="form-group"><div class="form-label">össz. vételár (Ft)</div>
         <input class="form-input" id="e-huf" type="number" value="${calcHuf}" oninput="recalcEditETFFromHuf()">
       </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">váltási díj (Ft)</div>
+        <input class="form-input" id="e-fee" type="number" step="1" value="${t.fee||0}" oninput="onFeeChange(true)">
+      </div><div class="form-group"></div></div>
       <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between">
-        <span>EUR/HUF: <input id="e-fx" type="number" step="0.01" value="${t.fxRate.toFixed(2)}" oninput="recalcEditETF()" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;padding:0 2px"></span>
-        <span>Összeg: <strong id="editCalcHuf" style="color:var(--text)">${fmt(calcHuf)}</strong></span>
+        <span>EUR/HUF (díj nélkül): <input id="e-fx" type="number" step="0.01" value="${t.fxRate.toFixed(2)}" oninput="recalcEditETF()" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;padding:0 2px"></span>
+        <span>Tényleges fx: <strong id="editCalcFxReal" style="color:var(--amber)">–</strong> | Összeg: <strong id="editCalcHuf" style="color:var(--text)">${fmt(calcHuf)}</strong></span>
       </div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div>
         <input class="form-input" id="e-note" value="${t.note||''}">
@@ -2314,13 +2350,18 @@ function editTx(kind, id){
 function recalcEditETF(){
   const s=parseFloat(document.getElementById('e-shares')?.value)||0;
   const p=parseFloat(document.getElementById('e-price')?.value)||0;
-  const fx=parseFloat(document.getElementById('e-fx')?.value)||liveFx;
+  const fx=parseFloat(document.getElementById('e-fx')?.value)||(liveFx||395);
+  const fee=parseFloat(document.getElementById('e-fee')?.value)||0;
   const hufEl=document.getElementById('e-huf');
+  const hufManual=parseFloat(hufEl?.value)||0;
   const calcEl=document.getElementById('editCalcHuf');
+  const fxRealEl=document.getElementById('editCalcFxReal');
   if(s&&p&&fx){
-    const huf=Math.round(s*p*fx);
-    if(hufEl&&!hufEl.matches(':focus'))hufEl.value=huf;
-    if(calcEl)calcEl.textContent=fmt(huf);
+    const totalHuf=Math.round(s*p*fx)+fee;
+    if(!hufManual&&hufEl)hufEl.value=totalHuf;
+    if(calcEl)calcEl.textContent=fmt(hufManual||totalHuf);
+    const fxReal=hufManual?((hufManual-fee)/(s*p)):fx;
+    if(fxRealEl)fxRealEl.textContent=fxReal.toFixed(2);
   }
 }
 
@@ -2328,11 +2369,14 @@ function recalcEditETFFromHuf(){
   const s=parseFloat(document.getElementById('e-shares')?.value)||0;
   const p=parseFloat(document.getElementById('e-price')?.value)||0;
   const huf=parseFloat(document.getElementById('e-huf')?.value)||0;
+  const fee=parseFloat(document.getElementById('e-fee')?.value)||0;
   const fxEl=document.getElementById('e-fx');
   const calcEl=document.getElementById('editCalcHuf');
+  const fxRealEl=document.getElementById('editCalcFxReal');
   if(huf&&s&&p){
-    const fx=huf/s/p;
-    if(fxEl&&!fxEl.matches(':focus'))fxEl.value=fx.toFixed(2);
+    const fxReal=(huf-fee)/(s*p);
+    if(fxEl&&!fxEl.matches(':focus'))fxEl.value=fxReal.toFixed(2);
+    if(fxRealEl)fxRealEl.textContent=fxReal.toFixed(2);
   }
   if(calcEl&&huf)calcEl.textContent=fmt(Math.round(huf));
 }
@@ -2383,8 +2427,10 @@ function saveEditETF(id){
   t.date=document.getElementById('e-date').value;
   t.shares=parseFloat(document.getElementById('e-shares').value)||t.shares;
   t.priceEur=parseFloat(document.getElementById('e-price').value)||t.priceEur;
+  t.fee=parseFloat(document.getElementById('e-fee')?.value)||0;
   const hufInput=parseFloat(document.getElementById('e-huf')?.value)||0;
-  t.fxRate=hufInput&&t.shares&&t.priceEur?hufInput/t.shares/t.priceEur:(parseFloat(document.getElementById('e-fx')?.value)||t.fxRate);
+  const fxBase=parseFloat(document.getElementById('e-fx')?.value)||t.fxRate;
+  t.fxRate=hufInput&&t.shares&&t.priceEur?(hufInput-t.fee)/(t.shares*t.priceEur):fxBase;
   t.tbszYear=parseInt(document.getElementById('e-tbsz').value)||t.tbszYear;
   t.note=document.getElementById('e-note').value;
   closeModal(); renderAll(); saveData(); toast('Mentve');
