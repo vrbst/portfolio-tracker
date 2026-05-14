@@ -705,7 +705,9 @@ async function loadOrCreateGist(){
     if(!data.fixmap)data.fixmap=[];
     if(!data.dkj)data.dkj=[];
     if(!data.etfTx)data.etfTx=[];
-    if(data.anthropicKey){anthropicKey=data.anthropicKey;console.log('API key loaded:',anthropicKey.slice(0,15)+'...');}
+    // API key NOT stored in Gist - use localStorage instead
+    const lsKey=localStorage.getItem('anthropic_api_key');
+    if(lsKey){anthropicKey=lsKey;console.log('API key loaded from localStorage:',lsKey.slice(0,15)+'...');}
   }else{
     data=JSON.parse(JSON.stringify(DEFAULT_DATA));
     const r2=await fetch('https://api.github.com/gists',{method:'POST',headers:{Authorization:'token '+token,'Content-Type':'application/json'},body:JSON.stringify({description:'Portfolio Tracker v2',public:false,files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}})});
@@ -3139,8 +3141,8 @@ function saveApiKey() {
   const val = inp.value.trim();
   // Accept any API key format
   anthropicKey = val;
-  data.anthropicKey = anthropicKey;
-  saveData();
+  localStorage.setItem('anthropic_api_key', val);
+  // Do NOT save to Gist - keep key local only
   updateApiKeyStatus();
   document.getElementById('apiKeySection').style.display = 'none';
   toast('API kulcs elmentve!');
@@ -3212,16 +3214,13 @@ async function callAI(userMsg, extra) {
     return;
   }
   try {
-    // Worker-en keresztul (CORS miatt)
+    // Worker-en keresztul (CORS miatt) - kulcs URL paramban
     const WORKER = 'https://cold-truth-4d27.vrbst405.workers.dev/';
     const apiUrl = 'https://api.anthropic.com/v1/messages';
-    const r = await fetch(WORKER+'?url='+encodeURIComponent(apiUrl), {
+    const workerUrl = WORKER+'?url='+encodeURIComponent(apiUrl)+'&apikey='+encodeURIComponent(anthropicKey);
+    const r = await fetch(workerUrl, {
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'x-api-key':anthropicKey,
-        'anthropic-version':'2023-06-01'
-      },
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:aiHistory})
     });
     const d = await r.json();
