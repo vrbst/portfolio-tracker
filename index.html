@@ -8,10 +8,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 :root {
-  --bg:#0e0f11;--bg2:#161719;--bg3:#1e2023;--bg4:#26282c;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
-  --text:#e8e6e0;--text2:#8a8880;--text3:#55534f;
-  --green:#4ade9a;--green-dim:rgba(74,222,154,0.12);
+  --bg:#13151c;--bg2:#0d0e12;--bg3:#1a1d26;--bg4:#1f2230;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);
+  --text:#e2e4eb;--text2:#7b8196;--text3:#4a4f63;
+  --green:#3dd68c;--green-dim:rgba(61,214,140,0.12);
   --red:#f87171;--red-dim:rgba(248,113,113,0.12);
   --amber:#fbbf24;--amber-dim:rgba(251,191,36,0.12);
   --blue:#60a5fa;--blue-dim:rgba(96,165,250,0.12);
@@ -40,8 +40,8 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 #app{display:none;min-height:100vh}
 
 /* HEADER */
-.header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(14,15,17,0.95);backdrop-filter:blur(12px);z-index:100}
-.header-logo{font-family:var(--font-head);font-size:17px;font-weight:700;letter-spacing:-.3px}
+.header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(19,21,28,0.97);backdrop-filter:blur(12px);z-index:100}
+.header-logo{font-family:var(--font-head);font-size:18px;font-weight:700;letter-spacing:-.5px}
 .header-logo span{color:var(--green)}
 .header-right{display:flex;align-items:center;gap:8px}
 .hbtn{padding:6px 11px;background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:5px}
@@ -53,16 +53,16 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* SIDEBAR */
-.sidebar{width:200px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:100%;overflow-y:auto;position:sticky;top:52px;align-self:flex-start;height:calc(100vh - 52px)}
-.sidebar-nav{flex:1;padding:8px 0}
-.nav-section{padding:8px 16px 4px;font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;border-left:2px solid transparent;background:none;border-top:none;border-right:none;border-bottom:none;width:100%;text-align:left;font-family:var(--font-mono);letter-spacing:.02em}
-.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.03)}
-.nav-item.active{color:var(--green);border-left-color:var(--green);background:rgba(74,222,154,0.05)}
+.sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:100%;overflow-y:auto;position:sticky;top:52px;align-self:flex-start;height:calc(100vh - 52px)}
+.sidebar-nav{flex:1;padding:12px 8px}
+.nav-section{padding:10px 12px 4px;font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;border-radius:8px;background:none;border:none;width:100%;text-align:left;font-family:var(--font-mono);letter-spacing:.02em;margin-bottom:2px}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.05)}
+.nav-item.active{color:var(--green);background:rgba(74,222,154,0.1);font-weight:500}
 .nav-item .ni{font-size:13px;width:16px;text-align:center;opacity:.7}
 
 /* CONTENT */
-.content{padding:20px 24px;flex:1;min-width:0}
+.content{padding:24px 28px;flex:1;min-width:0}
 .page{display:none}
 .page.active{display:block}
 
@@ -242,6 +242,19 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .live-pill.est{border-color:var(--amber);color:var(--amber)}
 .live-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
 
+/* INSTRUMENT AVATAR */
+.ins-avatar{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:12px;font-weight:700;flex-shrink:0;letter-spacing:-.3px}
+.ins-avatar-vwce{background:rgba(61,214,140,0.12);color:var(--green)}
+.ins-avatar-wbit{background:rgba(251,191,36,0.12);color:var(--amber)}
+.ins-avatar-ap{background:rgba(96,165,250,0.12);color:var(--blue)}
+.ins-avatar-dkj{background:rgba(167,139,250,0.12);color:var(--purple)}
+.ins-avatar-cash{background:rgba(255,255,255,0.06);color:var(--text2)}
+
+/* RANGE BUTTONS (dashboard chart) */
+.range-btn{padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .15s;letter-spacing:.03em}
+.range-btn:hover{border-color:var(--border2);color:var(--text2)}
+.range-btn.active{border-color:var(--green);color:var(--green);background:rgba(61,214,140,0.07)}
+
 /* EMPTY STATE */
 .empty{text-align:center;padding:32px;color:var(--text3);font-size:12px}
 
@@ -303,14 +316,13 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   <!-- SIDEBAR -->
   <div class="sidebar">
     <nav class="sidebar-nav">
-      <div class="nav-section">áttekintés</div>
+      <div class="nav-section" style="margin-top:4px">áttekintés</div>
       <button class="nav-item active" onclick="showTab('dashboard',this)"><span class="ni">◈</span>dashboard</button>
-      <button class="nav-item" onclick="showTab('history',this)"><span class="ni">↗</span>historikus</button>
       <button class="nav-item" onclick="showTab('tranzakciok',this)"><span class="ni">≡</span>tranzakciók</button>
       <button class="nav-item" onclick="showTab('ai',this)"><span class="ni">✦</span>AI elemzés</button>
       <div class="nav-section">portfóliók</div>
-      <button class="nav-item" onclick="showTab('kincstar',this)"><span class="ni">🏛</span>állampapír</button>
-      <button class="nav-item" onclick="showTab('tbsz',this)"><span class="ni">📈</span>tbsz</button>
+      <button class="nav-item" onclick="showTab('kincstar',this)"><span class="ni" style="font-size:8px;opacity:.5">●</span>állampapír</button>
+      <button class="nav-item" onclick="showTab('tbsz',this)"><span class="ni" style="font-size:8px;opacity:.5">●</span>tbsz</button>
     </nav>
   </div>
 
@@ -328,13 +340,20 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
           <!-- Nagy érték + mini chart -->
           <div class="panel">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
               <div>
-                <div style="font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">teljes portfólió</div>
-                <div class="blurable" id="dashTotalBig" style="font-family:var(--font-head);font-size:40px;font-weight:700;letter-spacing:-1px;line-height:1">–</div>
-                <div class="blurable" id="dashTotalSub" style="font-size:13px;color:var(--text2);margin-top:6px">–</div>
+                <div style="font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">portfóliók</div>
+                <div class="blurable" id="dashTotalBig" style="font-family:var(--font-head);font-size:52px;font-weight:700;letter-spacing:-2px;line-height:1">–</div>
+                <div class="blurable" id="dashTotalSub" style="font-size:13px;color:var(--text2);margin-top:8px">–</div>
               </div>
-    
+              <!-- Időszak szűrő -->
+              <div style="display:flex;gap:4px;align-self:flex-start;margin-top:4px">
+                <button class="range-btn active" onclick="setDashRange('ytd',this)">YTD</button>
+                <button class="range-btn" onclick="setDashRange('90',this)">3 hó</button>
+                <button class="range-btn" onclick="setDashRange('180',this)">6 hó</button>
+                <button class="range-btn" onclick="setDashRange('365',this)">1 év</button>
+                <button class="range-btn" onclick="setDashRange('all',this)">Max</button>
+              </div>
             </div>
             <div class="chart-wrap" style="height:200px">
               <canvas id="dashMiniChart" class="blurable" role="img" aria-label="Portfólió chart"></canvas>
@@ -350,7 +369,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
 
         <!-- Jobb oszlop: kártyák + donut -->
-        <div style="width:380px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <div style="width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
 
           <!-- Befektetett tőke kártya -->
           <div id="dashCards" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -593,28 +612,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       </div>
     </div>
 
-    <!-- HISTORIKUS -->
-    <div id="page-history" class="page">
-      <div class="card-row cards-3" id="histCards" style="margin-bottom:14px"></div>
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">befektetett tőke vs. portfólió érték</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select class="form-select" id="histRange" onchange="renderHistory()" style="padding:5px 10px;font-size:11px;width:auto">
-              <option value="all">teljes időszak</option>
-              <option value="30">1 hónap</option>
-              <option value="90">3 hónap</option>
-              <option value="180">6 hónap</option>
-              <option value="365">1 év</option>
-            </select>
-            <button class="btn btn-primary btn-sm" id="histLoadBtn" onclick="loadHistoricData()">frissítés</button>
-          </div>
-        </div>
-        <div id="histStatus" style="font-size:12px;color:var(--text2);margin-bottom:10px;display:none"></div>
-        <div class="chart-wrap" style="height:380px"><canvas id="histChart2" class="blurable" role="img" aria-label="Befektetett vs portfólió"></canvas></div>
-      </div>
 
-    </div>
 
   </div>
 </div>
@@ -735,7 +733,6 @@ function showApp(){
   renderAll();
   fetchLive();
   startAutoRefresh();
-  // Háttérben betöltjük a historikus adatokat
   loadHistoricData(true);
 }
 
@@ -747,10 +744,9 @@ function showTab(name,el){
   document.querySelectorAll('.nav-item').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   if(el)el.classList.add('active');
-  if(name==='history') loadHistoricData();
   if(name==='kincstar') setTimeout(renderCashflowChart, 50);
   if(name==='ai') setTimeout(updateApiKeyStatus, 50);
-  if(name==='dashboard'&&histData) setTimeout(renderDashMiniChart, 50);
+  if(name==='dashboard') setTimeout(renderDashMiniChart, 50);
 }
 
 // ═══════════════════════════════════════════════
@@ -815,8 +811,6 @@ function renderAll(){
   renderTBSZ();
   renderTranzakciok();
   renderTBSZInstruments();
-  if(document.getElementById('page-history')?.classList.contains('active'))renderHistory();
-  if(histData)setTimeout(updatePortfolioChange,0);
   if(blurOn)setTimeout(applyBlur,50);
 }
 
@@ -849,10 +843,18 @@ function renderDashboard(){
   const bigEl=document.getElementById('dashTotalBig');
   const subEl=document.getElementById('dashTotalSub');
   if(bigEl)bigEl.innerHTML='<span class="blurable">'+fmt(Math.round(total))+'</span>';
-  if(subEl)subEl.innerHTML='<span class="blurable">≈ '+fmtEur(totalEur)+'</span>';
+  
+  // P&L pill Growy-stílusban
+  const diff=total-totalInvested;
+  const pct=totalInvested>0?diff/totalInvested*100:0;
+  const pillCol=diff>=0?'var(--green)':'var(--red)';
+  const pillBg=diff>=0?'rgba(61,214,140,0.1)':'rgba(248,113,113,0.1)';
+  const pillSign=diff>=0?'+':'';
+  const pillHtml=totalInvested>0?`<span class="blurable" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;background:${pillBg};color:${pillCol};font-size:12px;font-weight:500;margin-left:10px;vertical-align:middle">${pillSign}${pct.toFixed(2)}% (${pillSign}${fmtM(diff)})</span>`:'';
+  
+  if(subEl)subEl.innerHTML=`<span class="blurable">≈ ${fmtEur(totalEur)}</span>${pillHtml}`;
 
   document.getElementById('dashCards').innerHTML=`
-    <span id="portfolioChgFt" style="display:none"></span><span id="portfolioChgEur" style="display:none"></span>
     <div class="stat-card">
       <div class="stat-label">befektetett tőke</div>
       <div class="stat-value blurable">${fmtM(totalInvested)}</div>
@@ -869,6 +871,7 @@ function renderDashboard(){
   if(ptl)ptl.textContent=fmtM(cb+apValue+tbszVal);
   renderUpcoming();
   renderCashflowChart();
+  renderDashMiniChart();
   if(blurOn)applyBlur();
   renderTBSZInstruments();
   if(tbszSelectedTicker) renderTBSZDetail(tbszSelectedTicker);
@@ -1241,7 +1244,7 @@ function renderAllampapir(){
       <td colspan="4" style="color:var(--text3)">${f.active?'aktív':'lezárt'}</td>
     </tr>`).join('');
     return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
-      <td><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></td>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="ins-avatar ins-avatar-ap">FM</div><div><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></div></div></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
       <td class="r">${couponRate?couponRate+'%':'–'}</td>
@@ -1285,7 +1288,7 @@ function renderAllampapir(){
     </tr>`).join('');
     const daysLeft=Math.max(0,Math.round((new Date(s.maturity)-new Date())/(1000*60*60*24)));
     return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
-      <td><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${s.name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.filter(d=>d.active).length} tétel</span></td>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="ins-avatar ins-avatar-dkj">DK</div><div><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${s.name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.filter(d=>d.active).length} tétel</span></div></div></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
       <td class="r pos blurable">+${fmt(Math.round(expectedReturn))}</td>
@@ -1362,10 +1365,16 @@ function renderTBSZInstruments() {
     const valEur = ins.val / fx;
     const plEur = valEur - costEur;
     const plEurPct = costEur > 0 ? plEur/costEur*100 : 0;
+    const avatarClass = ins.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit';
     return `<tr onclick="selectInstrument('${ins.ticker}')" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <td style="padding:14px 16px;border-bottom:1px solid var(--border)">
-        <div style="font-family:var(--font-head);font-size:14px;font-weight:600">${ins.ticker}</div>
-        <div style="font-size:11px;color:var(--text2)">${ins.name}</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="ins-avatar ${avatarClass}">${ins.ticker.slice(0,2)}</div>
+          <div>
+            <div style="font-family:var(--font-head);font-size:14px;font-weight:600">${ins.ticker}</div>
+            <div style="font-size:11px;color:var(--text2)">${ins.name}</div>
+          </div>
+        </div>
       </td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.shares.toFixed(2)} db</td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">
@@ -2324,6 +2333,210 @@ function submitETFSell(ticker){
 }
 
 // ═══════════════════════════════════════════════
+// DASHBOARD MINI CHART
+// ═══════════════════════════════════════════════
+let dashRange = 'ytd';
+
+function setDashRange(range, btn){
+  dashRange = range;
+  document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderDashMiniChart();
+}
+
+function renderDashMiniChart(){
+  const ctx = document.getElementById('dashMiniChart');
+  if(!ctx) return;
+  if(!histData) return; // vár amíg a historikus adatok betöltődnek
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const firstTx = getFirstTransactionDate();
+
+  let startDate;
+  if(dashRange==='ytd'){
+    startDate = new Date().getFullYear()+'-01-01';
+  } else if(dashRange==='all'){
+    startDate = firstTx;
+  } else {
+    const d = new Date(); d.setDate(d.getDate()-parseInt(dashRange));
+    startDate = d.toISOString().split('T')[0];
+  }
+  if(startDate < firstTx) startDate = firstTx;
+
+  const rangeMs = new Date(todayStr)-new Date(startDate);
+  const days = rangeMs/(1000*60*60*24);
+  const step = days<=90?1:days<=365?3:7;
+  const dates=[];
+  let d=new Date(startDate);
+  while(d<=new Date(todayStr)){dates.push(d.toISOString().split('T')[0]);d.setDate(d.getDate()+step);}
+  if(dates[dates.length-1]!==todayStr) dates.push(todayStr);
+
+  const points = dates.map(date=>{
+    const r = calcPortfolioOnDate(date);
+    return r&&r.total>0?{date,val:Math.round(r.total)}:null;
+  }).filter(Boolean);
+
+  if(points.length < 2) return;
+
+  const labels = points.map(p=>p.date);
+  const vals = points.map(p=>p.val);
+  const first = vals[0], last = vals[vals.length-1];
+  const isUp = last >= first;
+  const lineCol = isUp?'rgba(74,222,154,1)':'rgba(248,113,113,1)';
+
+  const canvasCtx = ctx.getContext('2d');
+  const gradient = canvasCtx.createLinearGradient(0,0,0,200);
+  if(isUp){
+    gradient.addColorStop(0,'rgba(74,222,154,0.18)');
+    gradient.addColorStop(0.5,'rgba(74,222,154,0.05)');
+    gradient.addColorStop(1,'rgba(74,222,154,0)');
+  } else {
+    gradient.addColorStop(0,'rgba(248,113,113,0.18)');
+    gradient.addColorStop(0.5,'rgba(248,113,113,0.05)');
+    gradient.addColorStop(1,'rgba(248,113,113,0)');
+  }
+
+  if(charts['dashMini']) charts['dashMini'].destroy();
+  charts['dashMini'] = new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[{
+      data:vals,
+      borderColor:lineCol,
+      backgroundColor:gradient,
+      borderWidth:1.5,
+      fill:true,
+      tension:0.4,
+      pointRadius:0,
+      pointHoverRadius:4,
+      pointHoverBackgroundColor:lineCol,
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{
+        callbacks:{
+          title:ctx=>ctx[0].label,
+          label:ctx=>blurOn?'  ···':'  '+fmtM(ctx.raw)
+        },
+        displayColors:false, padding:10,
+      }},
+      scales:{
+        x:{display:true,ticks:{color:'rgba(255,255,255,0.18)',font:{size:10},maxTicksLimit:6,maxRotation:0},grid:{display:false},border:{display:false}},
+        y:{display:false,grace:'8%'}
+      },
+      interaction:{mode:'index',intersect:false}
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
+// HISTORIKUS ADATOK (dashboard charthoz)
+// ═══════════════════════════════════════════════
+let histData=null;
+
+function getFirstTransactionDate(){
+  const dates=[];
+  data.cashTx.forEach(t=>dates.push(t.date));
+  data.fixmap.forEach(f=>dates.push(f.date));
+  data.dkj.forEach(d=>dates.push(d.date));
+  data.etfTx.forEach(t=>dates.push(t.date));
+  return dates.sort()[0]||new Date().toISOString().split('T')[0];
+}
+
+function interpolate(prices, date){
+  if(!prices||typeof prices!=='object')return null;
+  const sorted=Object.keys(prices).sort();
+  if(!sorted.length)return null;
+  let last=null;
+  for(const d of sorted){if(d<=date)last=prices[d];else break;}
+  return last;
+}
+
+async function fetchHistoricalPrices(symbol, startDate){
+  const start=Math.floor(new Date(startDate).getTime()/1000);
+  const end=Math.floor(Date.now()/1000);
+  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${start}&period2=${end}`;
+  const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
+  if(!r.ok)return null;
+  const d=await r.json();
+  const result=d?.chart?.result?.[0];
+  if(!result)return null;
+  const timestamps=result.timestamp||[];
+  const closes=result.indicators?.adjclose?.[0]?.adjclose||result.indicators?.quote?.[0]?.close||[];
+  const prices={};
+  timestamps.forEach((ts,i)=>{
+    if(closes[i]){prices[new Date(ts*1000).toISOString().split('T')[0]]=closes[i];}
+  });
+  return prices;
+}
+
+async function fetchHistoricalFX(startDate){
+  const end=new Date().toISOString().split('T')[0];
+  const url=`https://api.frankfurter.app/${startDate}..${end}?from=EUR&to=HUF`;
+  const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
+  if(!r.ok)return null;
+  const d=await r.json();
+  const rates={};
+  Object.entries(d.rates||{}).forEach(([date,r])=>{rates[date]=r.HUF;});
+  return rates;
+}
+
+async function loadHistoricData(silent=false){
+  const firstDate=getFirstTransactionDate();
+  const [vwcePrices, wbitPrices, fxPrices]=await Promise.all([
+    fetchHistoricalPrices('VWCE.DE', firstDate),
+    fetchHistoricalPrices('WBIT.DE', firstDate),
+    fetchHistoricalFX(firstDate),
+  ]);
+  if(!vwcePrices&&!fxPrices)return;
+  histData={
+    vwcePrices:vwcePrices||{},
+    wbitPrices:wbitPrices||{},
+    fxPrices:fxPrices||{},
+    firstDate
+  };
+  renderDashMiniChart();
+}
+
+function calcPortfolioOnDate(date){
+  let cash=0;
+  data.cashTx.forEach(t=>{
+    if(t.date>date)return;
+    if(['deposit','coupon','expire','sell'].includes(t.type))cash+=t.amount;
+    if(['withdraw','buy'].includes(t.type))cash-=t.amount;
+  });
+  let ap=0;
+  const fmSellDates=data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP')).map(t=>t.date).sort();
+  data.fixmap.forEach(f=>{
+    if(f.date>date)return;
+    if(f.active){ap+=f.faceValue;return;}
+    if(f.soldDate){if(f.soldDate>date)ap+=f.faceValue;return;}
+    if((fmSellDates[0]||'9999-99-99')>date)ap+=f.faceValue;
+  });
+  const dkjSellMap={};
+  data.cashTx.filter(t=>['sell','expire'].includes(t.type)&&t.note&&t.note.includes('DKJ')).forEach(t=>{
+    const m=t.note.match(/D(\d{6})/);
+    if(m){const mat='20'+m[1].slice(0,2)+'-'+m[1].slice(2,4)+'-'+m[1].slice(4,6);if(!dkjSellMap[mat]||t.date<dkjSellMap[mat])dkjSellMap[mat]=t.date;}
+  });
+  data.dkj.forEach(d=>{
+    if(d.date>date)return;
+    if(d.active){ap+=d.faceValue;return;}
+    if(d.soldDate){if(d.soldDate>date)ap+=d.faceValue;return;}
+    const inferredSell=dkjSellMap[d.maturity];
+    if(!inferredSell||inferredSell>date)ap+=d.faceValue;
+  });
+  const etfHoldings={};
+  data.etfTx.filter(t=>t.date<=date).forEach(t=>{
+    if(!etfHoldings[t.ticker])etfHoldings[t.ticker]=0;
+    etfHoldings[t.ticker]+=t.type==='buy'?t.shares:-t.shares;
+  });
+  const fx=histData?.fxPrices?interpolate(histData.fxPrices,date)||(liveFx||395):(liveFx||395);
+  const vp=histData?.vwcePrices?interpolate(histData.vwcePrices,date)||liveVwce||0:liveVwce||0;
+  const wp=histData?.wbitPrices?interpolate(histData.wbitPrices,date)||liveWbit||0:liveWbit||0;
+  const etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
+  return {cash,ap,etf:etfEur*fx,etfEur,fx,total:cash+ap+etfEur*fx};
+}
+
+// ═══════════════════════════════════════════════
 // LIVE PRICES
 // ═══════════════════════════════════════════════
 async function fetchLive(){
@@ -2364,8 +2577,6 @@ async function fetchLive(){
   await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',(p,pct)=>{liveVwce=p;liveVwcePct=pct;});
   await fetchETFPrice('WBIT-DE','wbitPill','wbitPriceLabel',(p,pct)=>{liveWbit=p;liveWbitPct=pct;});
   renderTBSZ(); renderDashboard();
-  // updatePortfolioChange after renderDashboard so spans exist in DOM
-  setTimeout(updatePortfolioChange, 0);
 }
 
 function getFxChangeHtml(){
@@ -2374,42 +2585,6 @@ function getFxChangeHtml(){
   const pct=(liveFx-prevFx)/prevFx*100;
   const color=pct>=0?'var(--green)':'var(--red)';
   return `<span style="color:${color};font-size:11px">${pct>=0?'+':''}${pct.toFixed(2)}%</span>`;
-}
-
-function updatePortfolioChange(){
-  if(!histData)return;
-
-  const yesterday=new Date(Date.now()-86400000).toISOString().split('T')[0];
-
-  // Mai érték – LIVE árakból (nem historikusból!)
-  const apValue=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
-               +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
-  const todayETFeur=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
-  const todayTotal=apValue+todayETFeur*(liveFx||395);
-  const todayEur=todayETFeur+(apValue/(liveFx||395));
-
-  // Tegnapi érték – historikus adatokból
-  const yesterdayVal=calcPortfolioOnDate(yesterday);
-  const yesterdayTotal=yesterdayVal.total;
-  const yesterdayFx=yesterdayVal.fx||liveFx;
-  const yesterdayEur=yesterdayVal.etfEur+(yesterdayVal.ap/yesterdayFx);
-
-  if(!yesterdayTotal||yesterdayTotal===0)return;
-
-  const chgFt=todayTotal-yesterdayTotal;
-  const chgPct=chgFt/yesterdayTotal*100;
-  const chgEur=todayEur-yesterdayEur;
-  const chgEurPct=yesterdayEur>0?chgEur/yesterdayEur*100:0;
-
-
-
-  const color=chgFt>=0?'var(--green)':'var(--red)';
-  const colorEur=chgEur>=0?'var(--green)':'var(--red)';
-
-  const ftEl=document.getElementById('portfolioChgFt');
-  const eurEl=document.getElementById('portfolioChgEur');
-  if(ftEl)ftEl.innerHTML=`<span style="color:${color}">${chgFt>=0?'+':''}${chgPct.toFixed(2)}%</span>`;
-  if(eurEl)eurEl.innerHTML=`<span style="color:${colorEur}">${chgEur>=0?'+':''}${chgEurPct.toFixed(2)}%</span>`;
 }
 
 async function fetchETFPrice(symbol,pillId,labelId,cb){
@@ -2472,23 +2647,12 @@ function toggleBlur(){
   document.getElementById('hideBtn').title=blurOn?'Összegek megjelenítése':'Összegek elrejtése';
   document.getElementById('hideBtn').innerHTML=blurOn?'🙈 <span class="lbl">mutat</span>':'👁 <span class="lbl">elrejt</span>';
   applyBlur();
-  // Chartok újrarajzolása hogy a tengelyek is frissüljenek
   renderCashflowChart();
-  if(histData){
-    if(document.getElementById('page-history')?.classList.contains('active')){
-      renderHistory();
-    } else {
-      // Ha a historikus fül nem aktív, csak a chart adatait frissítjük
-      Object.values(charts).forEach(c=>{try{c.update();}catch(e){}});
-    }
-  }
+  Object.values(charts).forEach(c=>{try{c.update();}catch(e){}});
 }
 function applyBlur(){
   document.querySelectorAll('.blurable').forEach(el=>el.classList.toggle('blurred',blurOn));
 }
-
-// Override renderHistory and renderCashflowChart to reapply blur after render
-const _origRenderHistory=typeof renderHistory==='function'?renderHistory:null;
 
 // ═══════════════════════════════════════════════
 // CSV EXPORT
@@ -2729,347 +2893,6 @@ async function confirmDeleteDB(){
   toast('Adatbázis törölve');
 }
 
-// ═══════════════════════════════════════════════
-// HISTORIKUS
-// ═══════════════════════════════════════════════
-let histData=null; // cached historical prices
-
-async function fetchHistoricalPrices(symbol, startDate){
-  // Yahoo Finance historical data via Cloudflare Worker
-  const start=Math.floor(new Date(startDate).getTime()/1000);
-  const end=Math.floor(Date.now()/1000);
-  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${start}&period2=${end}`;
-  const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
-  if(!r.ok)return null;
-  const d=await r.json();
-  const result=d?.chart?.result?.[0];
-  if(!result)return null;
-  const timestamps=result.timestamp||[];
-  const closes=result.indicators?.adjclose?.[0]?.adjclose||result.indicators?.quote?.[0]?.close||[];
-  const prices={};
-  timestamps.forEach((ts,i)=>{
-    if(closes[i]){
-      const date=new Date(ts*1000).toISOString().split('T')[0];
-      prices[date]=closes[i];
-    }
-  });
-  return prices;
-}
-
-async function fetchHistoricalFX(startDate){
-  // EUR/HUF historical from Frankfurter API
-  const start=startDate;
-  const end=new Date().toISOString().split('T')[0];
-  const url=`https://api.frankfurter.app/${start}..${end}?from=EUR&to=HUF`;
-  const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
-  if(!r.ok)return null;
-  const d=await r.json();
-  const rates={};
-  Object.entries(d.rates||{}).forEach(([date,r])=>{ rates[date]=r.HUF; });
-  return rates;
-}
-
-function getFirstTransactionDate(){
-  const dates=[];
-  data.cashTx.forEach(t=>dates.push(t.date));
-  data.fixmap.forEach(f=>dates.push(f.date));
-  data.dkj.forEach(d=>dates.push(d.date));
-  data.etfTx.forEach(t=>dates.push(t.date));
-  return dates.sort()[0]||new Date().toISOString().split('T')[0];
-}
-
-function interpolate(prices, date){
-  if(!prices||typeof prices!=='object')return null;
-  const sorted=Object.keys(prices).sort();
-  if(!sorted.length)return null;
-  let last=null;
-  for(const d of sorted){
-    if(d<=date)last=prices[d];
-    else break;
-  }
-  return last;
-}
-
-async function loadHistoricData(silent=false){
-  const btn=document.getElementById('histLoadBtn');
-  const status=document.getElementById('histStatus');
-  if(!silent){
-    if(btn){btn.disabled=true; btn.textContent='betöltés...';}
-    if(status){status.style.display='block'; status.textContent='Historikus adatok lekérése...';}
-  }
-
-  const firstDate=getFirstTransactionDate();
-
-  if(!silent&&status)status.textContent='VWCE árfolyam lekérése...';
-  const vwcePrices=await fetchHistoricalPrices('VWCE.DE', firstDate);
-
-  if(!silent&&status)status.textContent='WBIT árfolyam lekérése...';
-  const wbitPrices=await fetchHistoricalPrices('WBIT.DE', firstDate);
-
-  if(!silent&&status)status.textContent='EUR/HUF árfolyam lekérése...';
-  const fxPrices=await fetchHistoricalFX(firstDate);
-
-  if(!vwcePrices&&!fxPrices){
-    if(!silent){
-      if(status)status.textContent='Nem sikerült az adatok lekérése. Próbáld újra!';
-      if(btn){btn.disabled=false; btn.textContent='újra próbál';}
-    }
-    return;
-  }
-
-  histData={
-    vwcePrices:vwcePrices||{},
-    wbitPrices:wbitPrices||{},
-    fxPrices:fxPrices||{},
-    firstDate
-  };
-  if(!silent){
-    if(status){status.textContent='';status.style.display='none';}
-    if(btn){btn.disabled=false; btn.textContent='frissítés';}
-    renderHistory();
-  } else {
-    // Háttérben betöltve – frissítsük a dashboard változást
-    if(btn){btn.disabled=false; btn.textContent='frissítés';}
-    updatePortfolioChange();
-    renderDashMiniChart();
-  }
-  renderHistory();
-  renderDashMiniChart();
-}
-
-function calcPortfolioOnDate(date){
-  // 1. Cash balance – nettó pénzszámla egyenleg az adott dátumon
-  let cash=0;
-  data.cashTx.forEach(t=>{
-    if(t.date>date)return;
-    if(['deposit','coupon','expire','sell'].includes(t.type))cash+=t.amount;
-    if(['withdraw','buy'].includes(t.type))cash-=t.amount;
-  });
-
-  // 2. FixMáP – névértéken, csak azok amik vásárolva lettek és még nem lezárva az adott dátumon
-  let ap=0;
-  // FixMáP eladások dátuma cashTx-ből (legacy, ha nincs soldDate)
-  const fmSellDates=data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP'))
-    .map(t=>t.date).sort();
-  data.fixmap.forEach(f=>{
-    if(f.date>date)return;
-    if(f.active){ap+=f.faceValue;return;}
-    // Ha van soldDate, azt használjuk
-    if(f.soldDate){if(f.soldDate>date)ap+=f.faceValue;return;}
-    // Legacy: nincs soldDate, az első FixMáP eladás dátumát használjuk
-    const inferredSoldDate=fmSellDates[0]||'9999-99-99';
-    if(inferredSoldDate>date)ap+=f.faceValue;
-  });
-
-  // 3. DKJ – névértéken, aktív + eladott de az adott dátum előtt eladott
-  // Eladott DKJ tételek dátuma: a cashTx sell/expire típusból következtetve
-  const dkjSellMap={};
-  data.cashTx.filter(t=>['sell','expire'].includes(t.type)&&t.note&&t.note.includes('DKJ')).forEach(t=>{
-    // Maturity dátumot keressük a note-ban
-    const m=t.note.match(/D(\d{6})/);
-    if(m){
-      const mat='20'+m[1].slice(0,2)+'-'+m[1].slice(2,4)+'-'+m[1].slice(4,6);
-      if(!dkjSellMap[mat]||t.date<dkjSellMap[mat])dkjSellMap[mat]=t.date;
-    }
-  });
-  data.dkj.forEach(d=>{
-    if(d.date>date)return;
-    if(d.active){ap+=d.faceValue;return;}
-    if(d.soldDate){if(d.soldDate>date)ap+=d.faceValue;return;}
-    // Legacy: nincs soldDate, a cashTx-ből következtetjük
-    const inferredSell=dkjSellMap[d.maturity];
-    if(!inferredSell||inferredSell>date)ap+=d.faceValue;
-  });
-
-  // 4. ETF – historikus árfolyamon
-  let etfEur=0;
-  const etfHoldings={};
-  data.etfTx.filter(t=>t.date<=date).forEach(t=>{
-    if(!etfHoldings[t.ticker])etfHoldings[t.ticker]=0;
-    if(t.type==='buy')etfHoldings[t.ticker]+=t.shares;
-    if(t.type==='sell')etfHoldings[t.ticker]-=t.shares;
-  });
-
-  const fx=(histData&&histData.fxPrices)?interpolate(histData.fxPrices,date)||(liveFx||395):(liveFx||395);
-  if(histData){
-    // interpolate visszafelé keres – ha nincs adat az adott napra, a legközelebbi korábbi napot adja
-    const vp=(histData.vwcePrices?interpolate(histData.vwcePrices,date):null)||liveVwce||0;
-    const wp=(histData.wbitPrices?interpolate(histData.wbitPrices,date):null)||liveWbit||0;
-    etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
-  }
-
-  // Portfólió = AP + ETF (cash nem számít bele, mert a tranzakcióknál duplikálódna)
-  return {cash, ap, etf:etfEur*fx, etfEur, fx, total:cash+ap+etfEur*fx};
-}
-
-function calcInvestedOnDate(date){
-  // Befektetett tőke = deposit - withdraw + ETF vételek (ugyanaz mint dashboard)
-  let invested=0;
-  data.cashTx.filter(t=>t.date<=date&&t.type==='deposit').forEach(t=>invested+=t.amount);
-  data.cashTx.filter(t=>t.date<=date&&t.type==='withdraw').forEach(t=>invested-=t.amount);
-  data.etfTx.filter(t=>t.date<=date&&t.type==='buy').forEach(t=>invested+=t.shares*t.priceEur*t.fxRate);
-  return invested;
-}
-
-function renderDashMiniChart(){
-  const today=new Date().toISOString().split('T')[0];
-  if(!histData||!histData.vwcePrices)return;
-
-  // Last 90 days
-  const days=90;
-  const dates=[];
-  for(let i=days;i>=0;i--){
-    const d=new Date();d.setDate(d.getDate()-i);
-    dates.push(d.toISOString().split('T')[0]);
-  }
-
-  const vals=dates.map(d=>{
-    const r=calcPortfolioOnDate(d);
-    return r?Math.round(r.total):null;
-  }).filter(v=>v!==null&&v>0);
-
-  const labels=dates.slice(dates.length-vals.length);
-
-  if(charts['dashMini'])charts['dashMini'].destroy();
-  const ctx=document.getElementById('dashMiniChart');
-  if(!ctx)return;
-
-  const first=vals[0]||1;
-  const last=vals[vals.length-1]||0;
-  const isUp=last>=first;
-  const col=isUp?'rgba(74,222,154,1)':'rgba(248,113,113,1)';
-  const colFill=isUp?'rgba(74,222,154,0.1)':'rgba(248,113,113,0.1)';
-
-  charts['dashMini']=new Chart(ctx,{
-    type:'line',
-    data:{
-      labels,
-      datasets:[{
-        data:vals,
-        borderColor:col,
-        backgroundColor:colFill,
-        borderWidth:2,
-        fill:true,
-        tension:0.3,
-        pointRadius:0,
-        pointHoverRadius:4,
-      }]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{
-        callbacks:{label:ctx=>' '+fmtM(ctx.raw)},
-        displayColors:false
-      }},
-      scales:{
-        x:{display:false},
-        y:{display:false,grace:'5%'}
-      },
-      interaction:{mode:'index',intersect:false}
-    }
-  });
-}
-
-function renderHistory(){
-  destroyChart('hist'); destroyChart('hist2');
-  const range=parseInt(document.getElementById('histRange')?.value)||0;
-  const firstDate=getFirstTransactionDate();
-  const today=new Date().toISOString().split('T')[0];
-
-  // Generate date range – napi felbontás <= 90 nap, heti felbontás egyébként
-  const step=(range&&range<=90)?1:7;
-  const dates=[];
-  let d=new Date(firstDate);
-  const end=new Date(today);
-  while(d<=end){
-    dates.push(d.toISOString().split('T')[0]);
-    d.setDate(d.getDate()+step);
-  }
-  if(dates[dates.length-1]!==today)dates.push(today);
-
-  // Filter by range, skip leading dates with zero portfolio value
-  const rangeDate=range?new Date(Date.now()-range*86400000).toISOString().split('T')[0]:null;
-  let allDates=rangeDate?dates.filter(d=>d>=rangeDate):dates;
-  // Remove leading zeros (days before first actual investment shows up)
-  let skipLeading=true;
-  allDates=allDates.filter(d=>{
-    if(!skipLeading)return true;
-    const r=calcPortfolioOnDate(d);
-    if(r&&r.total>10000){skipLeading=false;return true;}
-    return false;
-  });
-  const filtered=allDates;
-
-
-
-
-  const todayStr=new Date().toISOString().split('T')[0];
-  // Live portfolio value for today
-  const liveInvestedNow=data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
-    -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
-    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.fee||0),0);
-  const apValueNow=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
-                  +data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
-  const etfEurNow=(liveVwce||0)*etfShares('VWCE')+(liveWbit||0)*etfShares('WBIT');
-  const liveTotalNow=cashBalance()+apValueNow+etfEurNow*(liveFx||395);
-
-  const filteredDates=filtered;
-  const portfolioVals=filtered.map(d=>d===todayStr&&liveVwce?Math.round(liveTotalNow):Math.round(calcPortfolioOnDate(d).total));
-  const investedVals=filtered.map(d=>d===todayStr&&liveVwce?Math.round(liveInvestedNow):Math.round(calcInvestedOnDate(d)));
-  const labels=filtered.map(d=>d.slice(0,7)); // YYYY-MM
-
-  // Summary cards
-  const first=portfolioVals[0]||0;
-  const last=portfolioVals[portfolioVals.length-1]||0;
-  const gain=last-first;
-  const gainPct=first>0?gain/first*100:0;
-  const maxVal=Math.max(...portfolioVals);
-  document.getElementById('histCards').innerHTML=`
-    <div class="stat-card"><div class="stat-label">jelenlegi érték</div><div class="stat-value blurable">${fmtM(last)}</div><div class="stat-sub blurable">${gainPct>=0?'+':''}${gainPct.toFixed(1)}% az időszak alatt</div></div>
-    <div class="stat-card"><div class="stat-label">nyereség az időszakban</div><div class="stat-value blurable ${gain>=0?'pos':'neg'}">${fmtSign(gain)}</div><div class="stat-sub">az első ponttól</div></div>
-    <div class="stat-card"><div class="stat-label">legmagasabb érték</div><div class="stat-value blurable">${fmtM(maxVal)}</div><div class="stat-sub">${filtered[portfolioVals.indexOf(maxVal)]||'–'}</div></div>
-  `;
-  if(blurOn)applyBlur();
-
-  // Portfolio vs Invested chart
-  charts['hist2']=new Chart(document.getElementById('histChart2'),{
-    type:'line',
-    data:{
-      labels:filtered,
-      datasets:[
-        {label:'Portfólió értéke',data:portfolioVals,borderColor:'#4ade9a',backgroundColor:'rgba(74,222,154,0.06)',fill:true,tension:.3,pointRadius:0,borderWidth:2},
-        {label:'Befektetett tőke',data:investedVals,borderColor:'#60a5fa',backgroundColor:'transparent',borderDash:[4,4],tension:.3,pointRadius:0,borderWidth:1.5}
-      ]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{display:true,position:'top',labels:{color:'#908d86',font:{size:10},boxWidth:12,padding:14}},
-        tooltip:{callbacks:{
-            title:ctx=>filtered[ctx[0].dataIndex],
-            label:c=>blurOn?'···':` ${c.dataset.label}: ${fmtM(c.parsed.y)}`,
-            afterBody:ctx=>{
-              if(blurOn)return[];
-              const i=ctx[0].dataIndex;
-              const pl=portfolioVals[i]-investedVals[i];
-              const pct=investedVals[i]>0?pl/investedVals[i]*100:0;
-              const sign=pl>=0?'+':'';
-              return[` P&L: ${sign}${fmtM(pl)} (${sign}${pct.toFixed(2)}%)`];
-            }
-          }}
-      },
-      scales:{
-        x:{ticks:{color:'#55534f',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.03)'}},
-        y:{ticks:{color:'#55534f',callback:v=>blurOn?'···':fmtM(v)},grid:{color:'rgba(255,255,255,0.04)'}}
-      }
-    }
-  });
-
-  destroyChart('hist');
-  // Reapply blur if active
-  if(blurOn)setTimeout(applyBlur,50);
-}
 
 // ═══════════════════════════════════════════════
 // LIVE REFRESH
