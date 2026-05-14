@@ -265,7 +265,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
 .dash-upcoming{flex:1}
 .dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
-.range-btns{display:flex;gap:4px;align-self:flex-start;margin-top:4px;flex-wrap:wrap;justify-content:flex-end;max-width:260px}
+.range-btns{display:flex;gap:4px;align-self:flex-start;margin-top:4px;flex-wrap:nowrap}
 .pie-wrap{position:relative;width:260px;height:260px}
 
 /* RANGE BUTTONS (dashboard chart) */
@@ -303,7 +303,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .dash-side{order:2;width:100%;flex-shrink:unset}
   .dash-upcoming{order:3!important}
   .dash-header-row{flex-direction:column;gap:10px}
-  .range-btns{max-width:100%;justify-content:flex-start}
+  .range-btns{max-width:100%;justify-content:flex-start;flex-wrap:wrap}
   .pie-wrap{width:200px;height:200px;margin:0 auto}
   #dashTotalBig{font-size:34px!important;letter-spacing:-1px!important}
 
