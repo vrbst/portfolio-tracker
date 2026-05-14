@@ -3221,7 +3221,7 @@ async function callAI(userMsg, extra) {
     const r = await fetch(workerUrl, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:aiHistory})
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1000,system:sys,messages:aiHistory})
     });
     const d = await r.json();
     console.log('AI response:', d);
