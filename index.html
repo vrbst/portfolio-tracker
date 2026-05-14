@@ -31,6 +31,14 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:1
 .setup-label{font-size:11px;color:var(--text2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
 .setup-input{width:100%;padding:12px 14px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:13px;outline:none;transition:border-color .2s}
 .setup-input:focus{border-color:var(--green)}
+.setup-input:-webkit-autofill,
+.setup-input:-webkit-autofill:hover,
+.setup-input:-webkit-autofill:focus{
+  -webkit-box-shadow:0 0 0 1000px var(--bg2) inset!important;
+  -webkit-text-fill-color:var(--text)!important;
+  border-color:var(--border2)!important;
+  transition:background-color 99999s ease-in-out 0s;
+}
 .setup-btn{width:100%;margin-top:16px;padding:13px;background:var(--green);color:#0a0f0a;border:none;border-radius:8px;font-family:var(--font-head);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}
 .setup-btn:hover{opacity:.9}
 .setup-error{margin-top:10px;font-size:12px;color:var(--red);display:none}
@@ -260,9 +268,9 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ai-scenario{width:320px;flex-shrink:0}
 
 /* DASHBOARD LAYOUT */
-.dash-layout{display:flex;gap:12px;align-items:flex-start}
+.dash-layout{display:flex;gap:12px;align-items:stretch}
 .dash-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
-.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
+.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;align-self:stretch}
 .dash-upcoming{flex:1}
 .dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
 .range-btns{display:flex;gap:3px;align-self:flex-start;margin-top:4px;flex-wrap:nowrap;flex-shrink:0}
@@ -460,7 +468,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div id="dashCards" style="display:flex;flex-direction:column;gap:8px"></div>
 
           <!-- Donut -->
-          <div class="panel" style="flex:1">
+          <div class="panel" style="flex:1;display:flex;flex-direction:column">
             <div class="panel-header"><div class="panel-title">megoszlás</div></div>
             <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:4px">
               <div class="pie-wrap">
