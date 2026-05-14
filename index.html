@@ -34,9 +34,9 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:1
 .setup-input:-webkit-autofill,
 .setup-input:-webkit-autofill:hover,
 .setup-input:-webkit-autofill:focus{
-  -webkit-box-shadow:0 0 0 1000px var(--bg2) inset!important;
-  -webkit-text-fill-color:var(--text)!important;
-  border-color:var(--border2)!important;
+  -webkit-box-shadow:0 0 0 1000px #232323 inset!important;
+  -webkit-text-fill-color:#e2e4eb!important;
+  border-color:rgba(255,255,255,0.15)!important;
   transition:background-color 99999s ease-in-out 0s;
 }
 .setup-btn{width:100%;margin-top:16px;padding:13px;background:var(--green);color:#0a0f0a;border:none;border-radius:8px;font-family:var(--font-head);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}
@@ -380,7 +380,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
     <div class="setup-logo">portfólió<span>.</span></div>
     <div class="setup-desc">Add meg a GitHub Personal Access Tokenedet. Az adatok privát GitHub Gist-ben tárolódnak.</div>
     <div class="setup-label">GitHub Token</div>
-    <input class="setup-input" id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+    <input class="setup-input" id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="new-password">
     <div class="setup-error" id="setupError">Érvénytelen token vagy nincs gist jogosultság.</div>
     <button class="setup-btn" onclick="connect()">Csatlakozás →</button>
     <div class="setup-note">Token: <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> → Generate new token (classic) → csak <strong>gist</strong> jogot pipáld be.</div>
@@ -3090,6 +3090,18 @@ async function manualRefresh(){
 window.addEventListener('DOMContentLoaded',()=>{
   const saved=localStorage.getItem('gh_token');
   if(saved){token=saved;document.getElementById('tokenInput').value=saved;connect();}
+
+  // Autofill fehér háttér javítás: type csere töri a Chrome autofill stílusát
+  const inp=document.getElementById('tokenInput');
+  if(inp){
+    setTimeout(()=>{
+      inp.style.backgroundColor='#232323';
+      inp.style.color='#e2e4eb';
+      // type swap trick
+      inp.type='text';
+      inp.type='password';
+    }, 200);
+  }
 });
 
 // AI ELEMZÉS
