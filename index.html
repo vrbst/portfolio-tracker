@@ -3167,17 +3167,22 @@ function getPortfolioContext() {
     return sr.name+': '+(face/1000000).toFixed(2)+'M Ft, '+sr.couponRate+'%, lejarat: '+sr.maturity;
   }).join(' | ');
 
+  const dkjDesc = data.dkj.filter(d=>d.active).map(d=>
+    'DKJ '+d.maturity+': '+(d.faceValue/1000).toFixed(0)+'e Ft lejar'
+  ).join(' | ');
+
   return 'Datum: '+new Date().toLocaleDateString('hu-HU')
+    +'\nFelhasznalo szuletesi eve: 1984'
     +'\nPortfolio: '+(total/1000000).toFixed(2)+'M Ft'
     +'\nBefektetett: '+(totalInvested/1000000).toFixed(2)+'M Ft'
     +'\nP&L: '+((total-totalInvested)/1000000).toFixed(2)+'M Ft ('+((total-totalInvested)/totalInvested*100).toFixed(2)+'%)'
     +'\nEUR/HUF: '+(liveFx||395).toFixed(2)
     +'\nFixMAP: '+fixmapDesc
+    +'\nDKJ: '+(dkjDesc||'nincs aktiv')
     +'\nPenzszamla: '+(cb/1000).toFixed(0)+'e Ft'
     +'\nVWCE: '+vwceShares.toFixed(2)+' db x EUR'+(liveVwce||0).toFixed(2)+' = '+(vwceVal/1000000).toFixed(2)+'M Ft'
     +'\nWBIT: '+wbitShares.toFixed(2)+' db x EUR'+(liveWbit||0).toFixed(2)+' = '+(wbitVal/1000000).toFixed(2)+'M Ft'
-    +'\nMegoszlas: Allampapar '+(apValue/total*100).toFixed(1)+'% / VWCE '+(vwceVal/total*100).toFixed(1)+'% / WBIT '+(wbitVal/total*100).toFixed(1)+'%'
-    +'\nHavi megtakaritas: ~150 000 Ft';
+    +'\nMegoszlas: Allampapar '+(apValue/total*100).toFixed(1)+'% / VWCE '+(vwceVal/total*100).toFixed(1)+'% / WBIT '+(wbitVal/total*100).toFixed(1)+'%';
 }
 
 function aiAddMessage(role, text, isLoading) {
