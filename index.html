@@ -52,15 +52,17 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 .sync-dot.saving{background:var(--amber);animation:pulse .8s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* TABS */
-.tabs{display:flex;padding:0 24px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.tabs::-webkit-scrollbar{display:none}
-.tab{padding:10px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);font-family:var(--font-mono);font-size:12px;cursor:pointer;margin-bottom:-1px;transition:all .15s;white-space:nowrap;letter-spacing:.03em}
-.tab:hover{color:var(--text)}
-.tab.active{color:var(--green);border-bottom-color:var(--green)}
+/* SIDEBAR */
+.sidebar{width:200px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:100%;overflow-y:auto;position:sticky;top:52px;align-self:flex-start;height:calc(100vh - 52px)}
+.sidebar-nav{flex:1;padding:8px 0}
+.nav-section{padding:8px 16px 4px;font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;border-left:2px solid transparent;background:none;border-top:none;border-right:none;border-bottom:none;width:100%;text-align:left;font-family:var(--font-mono);letter-spacing:.02em}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.03)}
+.nav-item.active{color:var(--green);border-left-color:var(--green);background:rgba(74,222,154,0.05)}
+.nav-item .ni{font-size:13px;width:16px;text-align:center;opacity:.7}
 
 /* CONTENT */
-.content{padding:20px 24px;max-width:1440px;margin:0 auto}
+.content{padding:20px 24px;flex:1;min-width:0}
 .page{display:none}
 .page.active{display:block}
 
@@ -203,6 +205,17 @@ thead[style*="sticky"] th {
   background:var(--bg3);
 }
 
+/* INSTRUMENT LIST */
+.instrument-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .15s;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.instrument-card:hover{border-color:var(--border2);background:var(--bg3)}
+.instrument-card.active{border-color:var(--green);background:rgba(74,222,154,0.05)}
+.instrument-card .ic-ticker{font-family:var(--font-head);font-size:15px;font-weight:600;min-width:50px}
+.instrument-card .ic-body{flex:1;min-width:0}
+.instrument-card .ic-name{font-size:11px;color:var(--text2);margin-bottom:2px}
+.instrument-card .ic-val{font-size:13px;font-weight:500}
+.instrument-card .ic-pl{font-size:11px;margin-top:2px}
+.instrument-card .ic-arrow{color:var(--text3);font-size:14px}
+
 /* TABLE NOWRAP */
 #fixmapBody td, #dkjBody td, #vwceBody td, #wbitBody td{white-space:nowrap}
 
@@ -283,41 +296,86 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
     </div>
   </div>
 
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('dashboard',this)">dashboard</button>
-    <button class="tab" onclick="showTab('kincstar',this)">államkincstár</button>
-    <button class="tab" onclick="showTab('tbsz',this)">tbsz</button>
-    <button class="tab" onclick="showTab('tranzakciok',this)">tranzakciók</button>
-    <button class="tab" onclick="showTab('history',this)">historikus</button>
+
+  <!-- SIDEBAR + MAIN WRAPPER -->
+  <div style="display:flex;min-height:calc(100vh - 52px)">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <nav class="sidebar-nav">
+      <div class="nav-section">áttekintés</div>
+      <button class="nav-item active" onclick="showTab('dashboard',this)"><span class="ni">◈</span>dashboard</button>
+      <button class="nav-item" onclick="showTab('history',this)"><span class="ni">↗</span>historikus</button>
+      <button class="nav-item" onclick="showTab('tranzakciok',this)"><span class="ni">≡</span>tranzakciók</button>
+      <button class="nav-item" onclick="showTab('ai',this)"><span class="ni">✦</span>AI elemzés</button>
+      <div class="nav-section">portfóliók</div>
+      <button class="nav-item" onclick="showTab('kincstar',this)"><span class="ni">🏛</span>állampapír</button>
+      <button class="nav-item" onclick="showTab('tbsz',this)"><span class="ni">📈</span>tbsz</button>
+    </nav>
   </div>
 
   <div class="content">
 
+
     <!-- DASHBOARD -->
     <div id="page-dashboard" class="page active">
-      <div class="card-row cards-5" id="dashCards"></div>
-      <div class="grid2">
-        <div class="panel">
-          <div class="panel-header"><div class="panel-title">portfólió megoszlás</div></div>
-          <div style="display:flex;gap:16px;align-items:center">
-            <div style="width:200px;height:200px;flex-shrink:0;position:relative">
-              <canvas id="pieChart" class="blurable" role="img" aria-label="Megoszlás"></canvas>
+
+      <!-- Fő layout: bal (chart + közelgő) + jobb (donut) -->
+      <div style="display:flex;gap:12px;align-items:stretch">
+
+        <!-- Bal oszlop -->
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+
+          <!-- Nagy érték + mini chart -->
+          <div class="panel">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+              <div>
+                <div style="font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">teljes portfólió</div>
+                <div class="blurable" id="dashTotalBig" style="font-family:var(--font-head);font-size:40px;font-weight:700;letter-spacing:-1px;line-height:1">–</div>
+                <div class="blurable" id="dashTotalSub" style="font-size:13px;color:var(--text2);margin-top:6px">–</div>
+              </div>
+    
             </div>
-            <div id="pieLegend" style="flex:1"></div>
+            <div class="chart-wrap" style="height:200px">
+              <canvas id="dashMiniChart" class="blurable" role="img" aria-label="Portfólió chart"></canvas>
+            </div>
           </div>
+
+          <!-- Közelgő események -->
+          <div class="panel" style="flex:1">
+            <div class="panel-header"><div class="panel-title">közelgő események</div></div>
+            <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
+          </div>
+
         </div>
-        <div class="panel">
-          <div class="panel-header"><div class="panel-title">közelgő események</div></div>
-          <div id="upcomingEvents" style="max-height:220px;overflow-y:auto"></div>
+
+        <!-- Jobb oszlop: kártyák + donut -->
+        <div style="width:380px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+
+          <!-- Befektetett tőke kártya -->
+          <div id="dashCards" style="display:flex;flex-direction:column;gap:8px"></div>
+
+          <!-- Donut -->
+          <div class="panel" style="flex:1">
+            <div class="panel-header"><div class="panel-title">megoszlás</div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:4px">
+              <div style="position:relative;width:260px;height:260px">
+                <canvas id="pieChart" class="blurable" role="img" aria-label="Megoszlás"></canvas>
+                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
+                  <div style="font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">összesen</div>
+                  <div class="blurable" id="pieTotalLabel" style="font-family:var(--font-head);font-size:17px;font-weight:700;letter-spacing:-.5px;white-space:nowrap">–</div>
+                  <div style="font-size:10px;color:var(--text2)">HUF</div>
+                </div>
+              </div>
+              <div id="pieLegend" style="width:100%"></div>
+            </div>
+          </div>
+
         </div>
+
       </div>
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">havi cashflow</div>
-          <select class="form-select" id="cashflowYear" onchange="renderCashflowChart()" style="padding:5px 10px;font-size:11px;width:auto"></select>
-        </div>
-        <div class="chart-wrap"><canvas id="cashflowChart" class="blurable" role="img" aria-label="Cashflow"></canvas></div>
-      </div>
+
+
     </div>
 
     <!-- PÉNZSZÁMLA -->
@@ -374,6 +432,14 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
 
       <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">havi cashflow</div>
+          <select class="form-select" id="cashflowYear" onchange="renderCashflowChart()" style="padding:5px 10px;font-size:11px;width:auto"></select>
+        </div>
+        <div class="chart-wrap"><canvas id="cashflowChart" class="blurable" role="img" aria-label="Cashflow"></canvas></div>
+      </div>
+
+      <div class="panel">
         <div class="panel-header"><div class="panel-title">pénzszámla mozgások</div></div>
         <div class="tbl-wrap" style="max-height:196px;overflow-y:auto"><table>
           <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>megjegyzés</th><th class="r">összeg</th><th class="r">egyenleg</th><th></th></tr></thead>
@@ -386,40 +452,129 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
     <!-- TBSZ -->
     <div id="page-tbsz" class="page">
+      <!-- Összesítő kártyák -->
       <div class="card-row cards-6" id="tbszCards"></div>
 
-      <div class="section-title">
-        VWCE pozíciók
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span id="vwcePill" class="live-pill est"><span class="live-dot"></span><span id="vwcePriceLabel"><span class="spin"></span>betöltés</span></span>
-          <span id="vwcePriceHuf" style="font-size:11px;color:var(--text2)"></span>
-          <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf','VWCE')">+ vétel</button>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-etf','VWCE')">− eladás</button>
+      <!-- Lista nézet -->
+      <div id="tbszListView">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">pozíciók</div>
+          <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf','VWCE')">+ új vétel</button>
         </div>
-      </div>
-      <div class="panel" style="margin-top:0">
-        <div class="tbl-wrap" style="max-height:320px;overflow-y:auto;overflow-x:auto;background:var(--bg2);border-radius:0 0 8px 8px"><table>
-          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr id="vwce-thead"></tr></thead>
-          <tbody id="vwceBody"></tbody>
-        </table></div>
-        <div class="empty" id="vwceEmpty" style="display:none">Még nincs VWCE tétel.</div>
+        <div class="panel" style="margin-top:0;padding:0">
+          <table style="width:100%">
+            <thead><tr>
+              <th style="padding:10px 16px;text-align:left;font-size:11px;color:var(--text3);font-weight:400;letter-spacing:.06em;border-bottom:1px solid var(--border)">eszköz</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">darabszám</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">befektetett</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">aktuális érték</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">P&L</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">live ár</th>
+              <th style="padding:10px 16px;border-bottom:1px solid var(--border)"></th>
+            </tr></thead>
+            <tbody id="tbszInstrumentList"></tbody>
+          </table>
+        </div>
       </div>
 
-      <div class="section-title">
-        WBIT pozíciók
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span id="wbitPill" class="live-pill est"><span class="live-dot"></span><span id="wbitPriceLabel"><span class="spin"></span>betöltés</span></span>
-          <span id="wbitPriceHuf" style="font-size:11px;color:var(--text2)"></span>
-          <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf','WBIT')">+ vétel</button>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-etf','WBIT')">− eladás</button>
+      <!-- Részlet nézet -->
+      <div id="tbszDetailView" style="display:none">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <button class="btn btn-ghost btn-sm" onclick="tbszBack()">← vissza</button>
+          <div id="tbszDetailHeader" style="font-family:var(--font-head);font-size:16px;font-weight:600"></div>
+          <span id="tbszDetailPill" class="live-pill est"><span class="live-dot"></span><span id="tbszDetailPriceLabel"></span></span>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary btn-sm" id="tbszDetailBuyBtn">+ vétel</button>
+          <button class="btn btn-ghost btn-sm" id="tbszDetailSellBtn">− eladás</button>
+        </div>
+        <div class="panel" style="margin-top:0">
+          <div class="tbl-wrap" style="max-height:500px;overflow-y:auto;overflow-x:auto;background:var(--bg2)"><table>
+            <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr id="tbszDetailThead"></tr></thead>
+            <tbody id="tbszDetailBody"></tbody>
+          </table></div>
+          <div class="empty" id="tbszDetailEmpty" style="display:none">Még nincs tétel.</div>
         </div>
       </div>
-      <div class="panel" style="margin-top:0">
-        <div class="tbl-wrap" style="max-height:320px;overflow-y:auto;overflow-x:auto;background:var(--bg2);border-radius:0 0 8px 8px"><table>
-          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr id="wbit-thead"></tr></thead>
-          <tbody id="wbitBody"></tbody>
-        </table></div>
-        <div class="empty" id="wbitEmpty" style="display:none">Még nincs WBIT tétel.</div>
+
+      <!-- Hidden elements needed for original renderTBSZ -->
+      <div style="display:none">
+        <span id="vwcePill"><span id="vwcePriceLabel"></span></span>
+        <span id="vwcePriceHuf"></span>
+        <span id="wbitPill"><span id="wbitPriceLabel"></span></span>
+        <span id="wbitPriceHuf"></span>
+        <table><thead><tr id="vwce-thead"></tr></thead><tbody id="vwceBody"></tbody></table>
+        <table><thead><tr id="wbit-thead"></tr></thead><tbody id="wbitBody"></tbody></table>
+        <div id="vwceEmpty"></div>
+        <div id="wbitEmpty"></div>
+      </div>
+    </div>
+
+    <!-- AI ELEMZÉS -->
+    <div id="page-ai" class="page">
+
+      <!-- Gyors elemzések -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">gyors elemzés</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="aiQuickAnalysis('portfolio')">◈ portfólió értékelés</button>
+          <button class="btn btn-ghost" onclick="aiQuickAnalysis('diversification')">⊕ diverzifikáció</button>
+          <button class="btn btn-ghost" onclick="aiQuickAnalysis('fixmap_vs_etf')">⇄ FixMáP vs ETF</button>
+          <button class="btn btn-ghost" onclick="aiQuickAnalysis('cashflow')">↗ cashflow elemzés</button>
+        </div>
+      </div>
+
+      <!-- Fő terület: Chat + Szcenárió -->
+      <div style="display:flex;gap:12px;align-items:flex-start">
+
+        <!-- Chat -->
+        <div class="panel" style="flex:1;min-width:0;display:flex;flex-direction:column">
+          <div class="panel-header">
+            <div class="panel-title">✦ AI asszisztens</div>
+            <button class="btn btn-ghost btn-sm" onclick="toggleApiKeyInput()" id="apiKeyBtn">⚙ API kulcs</button>
+          </div>
+          <div id="apiKeySection" style="display:none;margin-bottom:12px;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Anthropic API kulcs (<a href="https://console.anthropic.com" target="_blank" style="color:var(--blue)">console.anthropic.com</a>)</div>
+            <div style="display:flex;gap:8px">
+              <input class="form-input" id="apiKeyInput" type="password" placeholder="sk-ant-..." style="flex:1;font-size:11px">
+              <button class="btn btn-primary btn-sm" onclick="saveApiKey()">mentés</button>
+            </div>
+            <div id="apiKeyStatus" style="font-size:11px;margin-top:6px;color:var(--text3)"></div>
+          </div>
+          <div id="aiMessages" style="min-height:300px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0;margin-bottom:12px">
+            <div style="color:var(--text3);font-size:12px;text-align:center;padding:40px 0">Tegyél fel kérdést a portfóliódról, vagy válassz egy gyors elemzést!</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input id="aiInput" class="form-input" placeholder="Kérdezz a portfóliódról..." style="flex:1"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiChat()}">
+            <button class="btn btn-primary" onclick="aiChat()" id="aiSendBtn">küldés</button>
+          </div>
+        </div>
+
+        <!-- Szcenárió -->
+        <div class="panel" style="width:320px;flex-shrink:0">
+          <div class="panel-header"><div class="panel-title">szcenárió szimulátor</div></div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div class="form-group">
+              <div class="form-label">EUR/HUF árfolyam</div>
+              <input class="form-input" id="scenFx" type="number" value="400" placeholder="400">
+            </div>
+            <div class="form-group">
+              <div class="form-label">VWCE éves hozam (%)</div>
+              <input class="form-input" id="scenReturn" type="number" value="7" placeholder="7">
+            </div>
+            <div class="form-group">
+              <div class="form-label">Időtáv (év)</div>
+              <input class="form-input" id="scenYears" type="number" value="5" placeholder="5">
+            </div>
+            <div class="form-group">
+              <div class="form-label">Havi megtakarítás (Ft)</div>
+              <input class="form-input" id="scenSavings" type="number" value="150000" placeholder="150000">
+            </div>
+            <button class="btn btn-primary" onclick="aiScenario()" style="width:100%">✦ AI elemzés</button>
+            <div id="scenResult" style="font-size:12px;color:var(--text2);line-height:1.6;display:none"></div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -481,6 +636,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 const GIST_FILE = 'portfolio-tracker-v2.json';
 let token='', gistId='', blurOn=false;
 let liveVwce=null, liveWbit=null, liveFx=null, liveVwcePct=null, liveWbitPct=null;
+let anthropicKey=null;
 let charts={};
 
 const DEFAULT_DATA = {
@@ -549,6 +705,7 @@ async function loadOrCreateGist(){
     if(!data.fixmap)data.fixmap=[];
     if(!data.dkj)data.dkj=[];
     if(!data.etfTx)data.etfTx=[];
+    if(data.anthropicKey){anthropicKey=data.anthropicKey;console.log('API key loaded:',anthropicKey.slice(0,15)+'...');}
   }else{
     data=JSON.parse(JSON.stringify(DEFAULT_DATA));
     const r2=await fetch('https://api.github.com/gists',{method:'POST',headers:{Authorization:'token '+token,'Content-Type':'application/json'},body:JSON.stringify({description:'Portfolio Tracker v2',public:false,files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}})});
@@ -585,12 +742,13 @@ function showApp(){
 // ═══════════════════════════════════════════════
 function showTab(name,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  el.classList.add('active');
-  if(name==='history'){
-    loadHistoricData();
-  }
+  if(el)el.classList.add('active');
+  if(name==='history') loadHistoricData();
+  if(name==='kincstar') setTimeout(renderCashflowChart, 50);
+  if(name==='ai') setTimeout(updateApiKeyStatus, 50);
+  if(name==='dashboard'&&histData) setTimeout(renderDashMiniChart, 50);
 }
 
 // ═══════════════════════════════════════════════
@@ -654,6 +812,7 @@ function renderAll(){
   renderKincstar();
   renderTBSZ();
   renderTranzakciok();
+  renderTBSZInstruments();
   if(document.getElementById('page-history')?.classList.contains('active'))renderHistory();
   if(histData)setTimeout(updatePortfolioChange,0);
   if(blurOn)setTimeout(applyBlur,50);
@@ -684,26 +843,18 @@ function renderDashboard(){
     -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
     +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.fee||0),0);
 
+  // Nagy értékkijelző
+  const bigEl=document.getElementById('dashTotalBig');
+  const subEl=document.getElementById('dashTotalSub');
+  if(bigEl)bigEl.innerHTML='<span class="blurable">'+fmt(Math.round(total))+'</span>';
+  if(subEl)subEl.innerHTML='<span class="blurable">≈ '+fmtEur(totalEur)+'</span>';
+
   document.getElementById('dashCards').innerHTML=`
+    <span id="portfolioChgFt" style="display:none"></span><span id="portfolioChgEur" style="display:none"></span>
     <div class="stat-card">
-      <div class="stat-label">teljes portfólió</div>
-      <div class="stat-value blurable">${fmtM(total)} <span id="portfolioChgFt" style="font-size:13px;font-weight:400"></span></div>
-      <div class="stat-sub blurable">${hasLive?'≈ '+fmtEur(totalEur,0):'EUR: nincs live adat'} <span id="portfolioChgEur" style="font-size:11px"></span></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">összes befektetett tőke</div>
+      <div class="stat-label">befektetett tőke</div>
       <div class="stat-value blurable">${fmtM(totalInvested)}</div>
       ${totalInvested>0?(()=>{const diff=total-totalInvested;const pct=diff/totalInvested*100;const col=diff>=0?'var(--green)':'var(--red)';return '<div class="blurable" style="font-size:11px;margin-top:2px;color:'+col+'">'+(diff>=0?'+':'')+fmtM(diff)+' ('+(diff>=0?'+':'')+pct.toFixed(2)+'%)</div>';})():''}
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">állampapír</div>
-      <div class="stat-value blurable">${fmtM(apValue)}</div>
-      <div class="stat-sub blurable">${liveFx?'≈ '+fmtEur(apEur,0):'–'}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">tbsz (etf)</div>
-      <div class="stat-value blurable">${tbszVal>0?fmtM(tbszVal):'–'}</div>
-      <div class="stat-sub blurable">${(liveFx&&tbszEur>0)?fmtEur(tbszEur,0):'–'}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
@@ -712,9 +863,13 @@ function renderDashboard(){
     </div>
   `;
   renderPie(cb,apValue,tbszVal);
+  const ptl=document.getElementById('pieTotalLabel');
+  if(ptl)ptl.textContent=fmtM(cb+apValue+tbszVal);
   renderUpcoming();
   renderCashflowChart();
   if(blurOn)applyBlur();
+  renderTBSZInstruments();
+  if(tbszSelectedTicker) renderTBSZDetail(tbszSelectedTicker);
 }
 
 function renderPie(cb,ap,tbsz){
@@ -731,7 +886,7 @@ function renderPie(cb,ap,tbsz){
   charts['pie']=new Chart(document.getElementById('pieChart'),{
     type:'doughnut',
     data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:0,hoverOffset:0}]},
-    options:{responsive:true,maintainAspectRatio:true,aspectRatio:1,cutout:'70%',plugins:{legend:{display:false},tooltip:{enabled:false}}}
+    options:{responsive:true,maintainAspectRatio:true,aspectRatio:1,cutout:'75%',plugins:{legend:{display:false},tooltip:{enabled:false}}}
   });
   document.getElementById('pieLegend').innerHTML=labels.map((l,i)=>{
     const pct=total>0?(vals[i]/total*100).toFixed(1):'0.0';
@@ -749,7 +904,7 @@ function renderPie(cb,ap,tbsz){
 }
 
 function renderUpcoming(){
-  const now=new Date('2026-04-17');
+  const now=new Date();
   const events=[];
   // FixMáP coupons – all future quarterly dates per series
   const fmCouponMap={};
@@ -766,7 +921,7 @@ function renderUpcoming(){
     let d=new Date(startDate+"T00:00:00Z");
     let isFirst=true;
     let safety=0;
-    while(d<=matDate&&safety<20){
+    while(d<=matDate&&safety<100){
       const ds=d.toISOString().split('T')[0];
       if(new Date(ds)>new Date()){
         const pastFirst=sr.firstCouponAmount&&new Date(ds)<new Date();const amount=isFirst&&sr.firstCouponAmount&&!pastFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
@@ -799,6 +954,7 @@ function renderUpcoming(){
 }
 
 function renderCashflowChart(){
+  if(!document.getElementById('cashflowChart'))return;
   destroyChart('cf');
   const months=['Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Sze','Okt','Nov','Dec'];
 
@@ -851,7 +1007,7 @@ function renderCashflowChart(){
     let d=new Date(startDate+"T00:00:00Z");
     let isFirst=true;
     let safety=0;
-    while(d<=matDate&&safety<20){
+    while(d<=matDate&&safety<100){
       const ds=d.toISOString().split('T')[0];
       if(ds.startsWith(year)){
         const m=parseInt(ds.split('-')[1])-1;
@@ -1170,6 +1326,102 @@ function sellDKJ(id){
 // ═══════════════════════════════════════════════
 // TBSZ
 // ═══════════════════════════════════════════════
+let tbszSelectedTicker = null;
+
+function selectInstrument(ticker) {
+  tbszSelectedTicker = ticker;
+  document.getElementById('tbszListView').style.display = 'none';
+  document.getElementById('tbszDetailView').style.display = '';
+  renderTBSZDetail(ticker);
+}
+
+function renderTBSZInstruments() {
+  const instruments = [
+    { ticker:'VWCE', name:'Vanguard FTSE All-World', shares:etfShares('VWCE'), price:liveVwce, pct:liveVwcePct,
+      cost:etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0) },
+    { ticker:'WBIT', name:'WisdomTree Bitcoin', shares:etfShares('WBIT'), price:liveWbit, pct:liveWbitPct,
+      cost:etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0) },
+  ].filter(i => i.shares > 0).map(i => ({
+    ...i,
+    val: (i.price||0) * i.shares * (liveFx||395)
+  }));
+
+  const el = document.getElementById('tbszInstrumentList');
+  if(!el) return;
+
+  el.innerHTML = instruments.map(ins => {
+    const pl = ins.val - ins.cost;
+    const plPct = ins.cost > 0 ? pl/ins.cost*100 : 0;
+    const plCol = pl >= 0 ? 'var(--green)' : 'var(--red)';
+    const pctCol = (ins.pct||0) >= 0 ? 'var(--green)' : 'var(--red)';
+    const fx = liveFx||395;
+    // Tényleges befektetett EUR = costHuf tételekből (eredeti árfolyamon)
+    const costEur = etfCostBasis(ins.ticker).reduce((s,b)=>s+b.remaining*b.priceEur,0);
+    const valEur = ins.val / fx;
+    const plEur = valEur - costEur;
+    const plEurPct = costEur > 0 ? plEur/costEur*100 : 0;
+    return `<tr onclick="selectInstrument('${ins.ticker}')" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <td style="padding:14px 16px;border-bottom:1px solid var(--border)">
+        <div style="font-family:var(--font-head);font-size:14px;font-weight:600">${ins.ticker}</div>
+        <div style="font-size:11px;color:var(--text2)">${ins.name}</div>
+      </td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.shares.toFixed(2)} db</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">
+        ${fmtM(ins.cost)}
+        <div style="font-size:10px;color:var(--text3)">${fmtEur(costEur,0)}</div>
+      </td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">
+        ${ins.val>0?fmtM(ins.val):'–'}
+        <div style="font-size:10px;color:var(--text3)">${ins.val>0?fmtEur(valEur,0):'–'}</div>
+      </td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">
+        <div style="color:${plCol}">${pl>=0?'+':''}${fmtM(pl)} <span style="font-size:10px">(${plPct>=0?'+':''}${plPct.toFixed(2)}%)</span></div>
+        <div style="font-size:10px;color:${plEur>=0?'var(--green)':'var(--red)'}">
+          ${plEur>=0?'+':''}${fmtEur(Math.abs(plEur),0)}
+          <span style="color:${plEurPct>=0?'var(--green)':'var(--red)'};">(${plEurPct>=0?'+':''}${plEurPct.toFixed(2)}%)</span>
+        </div>
+      </td>
+      <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.price?fmtEur(ins.price):'–'}${ins.pct!==null?`<br><span style="font-size:10px;color:${pctCol}">${ins.pct>=0?'+':''}${ins.pct.toFixed(2)}%</span>`:''}</td>
+      <td style="padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text3);font-size:16px">›</td>
+    </tr>`;
+  }).join('');
+}
+
+function tbszBack() {
+  document.getElementById('tbszListView').style.display = '';
+  document.getElementById('tbszDetailView').style.display = 'none';
+  tbszSelectedTicker = null;
+}
+
+function renderTBSZDetail(ticker) {
+  const livePrice = ticker === 'VWCE' ? liveVwce : liveWbit;
+  const livePct = ticker === 'VWCE' ? liveVwcePct : liveWbitPct;
+  const name = ticker === 'VWCE' ? 'Vanguard FTSE All-World' : 'WisdomTree Bitcoin';
+
+  // Header
+  const hdr = document.getElementById('tbszDetailHeader');
+  if(hdr) hdr.textContent = ticker + ' pozíciók';
+
+  // Pill
+  const pill = document.getElementById('tbszDetailPill');
+  const pillLabel = document.getElementById('tbszDetailPriceLabel');
+  if(pill && pillLabel) {
+    pill.className = 'live-pill ' + (livePrice ? 'live' : 'est');
+    pillLabel.innerHTML = livePrice
+      ? fmtEur(livePrice) + (livePct!==null ? ` <span style="color:${livePct>=0?'var(--green)':'var(--red)'}">${livePct>=0?'+':''}${livePct.toFixed(2)}%${ticker==='WBIT'?' (BTC)':''}</span>` : '')
+      : 'betöltés...';
+  }
+
+  // Buttons
+  const buyBtn = document.getElementById('tbszDetailBuyBtn');
+  const sellBtn = document.getElementById('tbszDetailSellBtn');
+  if(buyBtn) buyBtn.onclick = () => openModal('buy-etf', ticker);
+  if(sellBtn) sellBtn.onclick = () => openModal('sell-etf', ticker);
+
+  // Table
+  renderETFTable(ticker, 'tbszDetailBody', 'tbszDetailEmpty', livePrice, 'tbszDetailThead');
+}
+
 function renderTBSZ(){
   const vwceShares=etfShares('VWCE');
   const wbitShares=etfShares('WBIT');
@@ -1202,7 +1454,7 @@ function sortETF(ticker,col){
   renderETFTable(ticker,ticker.toLowerCase()+'Body',ticker.toLowerCase()+'Empty',livePrice);
 }
 
-function renderETFTable(ticker,bodyId,emptyId,livePrice){
+function renderETFTable(ticker,bodyId,emptyId,livePrice,theadIdOverride){
   const {col,dir}=etfSortState[ticker]||{col:'date',dir:-1};
   const buys=etfCostBasis(ticker).sort((a,b)=>{
     const lp=livePrice||0;
@@ -1256,7 +1508,7 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice){
     {key:'tbsz',label:'TBSZ',r:true},
     {key:null,label:'',r:false},
   ];
-  const theadEl=document.getElementById(ticker.toLowerCase()+'-thead');
+  const theadEl=document.getElementById(theadIdOverride||ticker.toLowerCase()+'-thead');
   if(theadEl) theadEl.innerHTML=cols.map(c=>c.key?
     `<th class="sortable ${c.r?'r':''} ${col===c.key?(dir===-1?'sort-desc':'sort-asc'):''}" onclick="sortETF('${ticker}','${c.key}')" style="background:var(--bg2)">${c.label}</th>`
     :`<th style="background:var(--bg2)"></th>`
@@ -2577,7 +2829,10 @@ async function loadHistoricData(silent=false){
     // Háttérben betöltve – frissítsük a dashboard változást
     if(btn){btn.disabled=false; btn.textContent='frissítés';}
     updatePortfolioChange();
+    renderDashMiniChart();
   }
+  renderHistory();
+  renderDashMiniChart();
 }
 
 function calcPortfolioOnDate(date){
@@ -2652,6 +2907,65 @@ function calcInvestedOnDate(date){
   data.cashTx.filter(t=>t.date<=date&&t.type==='withdraw').forEach(t=>invested-=t.amount);
   data.etfTx.filter(t=>t.date<=date&&t.type==='buy').forEach(t=>invested+=t.shares*t.priceEur*t.fxRate);
   return invested;
+}
+
+function renderDashMiniChart(){
+  const today=new Date().toISOString().split('T')[0];
+  if(!histData||!histData.vwcePrices)return;
+
+  // Last 90 days
+  const days=90;
+  const dates=[];
+  for(let i=days;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+
+  const vals=dates.map(d=>{
+    const r=calcPortfolioOnDate(d);
+    return r?Math.round(r.total):null;
+  }).filter(v=>v!==null&&v>0);
+
+  const labels=dates.slice(dates.length-vals.length);
+
+  if(charts['dashMini'])charts['dashMini'].destroy();
+  const ctx=document.getElementById('dashMiniChart');
+  if(!ctx)return;
+
+  const first=vals[0]||1;
+  const last=vals[vals.length-1]||0;
+  const isUp=last>=first;
+  const col=isUp?'rgba(74,222,154,1)':'rgba(248,113,113,1)';
+  const colFill=isUp?'rgba(74,222,154,0.1)':'rgba(248,113,113,0.1)';
+
+  charts['dashMini']=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        data:vals,
+        borderColor:col,
+        backgroundColor:colFill,
+        borderWidth:2,
+        fill:true,
+        tension:0.3,
+        pointRadius:0,
+        pointHoverRadius:4,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{
+        callbacks:{label:ctx=>' '+fmtM(ctx.raw)},
+        displayColors:false
+      }},
+      scales:{
+        x:{display:false},
+        y:{display:false,grace:'5%'}
+      },
+      interaction:{mode:'index',intersect:false}
+    }
+  });
 }
 
 function renderHistory(){
@@ -2793,6 +3107,167 @@ window.addEventListener('DOMContentLoaded',()=>{
   const saved=localStorage.getItem('gh_token');
   if(saved){token=saved;document.getElementById('tokenInput').value=saved;connect();}
 });
+
+// AI ELEMZÉS
+const aiHistory = [];
+
+function toggleApiKeyInput() {
+  const sec = document.getElementById('apiKeySection');
+  if(!sec) return;
+  const visible = sec.style.display !== 'none';
+  sec.style.display = visible ? 'none' : '';
+  if(!visible) {
+    const inp = document.getElementById('apiKeyInput');
+    if(inp) inp.value = ''; // Always empty so user types fresh
+    if(inp) inp.placeholder = anthropicKey ? 'Kulcs beallitva - uj kulcs beirasakor felulirja' : 'sk-ant-...';
+    updateApiKeyStatus();
+  }
+}
+
+function updateApiKeyStatus() {
+  const el = document.getElementById('apiKeyStatus');
+  if(!el) return;
+  el.textContent = anthropicKey ? 'Kulcs beallitva ('+anthropicKey.slice(0,10)+'...) - Gist-ben mentve' : 'Nincs API kulcs beallitva';
+  el.style.color = anthropicKey ? 'var(--green)' : 'var(--text3)';
+  const btn = document.getElementById('apiKeyBtn');
+  if(btn) btn.style.color = anthropicKey ? 'var(--green)' : '';
+}
+
+function saveApiKey() {
+  const inp = document.getElementById('apiKeyInput');
+  if(!inp||!inp.value.trim()) return;
+  const val = inp.value.trim();
+  // Accept any API key format
+  anthropicKey = val;
+  data.anthropicKey = anthropicKey;
+  saveData();
+  updateApiKeyStatus();
+  document.getElementById('apiKeySection').style.display = 'none';
+  toast('API kulcs elmentve!');
+  console.log('API key saved:', val.slice(0,15)+'...');
+}
+
+function getPortfolioContext() {
+  const cb = cashBalance();
+  const apValue = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
+    + data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  const vwceShares = etfShares('VWCE');
+  const wbitShares = etfShares('WBIT');
+  const vwceVal = (liveVwce||0)*vwceShares*(liveFx||395);
+  const wbitVal = (liveWbit||0)*wbitShares*(liveFx||395);
+  const total = cb+apValue+vwceVal+wbitVal;
+  const totalInvested = data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
+    - data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
+    + data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.fee||0),0);
+
+  const fixmapDesc = data.fixmapSeries.map(sr => {
+    const face = data.fixmap.filter(f=>f.active&&f.seriesId===sr.id).reduce((s,f)=>s+f.faceValue,0);
+    return sr.name+': '+(face/1000000).toFixed(2)+'M Ft, '+sr.couponRate+'%, lejarat: '+sr.maturity;
+  }).join(' | ');
+
+  return 'Datum: '+new Date().toLocaleDateString('hu-HU')
+    +'\nPortfolio: '+(total/1000000).toFixed(2)+'M Ft'
+    +'\nBefektetett: '+(totalInvested/1000000).toFixed(2)+'M Ft'
+    +'\nP&L: '+((total-totalInvested)/1000000).toFixed(2)+'M Ft ('+((total-totalInvested)/totalInvested*100).toFixed(2)+'%)'
+    +'\nEUR/HUF: '+(liveFx||395).toFixed(2)
+    +'\nFixMAP: '+fixmapDesc
+    +'\nPenzszamla: '+(cb/1000).toFixed(0)+'e Ft'
+    +'\nVWCE: '+vwceShares.toFixed(2)+' db x EUR'+(liveVwce||0).toFixed(2)+' = '+(vwceVal/1000000).toFixed(2)+'M Ft'
+    +'\nWBIT: '+wbitShares.toFixed(2)+' db x EUR'+(liveWbit||0).toFixed(2)+' = '+(wbitVal/1000000).toFixed(2)+'M Ft'
+    +'\nMegoszlas: Allampapar '+(apValue/total*100).toFixed(1)+'% / VWCE '+(vwceVal/total*100).toFixed(1)+'% / WBIT '+(wbitVal/total*100).toFixed(1)+'%'
+    +'\nHavi megtakaritas: ~150 000 Ft';
+}
+
+function aiAddMessage(role, text, isLoading) {
+  const el = document.getElementById('aiMessages');
+  if(!el) return;
+  const empty = el.querySelector('.ai-empty');
+  if(empty) empty.remove();
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:10px;align-items:flex-start;'+(role==='user'?'flex-direction:row-reverse':'');
+  const bubble = document.createElement('div');
+  bubble.style.cssText = 'max-width:85%;padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.6;white-space:pre-wrap;'
+    +(role==='user'
+      ?'background:var(--green-dim);border:1px solid rgba(74,222,154,0.2)'
+      :'background:var(--bg3);border:1px solid var(--border)');
+  bubble.textContent = isLoading ? '...' : text;
+  if(isLoading) bubble.id='aiLoading';
+  wrap.appendChild(bubble);
+  el.appendChild(wrap);
+  el.scrollTop = el.scrollHeight;
+  return bubble;
+}
+
+async function callAI(userMsg, extra) {
+  const btn = document.getElementById('aiSendBtn');
+  if(btn) btn.disabled=true;
+  aiAddMessage('user', userMsg);
+  const loadBubble = aiAddMessage('assistant','',true);
+  const sys = 'Te egy szemelyes penzugyi asszisztens vagy. Magyarul valaszolj, tomoren, konkret szamokkal.\n'+(extra||'')+'\n\n'+getPortfolioContext();
+  aiHistory.push({role:'user',content:userMsg});
+  if(!anthropicKey) {
+    if(loadBubble) loadBubble.textContent = 'Nincs API kulcs beallitva! Kattints a fogaskerek ikonra es add meg az Anthropic API kulcsot.';
+    if(btn) btn.disabled=false;
+    toggleApiKeyInput();
+    return;
+  }
+  try {
+    // Worker-en keresztul (CORS miatt)
+    const WORKER = 'https://cold-truth-4d27.vrbst405.workers.dev/';
+    const apiUrl = 'https://api.anthropic.com/v1/messages';
+    const r = await fetch(WORKER+'?url='+encodeURIComponent(apiUrl), {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':anthropicKey,
+        'anthropic-version':'2023-06-01'
+      },
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:aiHistory})
+    });
+    const d = await r.json();
+    console.log('AI response:', d);
+    if(d.error) throw new Error(d.error.message||JSON.stringify(d.error));
+    const reply = d.content?.[0]?.text||'Ures valasz';
+    if(loadBubble) loadBubble.textContent=reply;
+    aiHistory.push({role:'assistant',content:reply});
+  } catch(e) {
+    if(loadBubble) loadBubble.textContent='Hiba: '+e.message+' (Ellenorizd az API kulcsot es a konzolt!)';
+    console.error('AI hiba:', e);
+  }
+  if(btn) btn.disabled=false;
+}
+
+function aiChat() {
+  const inp = document.getElementById('aiInput');
+  if(!inp||!inp.value.trim()) return;
+  const msg = inp.value.trim();
+  inp.value='';
+  callAI(msg);
+}
+
+const aiQuickPrompts = {
+  portfolio: 'Ertekeld roviden a portfoliomat! Mik az erossegek es gyengesegek?',
+  diversification: 'Elemezd a portfolio diverzifikaciojat! Mennyire vagyok kiteve kulonbozo kockaza toknak?',
+  fixmap_vs_etf: 'Hogyan latod a FixMAP vs ETF aranyomat? Erdemes-e valtoztatni?',
+  cashflow: 'Elemezd a varhato cashflow-mat a kovetkezo 1-2 evben!'
+};
+
+function aiQuickAnalysis(type) {
+  const navItem = document.querySelector('button.nav-item[onclick*="ai"]');
+  showTab('ai', navItem);
+  callAI(aiQuickPrompts[type]);
+}
+
+async function aiScenario() {
+  const fx = parseFloat(document.getElementById('scenFx').value)||400;
+  const ret = parseFloat(document.getElementById('scenReturn').value)||7;
+  const years = parseFloat(document.getElementById('scenYears').value)||5;
+  const savings = parseFloat(document.getElementById('scenSavings').value)||150000;
+  const prompt = 'Szcenario: EUR/HUF='+fx+', VWCE eves hozam='+ret+'%, idotav='+years+' ev, havi megtakaritas='+savings+' Ft. '
+    +'Szamold ki mekkora lesz a portfolio '+years+' ev mulva! Legyen konkret, szamszeru, hasonlitsd ossze a mostani helyzettel.';
+  callAI(prompt, 'Szcenario szimulator: vegezz konkret szamitast.');
+}
+
 </script>
 </body>
 </html>
