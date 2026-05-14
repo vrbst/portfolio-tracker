@@ -62,7 +62,7 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:1
 .nav-item .ni{font-size:13px;width:16px;text-align:center;opacity:.7}
 
 /* CONTENT */
-.content{padding:24px 28px;flex:1;min-width:0}
+.content{padding:24px 28px;flex:1;min-width:0;background:var(--bg)}
 .page{display:none}
 .page.active{display:block}
 
@@ -263,21 +263,88 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
 /* RESPONSIVE */
 @media(max-width:700px){
-  .cards-4,.cards-3,.cards-5{grid-template-columns:1fr 1fr}
-  .cards-2{grid-template-columns:1fr}
-  .grid2{grid-template-columns:1fr}
-  .content{padding:12px 14px}
-  .panel{padding:14px}
-  .header{padding:12px 14px}
+  /* Body & App */
+  body{padding:0}
+  #app{border-radius:0;border:none;min-height:100vh}
+
+  /* Header */
+  .header{padding:10px 14px}
   .header-logo{font-size:15px}
   .hbtn .lbl{display:none}
-  .stat-value{font-size:16px!important}
-  .balance-bar{flex-wrap:wrap}
-  .balance-actions{margin-left:0;width:100%}
+  .hbtn{padding:6px 8px}
+
+  /* Sidebar ELREJTVE – bottom nav veszi át */
+  .sidebar{display:none}
+
+  /* Content teljes szélességű */
+  .content{padding:12px;background:var(--bg)}
+
+  /* Grids */
+  .cards-4,.cards-3,.cards-5,.cards-2{grid-template-columns:1fr 1fr}
+  .grid2{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
+
+  /* Panels */
+  .panel{padding:14px 12px;border-radius:10px}
+  .stat-card{padding:10px 12px}
+  .stat-value{font-size:16px!important}
+
+  /* Dashboard nagy szám */
+  #dashTotalBig{font-size:34px!important;letter-spacing:-1px!important}
+
+  /* Dashboard layout: főbb flex dobozok egymás alá */
+  .content > div[style*="display:flex"][style*="gap"]{
+    flex-direction:column!important;
+  }
+
+  /* Jobb oldali kártyaoszlop teljes szélességű */
+  .content > div > div[style*="width:340px"]{
+    width:100%!important;
+  }
+
+  /* Donut chart kisebb */
+  #pieChart{max-height:180px}
+
+  /* Range gombok */
+  .range-btn{padding:3px 7px;font-size:10px}
+
+  /* Chart magasság */
+  .chart-wrap{height:160px!important}
+
+  /* Táblák: vízszintes scroll */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:480px}
+
+  /* Upcoming events: dátum jobbra igazítva kisebb */
+  .balance-bar{flex-wrap:wrap}
+
+  /* BOTTOM NAV */
+  #mobile-nav{
+    display:flex;
+    position:fixed;
+    bottom:0;left:0;right:0;
+    background:#0c0c0c;
+    border-top:1px solid var(--border);
+    z-index:200;
+    padding:0;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .mob-nav-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:10px 4px;gap:3px;background:none;border:none;color:var(--text3);
+    font-family:var(--font-mono);font-size:9px;cursor:pointer;transition:color .15s;
+    letter-spacing:.03em;
+  }
+  .mob-nav-btn.active{color:var(--green)}
+  .mob-nav-btn svg{width:18px;height:18px;stroke-width:1.8}
+
+  /* Extra padding a tartalom aljának hogy ne takarja a nav */
+  .content{padding-bottom:70px!important}
 }
+
 @media(max-width:420px){
   .cards-4,.cards-3,.cards-2{grid-template-columns:1fr}
+  #dashTotalBig{font-size:28px!important}
 }
 </style>
 </head>
@@ -343,12 +410,14 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
               <div>
                 <div style="font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">portfóliók</div>
-                <div class="blurable" id="dashTotalBig" style="font-family:var(--font-head);font-size:52px;font-weight:700;letter-spacing:-2px;line-height:1">–</div>
+                <div id="dashTotalBig" style="font-family:var(--font-head);font-size:52px;font-weight:700;letter-spacing:-2px;line-height:1">–</div>
                 <div class="blurable" id="dashTotalSub" style="font-size:13px;color:var(--text2);margin-top:8px">–</div>
               </div>
               <!-- Időszak szűrő -->
               <div style="display:flex;gap:4px;align-self:flex-start;margin-top:4px">
                 <button class="range-btn active" onclick="setDashRange('ytd',this)">YTD</button>
+                <button class="range-btn" onclick="setDashRange('7',this)">1 hét</button>
+                <button class="range-btn" onclick="setDashRange('30',this)">1 hó</button>
                 <button class="range-btn" onclick="setDashRange('90',this)">3 hó</button>
                 <button class="range-btn" onclick="setDashRange('180',this)">6 hó</button>
                 <button class="range-btn" onclick="setDashRange('365',this)">1 év</button>
@@ -615,7 +684,32 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
 
   </div>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <nav id="mobile-nav" style="display:none">
+    <button class="mob-nav-btn active" onclick="mobileNav('dashboard',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      dashboard
+    </button>
+    <button class="mob-nav-btn" onclick="mobileNav('kincstar',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      állampapír
+    </button>
+    <button class="mob-nav-btn" onclick="mobileNav('tbsz',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      tbsz
+    </button>
+    <button class="mob-nav-btn" onclick="mobileNav('tranzakciok',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      lista
+    </button>
+    <button class="mob-nav-btn" onclick="mobileNav('ai',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      AI
+    </button>
+  </nav>
 </div>
+
 
 <!-- MODALS -->
 <div class="modal-backdrop" id="modalBackdrop" onclick="closeModalOutside(event)">
@@ -730,11 +824,27 @@ function logout(){localStorage.removeItem('gh_token');location.reload();}
 function showApp(){
   document.getElementById('setup-screen').style.display='none';
   document.getElementById('app').style.display='block';
+  // Mobilon mutassuk a bottom nav-ot
+  if(window.innerWidth<=700){
+    const nav=document.getElementById('mobile-nav');
+    if(nav)nav.style.display='flex';
+  }
   renderAll();
   fetchLive();
   startAutoRefresh();
   loadHistoricData(true);
 }
+
+function mobileNav(name, btn){
+  // Tab váltás
+  showTab(name, null);
+  // Bottom nav aktív state
+  document.querySelectorAll('.mob-nav-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  // Oldal tetejére görgetés
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
 
 // ═══════════════════════════════════════════════
 // TABS
@@ -842,7 +952,13 @@ function renderDashboard(){
   // Nagy értékkijelző
   const bigEl=document.getElementById('dashTotalBig');
   const subEl=document.getElementById('dashTotalSub');
-  if(bigEl)bigEl.innerHTML='<span class="blurable">'+fmt(Math.round(total))+'</span>';
+  const totalFormatted=fmt(Math.round(total));
+  if(bigEl){
+    bigEl.dataset.value=totalFormatted;
+    bigEl.innerHTML=blurOn
+      ?'<span style="filter:blur(6px);user-select:none">*****</span>'
+      :'<span>'+totalFormatted+'</span>';
+  }
   
   // P&L pill Growy-stílusban
   const diff=total-totalInvested;
@@ -850,7 +966,7 @@ function renderDashboard(){
   const pillCol=diff>=0?'var(--green)':'var(--red)';
   const pillBg=diff>=0?'rgba(61,214,140,0.1)':'rgba(248,113,113,0.1)';
   const pillSign=diff>=0?'+':'';
-  const pillHtml=totalInvested>0?`<span class="blurable" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;background:${pillBg};color:${pillCol};font-size:12px;font-weight:500;margin-left:10px;vertical-align:middle">${pillSign}${pct.toFixed(2)}% (${pillSign}${fmtM(diff)})</span>`:'';
+  const pillHtml=totalInvested>0?`<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;background:${pillBg};color:${pillCol};font-size:12px;font-weight:500;margin-left:10px;vertical-align:middle">${pillSign}${pct.toFixed(2)}% (<span class="blurable">${pillSign}${fmtM(diff)}</span>)</span>`:'';
   
   if(subEl)subEl.innerHTML=`<span class="blurable">≈ ${fmtEur(totalEur)}</span>${pillHtml}`;
 
@@ -858,7 +974,7 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">befektetett tőke</div>
       <div class="stat-value blurable">${fmtM(totalInvested)}</div>
-      ${totalInvested>0?(()=>{const diff=total-totalInvested;const pct=diff/totalInvested*100;const col=diff>=0?'var(--green)':'var(--red)';return '<div class="blurable" style="font-size:11px;margin-top:2px;color:'+col+'">'+(diff>=0?'+':'')+fmtM(diff)+' ('+(diff>=0?'+':'')+pct.toFixed(2)+'%)</div>';})():''}
+      ${totalInvested>0?(()=>{const diff=total-totalInvested;const pct=diff/totalInvested*100;const col=diff>=0?'var(--green)':'var(--red)';return '<div style="font-size:11px;margin-top:2px;color:'+col+'"><span class="blurable">'+(diff>=0?'+':'')+fmtM(diff)+'</span> ('+(diff>=0?'+':'')+pct.toFixed(2)+'%)</div>';})():''}
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
@@ -901,7 +1017,7 @@ function renderPie(cb,ap,tbsz){
       <div style="width:10px;height:10px;border-radius:2px;background:${colors[i]};flex-shrink:0"></div>
       <span style="flex:1;color:var(--text2);font-size:12px">${l}</span>
       <div style="text-align:right">
-        <div class="blurable" style="font-size:12px;font-weight:500">${pct}%</div>
+        <div style="font-size:12px;font-weight:500">${pct}%</div>
         <div class="blurable" style="font-size:10px;color:var(--text3)">${fmtM(vals[i])} · ${fmtEur(eur,0)}</div>
       </div>
     </div>`;
@@ -1212,8 +1328,16 @@ function renderAllampapir(){
     const name=sr?sr.name:(s.seriesId==='legacy'?'FixMáP (régi)':'Ismeretlen');
     const couponRate=sr?sr.couponRate:0;
     const maturity=sr?sr.maturity:'–';
-    const nextCoupon=sr?sr.nextCoupon:'–';
-    const nextCouponPast=sr&&sr.nextCoupon&&new Date(sr.nextCoupon)<new Date();
+    const nextCouponRaw=sr?sr.nextCoupon:'–';
+    // Ha a nextCoupon múltban van, lépjük előre negyedévekkel
+    let nextCoupon=nextCouponRaw;
+    if(sr&&sr.nextCoupon){
+      let d=new Date(sr.nextCoupon+'T00:00:00Z');
+      const now=new Date();
+      while(d<now){d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+3,d.getUTCDate()));}
+      nextCoupon=d.toISOString().split('T')[0];
+    }
+    const nextCouponPast=false; // már előreléptettük, sosem múltbeli
     const isFirstCoupon=sr&&sr.firstCouponAmount&&!nextCouponPast;
     const qCoupon=s.active&&couponRate?(isFirstCoupon?sr.firstCouponAmount:s.totalFace*couponRate/100/4):0;
     const rowId='fm-'+s.seriesId.replace(/[^a-z0-9]/gi,'');
@@ -1641,7 +1765,7 @@ function renderTranzakciok(){
     <td><span class="badge ${typeBadge[t.type]||'b-deposit'}">${typeLabel[t.type]||t.type}</span></td>
     <td>${t.asset}</td>
     <td class="r blurable">${t.vetelar||'–'}</td>
-    <td class="r" style="color:var(--text2)">${t.nevd||'–'}</td>
+    <td class="r blurable" style="color:var(--text2)">${t.nevd||'–'}</td>
     <td class="r" style="color:var(--text2)">${t.rate||'–'}</td>
     <td class="r" style="color:var(--text3)">${t.note}</td>
     <td style="white-space:nowrap">
@@ -2651,7 +2775,18 @@ function toggleBlur(){
   Object.values(charts).forEach(c=>{try{c.update();}catch(e){}});
 }
 function applyBlur(){
-  document.querySelectorAll('.blurable').forEach(el=>el.classList.toggle('blurred',blurOn));
+  document.querySelectorAll('.blurable').forEach(el=>{
+    if(el.tagName==='CANVAS') return;
+    if(el.classList.contains('pct-value')) return;
+    el.classList.toggle('blurred',blurOn);
+  });
+  // Fő összeg: *****  blur esetén
+  const bigEl=document.getElementById('dashTotalBig');
+  if(bigEl&&bigEl.dataset.value){
+    bigEl.innerHTML=blurOn
+      ?'<span style="filter:blur(6px);user-select:none">*****</span>'
+      :'<span>'+bigEl.dataset.value+'</span>';
+  }
 }
 
 // ═══════════════════════════════════════════════
