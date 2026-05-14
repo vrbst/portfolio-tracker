@@ -250,15 +250,20 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ins-avatar-dkj{background:rgba(167,139,250,0.12);color:var(--purple)}
 .ins-avatar-cash{background:rgba(255,255,255,0.06);color:var(--text2)}
 
+/* ÁLLAMPAPÍR TOP LAYOUT */
+.ap-top-grid{display:grid;grid-template-columns:1fr 2fr;gap:12px}
+.ap-cards-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+
 /* AI LAYOUT */
 .ai-layout{display:flex;gap:12px;align-items:flex-start}
 .ai-chat{flex:1;min-width:0;display:flex;flex-direction:column}
 .ai-scenario{width:320px;flex-shrink:0}
 
 /* DASHBOARD LAYOUT */
-.dash-layout{display:flex;gap:12px;align-items:stretch}
-.dash-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
-.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
+.dash-layout{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.dash-main{flex:1;min-width:300px;display:flex;flex-direction:column;gap:12px;order:1}
+.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;order:2}
+.dash-upcoming{flex:1;min-width:300px;order:3}
 .dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
 .range-btns{display:flex;gap:4px;align-self:flex-start;margin-top:4px;flex-wrap:wrap;justify-content:flex-end;max-width:260px}
 .pie-wrap{position:relative;width:260px;height:260px}
@@ -293,19 +298,24 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .content{padding:12px;background:var(--bg)}
 
   /* Dashboard layout mobilon: egymás alá */
-  .dash-layout{flex-direction:column}
-  .dash-side{width:100%;flex-shrink:unset}
+  .dash-main{order:1;width:100%;min-width:unset}
+  .dash-side{order:2;width:100%;flex-shrink:unset}
+  .dash-upcoming{order:3;width:100%;min-width:unset}
   .dash-header-row{flex-direction:column;gap:10px}
   .range-btns{max-width:100%;justify-content:flex-start}
   .pie-wrap{width:200px;height:200px;margin:0 auto}
   #dashTotalBig{font-size:34px!important;letter-spacing:-1px!important}
+
+  /* Állampapír kártyák mobilon: minden egymás alatt */
+  .ap-top-grid{grid-template-columns:1fr}
+  .ap-cards-grid{grid-template-columns:1fr}
 
   /* AI layout mobilon */
   .ai-layout{flex-direction:column}
   .ai-scenario{width:100%;flex-shrink:unset}
 
   /* Grids */
-  .cards-4,.cards-3,.cards-5,.cards-2{grid-template-columns:1fr 1fr}
+  .cards-4,.cards-3,.cards-5,.cards-2,.cards-6{grid-template-columns:1fr 1fr}
   .grid2{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
 
@@ -348,7 +358,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 }
 
 @media(max-width:420px){
-  .cards-4,.cards-3,.cards-2{grid-template-columns:1fr}
+  .cards-4,.cards-3,.cards-2,.cards-6{grid-template-columns:1fr}
   #dashTotalBig{font-size:28px!important}
 }
 </style>
@@ -434,12 +444,6 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             </div>
           </div>
 
-          <!-- Közelgő események -->
-          <div class="panel" style="flex:1">
-            <div class="panel-header"><div class="panel-title">közelgő események</div></div>
-            <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
-          </div>
-
         </div>
 
         <!-- Jobb oszlop: kártyák + donut -->
@@ -466,16 +470,21 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
         </div>
 
+      </div><!-- /.dash-side -->
+
+      <!-- Közelgő események: desktop=bal, mobil=legalul -->
+      <div class="panel dash-upcoming">
+        <div class="panel-header"><div class="panel-title">közelgő események</div></div>
+        <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
       </div>
 
-
-    </div>
+    </div><!-- /.dash-layout -->
 
     <!-- PÉNZSZÁMLA -->
     <div id="page-kincstar" class="page">
 
       <!-- PÉNZSZÁMLA + ÁLLAMPAPÍR egy sorban -->
-      <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:14px">
+      <div class="ap-top-grid" style="margin-bottom:14px">
         <div class="balance-bar" style="margin-bottom:0">
           <div>
             <div class="stat-label">pénzszámla egyenleg</div>
@@ -488,7 +497,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             <button class="btn btn-ghost btn-sm" onclick="openModal('withdraw')">− kiutalás</button>
           </div>
         </div>
-        <div class="card-row cards-4" id="apCards" style="margin-bottom:0"></div>
+        <div class="card-row ap-cards-grid" id="apCards" style="margin-bottom:0"></div>
       </div>
 
       <div class="section-title">
