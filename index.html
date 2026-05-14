@@ -250,6 +250,11 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ins-avatar-dkj{background:rgba(167,139,250,0.12);color:var(--purple)}
 .ins-avatar-cash{background:rgba(255,255,255,0.06);color:var(--text2)}
 
+/* AI LAYOUT */
+.ai-layout{display:flex;gap:12px;align-items:flex-start}
+.ai-chat{flex:1;min-width:0;display:flex;flex-direction:column}
+.ai-scenario{width:320px;flex-shrink:0}
+
 /* DASHBOARD LAYOUT */
 .dash-layout{display:flex;gap:12px;align-items:stretch}
 .dash-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
@@ -294,6 +299,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .range-btns{max-width:100%;justify-content:flex-start}
   .pie-wrap{width:200px;height:200px;margin:0 auto}
   #dashTotalBig{font-size:34px!important;letter-spacing:-1px!important}
+
+  /* AI layout mobilon */
+  .ai-layout{flex-direction:column}
+  .ai-scenario{width:100%;flex-shrink:unset}
 
   /* Grids */
   .cards-4,.cards-3,.cards-5,.cards-2{grid-template-columns:1fr 1fr}
@@ -608,10 +617,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       </div>
 
       <!-- Fő terület: Chat + Szcenárió -->
-      <div style="display:flex;gap:12px;align-items:flex-start">
+      <div class="ai-layout">
 
         <!-- Chat -->
-        <div class="panel" style="flex:1;min-width:0;display:flex;flex-direction:column">
+        <div class="panel ai-chat">
           <div class="panel-header">
             <div class="panel-title">✦ AI asszisztens</div>
             <button class="btn btn-ghost btn-sm" onclick="toggleApiKeyInput()" id="apiKeyBtn">⚙ API kulcs</button>
@@ -635,7 +644,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
 
         <!-- Szcenárió -->
-        <div class="panel" style="width:320px;flex-shrink:0">
+        <div class="panel ai-scenario">
           <div class="panel-header"><div class="panel-title">szcenárió szimulátor</div></div>
           <div style="display:flex;flex-direction:column;gap:12px">
             <div class="form-group">
