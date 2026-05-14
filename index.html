@@ -268,10 +268,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ai-scenario{width:320px;flex-shrink:0}
 
 /* DASHBOARD LAYOUT */
-.dash-layout{display:flex;gap:12px;align-items:stretch}
-.dash-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
-.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;align-self:stretch}
-.dash-upcoming{flex:1}
+.dash-layout{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap}
+.dash-main{flex:1;min-width:300px;display:flex;flex-direction:column;gap:12px;order:1}
+.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;align-self:stretch;order:2}
+.dash-upcoming{flex:1;min-width:300px;order:3}
 .dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
 .range-btns{display:flex;gap:3px;align-self:flex-start;margin-top:4px;flex-wrap:nowrap;flex-shrink:0}
 .pie-wrap{position:relative;width:260px;height:260px}
@@ -306,10 +306,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .content{padding:12px;background:var(--bg)}
 
   /* Dashboard layout mobilon: egymás alá */
-  .dash-layout{flex-direction:column}
-  .dash-main{order:1;width:100%}
+  .dash-layout{flex-direction:column;flex-wrap:unset}
+  .dash-main{order:1;width:100%;min-width:unset}
   .dash-side{order:2;width:100%;flex-shrink:unset}
-  .dash-upcoming{order:3!important}
+  .dash-upcoming{order:3;width:100%;min-width:unset}
   .dash-header-row{flex-direction:column;gap:10px}
   .range-btns{max-width:100%;justify-content:flex-start;flex-wrap:wrap}
   .pie-wrap{width:200px;height:200px;margin:0 auto}
@@ -453,12 +453,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             </div>
           </div>
 
-          <!-- Közelgő események -->
-          <div class="panel dash-upcoming">
-            <div class="panel-header"><div class="panel-title">közelgő események</div></div>
-            <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
-          </div>
-
+          <!-- Közelgő események – placeholder, mobilon ide kerül -->
         </div>
 
         <!-- Jobb oszlop: kártyák + donut -->
@@ -483,6 +478,12 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             </div>
           </div>
 
+        </div>
+
+        <!-- Közelgő események: dash-layout közvetlen gyereke → order működik mobilon -->
+        <div class="panel dash-upcoming">
+          <div class="panel-header"><div class="panel-title">közelgő események</div></div>
+          <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
         </div>
 
       </div><!-- /.dash-layout -->
