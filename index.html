@@ -8,9 +8,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 :root {
-  --bg:#13151c;--bg2:#0d0e12;--bg3:#1a1d26;--bg4:#1f2230;
-  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);
-  --text:#e2e4eb;--text2:#7b8196;--text3:#4a4f63;
+  --bg:#1c1c1c;--bg2:#232323;--bg3:#2a2a2a;--bg4:#333333;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
+  --text:#e2e4eb;--text2:#8b8fa8;--text3:#555870;
   --green:#3dd68c;--green-dim:rgba(61,214,140,0.12);
   --red:#f87171;--red-dim:rgba(248,113,113,0.12);
   --amber:#fbbf24;--amber-dim:rgba(251,191,36,0.12);
@@ -19,7 +19,8 @@
   --font-head:'Syne',sans-serif;--font-mono:'DM Mono',monospace;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;line-height:1.6}
+body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:100vh;font-size:13px;line-height:1.6;padding:8px}
+#app{display:none;min-height:calc(100vh - 16px);border-radius:12px;overflow:hidden;border:1px solid var(--border)}
 
 /* SETUP */
 #setup-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -37,10 +38,9 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 .setup-note a{color:var(--text2)}
 
 /* APP */
-#app{display:none;min-height:100vh}
 
 /* HEADER */
-.header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(19,21,28,0.97);backdrop-filter:blur(12px);z-index:100}
+.header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(12,12,12,0.97);backdrop-filter:blur(12px);z-index:100}
 .header-logo{font-family:var(--font-head);font-size:18px;font-weight:700;letter-spacing:-.5px}
 .header-logo span{color:var(--green)}
 .header-right{display:flex;align-items:center;gap:8px}
@@ -53,12 +53,12 @@ body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-hei
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* SIDEBAR */
-.sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:100%;overflow-y:auto;position:sticky;top:52px;align-self:flex-start;height:calc(100vh - 52px)}
+.sidebar{width:220px;flex-shrink:0;background:#0c0c0c;border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:100%;overflow-y:auto;position:sticky;top:52px;align-self:flex-start;height:calc(100vh - 52px)}
 .sidebar-nav{flex:1;padding:12px 8px}
 .nav-section{padding:10px 12px 4px;font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;border-radius:8px;background:none;border:none;width:100%;text-align:left;font-family:var(--font-mono);letter-spacing:.02em;margin-bottom:2px}
 .nav-item:hover{color:var(--text);background:rgba(255,255,255,0.05)}
-.nav-item.active{color:var(--green);background:rgba(74,222,154,0.1);font-weight:500}
+.nav-item.active{color:var(--text);background:rgba(255,255,255,0.08);font-weight:500}
 .nav-item .ni{font-size:13px;width:16px;text-align:center;opacity:.7}
 
 /* CONTENT */
