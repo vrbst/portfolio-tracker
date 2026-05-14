@@ -260,10 +260,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ai-scenario{width:320px;flex-shrink:0}
 
 /* DASHBOARD LAYOUT */
-.dash-layout{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
-.dash-main{flex:1;min-width:300px;display:flex;flex-direction:column;gap:12px;order:1}
-.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;order:2}
-.dash-upcoming{flex:1;min-width:300px;order:3}
+.dash-layout{display:flex;gap:12px;align-items:flex-start}
+.dash-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
+.dash-upcoming{flex:1}
 .dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
 .range-btns{display:flex;gap:4px;align-self:flex-start;margin-top:4px;flex-wrap:wrap;justify-content:flex-end;max-width:260px}
 .pie-wrap{position:relative;width:260px;height:260px}
@@ -298,9 +298,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .content{padding:12px;background:var(--bg)}
 
   /* Dashboard layout mobilon: egymás alá */
-  .dash-main{order:1;width:100%;min-width:unset}
+  .dash-layout{flex-direction:column}
+  .dash-main{order:1;width:100%}
   .dash-side{order:2;width:100%;flex-shrink:unset}
-  .dash-upcoming{order:3;width:100%;min-width:unset}
+  .dash-upcoming{order:3!important}
   .dash-header-row{flex-direction:column;gap:10px}
   .range-btns{max-width:100%;justify-content:flex-start}
   .pie-wrap{width:200px;height:200px;margin:0 auto}
@@ -444,6 +445,12 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             </div>
           </div>
 
+          <!-- Közelgő események -->
+          <div class="panel dash-upcoming">
+            <div class="panel-header"><div class="panel-title">közelgő események</div></div>
+            <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
+          </div>
+
         </div>
 
         <!-- Jobb oszlop: kártyák + donut -->
@@ -470,15 +477,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
         </div>
 
-      </div><!-- /.dash-side -->
+      </div><!-- /.dash-layout -->
 
-      <!-- Közelgő események: desktop=bal, mobil=legalul -->
-      <div class="panel dash-upcoming">
-        <div class="panel-header"><div class="panel-title">közelgő események</div></div>
-        <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
-      </div>
 
-    </div><!-- /.dash-layout -->
+    </div>
 
     <!-- PÉNZSZÁMLA -->
     <div id="page-kincstar" class="page">
@@ -642,7 +644,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             </div>
             <div id="apiKeyStatus" style="font-size:11px;margin-top:6px;color:var(--text3)"></div>
           </div>
-          <div id="aiMessages" style="min-height:300px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0;margin-bottom:12px">
+          <div id="aiMessages" style="min-height:500px;max-height:65vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0;margin-bottom:12px">
             <div style="color:var(--text3);font-size:12px;text-align:center;padding:40px 0">Tegyél fel kérdést a portfóliódról, vagy válassz egy gyors elemzést!</div>
           </div>
           <div style="display:flex;gap:8px">
