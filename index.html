@@ -250,6 +250,14 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ins-avatar-dkj{background:rgba(167,139,250,0.12);color:var(--purple)}
 .ins-avatar-cash{background:rgba(255,255,255,0.06);color:var(--text2)}
 
+/* DASHBOARD LAYOUT */
+.dash-layout{display:flex;gap:12px;align-items:stretch}
+.dash-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
+.dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+.range-btns{display:flex;gap:4px;align-self:flex-start;margin-top:4px;flex-wrap:wrap;justify-content:flex-end;max-width:260px}
+.pie-wrap{position:relative;width:260px;height:260px}
+
 /* RANGE BUTTONS (dashboard chart) */
 .range-btn{padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .15s;letter-spacing:.03em}
 .range-btn:hover{border-color:var(--border2);color:var(--text2)}
@@ -279,6 +287,14 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   /* Content teljes szélességű */
   .content{padding:12px;background:var(--bg)}
 
+  /* Dashboard layout mobilon: egymás alá */
+  .dash-layout{flex-direction:column}
+  .dash-side{width:100%;flex-shrink:unset}
+  .dash-header-row{flex-direction:column;gap:10px}
+  .range-btns{max-width:100%;justify-content:flex-start}
+  .pie-wrap{width:200px;height:200px;margin:0 auto}
+  #dashTotalBig{font-size:34px!important;letter-spacing:-1px!important}
+
   /* Grids */
   .cards-4,.cards-3,.cards-5,.cards-2{grid-template-columns:1fr 1fr}
   .grid2{grid-template-columns:1fr}
@@ -289,25 +305,6 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .stat-card{padding:10px 12px}
   .stat-value{font-size:16px!important}
 
-  /* Dashboard nagy szám */
-  #dashTotalBig{font-size:34px!important;letter-spacing:-1px!important}
-
-  /* Dashboard layout: főbb flex dobozok egymás alá */
-  .content > div[style*="display:flex"][style*="gap"]{
-    flex-direction:column!important;
-  }
-
-  /* Jobb oldali kártyaoszlop teljes szélességű */
-  .content > div > div[style*="width:340px"]{
-    width:100%!important;
-  }
-
-  /* Donut chart kisebb */
-  #pieChart{max-height:180px}
-
-  /* Range gombok */
-  .range-btn{padding:3px 7px;font-size:10px}
-
   /* Chart magasság */
   .chart-wrap{height:160px!important}
 
@@ -315,7 +312,6 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   table{min-width:480px}
 
-  /* Upcoming events: dátum jobbra igazítva kisebb */
   .balance-bar{flex-wrap:wrap}
 
   /* BOTTOM NAV */
@@ -400,21 +396,21 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
     <div id="page-dashboard" class="page active">
 
       <!-- Fő layout: bal (chart + közelgő) + jobb (donut) -->
-      <div style="display:flex;gap:12px;align-items:stretch">
+      <div class="dash-layout">
 
         <!-- Bal oszlop -->
-        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <div class="dash-main">
 
           <!-- Nagy érték + mini chart -->
           <div class="panel">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+            <div class="dash-header-row">
               <div>
                 <div style="font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">portfóliók</div>
                 <div id="dashTotalBig" style="font-family:var(--font-head);font-size:52px;font-weight:700;letter-spacing:-2px;line-height:1">–</div>
                 <div class="blurable" id="dashTotalSub" style="font-size:13px;color:var(--text2);margin-top:8px">–</div>
               </div>
               <!-- Időszak szűrő -->
-              <div style="display:flex;gap:4px;align-self:flex-start;margin-top:4px">
+              <div class="range-btns">
                 <button class="range-btn active" onclick="setDashRange('ytd',this)">YTD</button>
                 <button class="range-btn" onclick="setDashRange('7',this)">1 hét</button>
                 <button class="range-btn" onclick="setDashRange('30',this)">1 hó</button>
@@ -438,7 +434,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
 
         <!-- Jobb oszlop: kártyák + donut -->
-        <div style="width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <div class="dash-side">
 
           <!-- Befektetett tőke kártya -->
           <div id="dashCards" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -447,7 +443,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div class="panel" style="flex:1">
             <div class="panel-header"><div class="panel-title">megoszlás</div></div>
             <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:4px">
-              <div style="position:relative;width:260px;height:260px">
+              <div class="pie-wrap">
                 <canvas id="pieChart" class="blurable" role="img" aria-label="Megoszlás"></canvas>
                 <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
                   <div style="font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">összesen</div>
