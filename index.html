@@ -98,7 +98,8 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:1
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
 
 /* TABLE */
-.tbl-wrap{overflow-x:auto}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl-wrap table{min-width:480px}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:500px}
 th{text-align:left;padding:6px 10px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:10px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
 th.r{text-align:right}
@@ -268,10 +269,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ai-scenario{width:320px;flex-shrink:0}
 
 /* DASHBOARD LAYOUT */
-.dash-layout{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap}
-.dash-main{flex:1;min-width:300px;display:flex;flex-direction:column;gap:12px;order:1}
-.dash-side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;align-self:stretch;order:2}
-.dash-upcoming{flex:1;min-width:300px;order:3}
+.dash-layout{display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto auto;gap:12px}
+.dash-main{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:12px}
+.dash-side{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:12px}
+.dash-upcoming{grid-column:1;grid-row:2}
 .dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
 .range-btns{display:flex;gap:3px;align-self:flex-start;margin-top:4px;flex-wrap:nowrap;flex-shrink:0}
 .pie-wrap{position:relative;width:260px;height:260px}
@@ -306,7 +307,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .content{padding:12px;background:var(--bg)}
 
   /* Dashboard layout mobilon: egymás alá */
-  .dash-layout{flex-direction:column;flex-wrap:unset}
+  .dash-layout{display:flex;flex-direction:column}
   .dash-main{order:1;width:100%;min-width:unset}
   .dash-side{order:2;width:100%;flex-shrink:unset}
   .dash-upcoming{order:3;width:100%;min-width:unset}
@@ -338,7 +339,6 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
   /* Táblák: vízszintes scroll */
   .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  table{min-width:480px}
 
   .balance-bar{flex-wrap:wrap}
 
