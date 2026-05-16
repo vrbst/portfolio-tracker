@@ -262,6 +262,15 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ap-top-grid{display:grid;grid-template-columns:1fr 2fr;gap:12px}
 .ap-cards-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 
+/* QUICK BUTTONS */
+.quick-btns-grid{display:flex;flex-direction:column;gap:6px}
+.quick-btn{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--font-mono);font-size:12px;cursor:pointer;transition:all .15s;text-align:left;width:100%}
+.quick-btn:hover{border-color:var(--green);background:var(--bg3)}
+.quick-btn-icon{font-size:18px;flex-shrink:0;width:24px;text-align:center;opacity:.8}
+.quick-btn-text{display:flex;flex-direction:column;gap:2px}
+.quick-btn-text strong{font-size:12px;font-weight:600;color:var(--text)}
+.quick-btn-text span{font-size:10px;color:var(--text3)}
+
 /* AI LAYOUT */
 .ai-layout{display:flex;gap:12px;align-items:flex-start}
 .ai-chat{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -322,6 +331,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   /* AI layout mobilon */
   .ai-layout{flex-direction:column}
   .ai-scenario{width:100%;flex-shrink:unset}
+  .quick-btns-grid{grid-template-columns:1fr}
 
   /* Grids */
   .cards-4,.cards-3,.cards-5,.cards-2,.cards-6{grid-template-columns:1fr 1fr}
@@ -626,18 +636,33 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
     <!-- AI ELEMZÉS -->
     <div id="page-ai" class="page">
 
-      <!-- Gyors elemzések -->
-      <div style="margin-bottom:16px">
-        <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">gyors elemzés</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-ghost" onclick="aiQuickAnalysis('portfolio')">◈ portfólió értékelés</button>
-          <button class="btn btn-ghost" onclick="aiQuickAnalysis('diversification')">⊕ diverzifikáció</button>
-          <button class="btn btn-ghost" onclick="aiQuickAnalysis('fixmap_vs_etf')">⇄ FixMáP vs ETF</button>
-          <button class="btn btn-ghost" onclick="aiQuickAnalysis('cashflow')">↗ cashflow elemzés</button>
+      <!-- Szcenárió szimulátor – felül, egy sorban -->
+      <div class="panel ai-scenario-top" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;flex-shrink:0">szcenárió szimulátor</div>
+          <div style="display:flex;gap:10px;flex:1;flex-wrap:wrap;align-items:flex-end">
+            <div class="form-group" style="margin:0;flex:1;min-width:100px">
+              <div class="form-label">EUR/HUF</div>
+              <input class="form-input" id="scenFx" type="number" value="400" placeholder="400">
+            </div>
+            <div class="form-group" style="margin:0;flex:1;min-width:100px">
+              <div class="form-label">VWCE hozam (%)</div>
+              <input class="form-input" id="scenReturn" type="number" value="7" placeholder="7">
+            </div>
+            <div class="form-group" style="margin:0;flex:1;min-width:100px">
+              <div class="form-label">Időtáv (év)</div>
+              <input class="form-input" id="scenYears" type="number" value="5" placeholder="5">
+            </div>
+            <div class="form-group" style="margin:0;flex:1;min-width:120px">
+              <div class="form-label">Havi megtakarítás (Ft)</div>
+              <input class="form-input" id="scenSavings" type="number" value="150000" placeholder="150000">
+            </div>
+            <button class="btn btn-primary" onclick="aiScenario()" style="flex-shrink:0;white-space:nowrap">✦ AI elemzés</button>
+          </div>
         </div>
       </div>
 
-      <!-- Fő terület: Chat + Szcenárió -->
+      <!-- Chat + gyorsgombok -->
       <div class="ai-layout">
 
         <!-- Chat -->
@@ -664,28 +689,50 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           </div>
         </div>
 
-        <!-- Szcenárió -->
-        <div class="panel ai-scenario">
-          <div class="panel-header"><div class="panel-title">szcenárió szimulátor</div></div>
-          <div style="display:flex;flex-direction:column;gap:12px">
-            <div class="form-group">
-              <div class="form-label">EUR/HUF árfolyam</div>
-              <input class="form-input" id="scenFx" type="number" value="400" placeholder="400">
-            </div>
-            <div class="form-group">
-              <div class="form-label">VWCE éves hozam (%)</div>
-              <input class="form-input" id="scenReturn" type="number" value="7" placeholder="7">
-            </div>
-            <div class="form-group">
-              <div class="form-label">Időtáv (év)</div>
-              <input class="form-input" id="scenYears" type="number" value="5" placeholder="5">
-            </div>
-            <div class="form-group">
-              <div class="form-label">Havi megtakarítás (Ft)</div>
-              <input class="form-input" id="scenSavings" type="number" value="150000" placeholder="150000">
-            </div>
-            <button class="btn btn-primary" onclick="aiScenario()" style="width:100%">✦ AI elemzés</button>
-            <div id="scenResult" style="font-size:12px;color:var(--text2);line-height:1.6;display:none"></div>
+        <!-- Gyors elemzések – jobb oldal -->
+        <div class="ai-scenario">
+          <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">gyors elemzés</div>
+          <div class="quick-btns-grid">
+            <button class="quick-btn" onclick="aiQuickAnalysis('portfolio')">
+              <span class="quick-btn-icon">◈</span>
+              <span class="quick-btn-text"><strong>portfólió értékelés</strong><span>átfogó elemzés a jelenlegi helyzetről</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('diversification')">
+              <span class="quick-btn-icon">⊕</span>
+              <span class="quick-btn-text"><strong>diverzifikáció</strong><span>kockázat és allokáció elemzése</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('fixmap_vs_etf')">
+              <span class="quick-btn-icon">⇄</span>
+              <span class="quick-btn-text"><strong>FixMáP vs ETF</strong><span>melyik hozza jobban jelenleg</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('cashflow')">
+              <span class="quick-btn-icon">↗</span>
+              <span class="quick-btn-text"><strong>cashflow elemzés</strong><span>várható bevételek és kifizetések</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('fixmap_2031')">
+              <span class="quick-btn-icon">⏱</span>
+              <span class="quick-btn-text"><strong>FixMáP lejárat 2031</strong><span>mi legyen a 40M Ft-tal lejáratkor</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('fi_timeline')">
+              <span class="quick-btn-icon">🏁</span>
+              <span class="quick-btn-text"><strong>FI idővonal</strong><span>mikor éred el a pénzügyi függetlenséget</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('risk')">
+              <span class="quick-btn-icon">⚡</span>
+              <span class="quick-btn-text"><strong>kockázatelemzés</strong><span>mi történik piaci sokk esetén</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('tax')">
+              <span class="quick-btn-icon">§</span>
+              <span class="quick-btn-text"><strong>adóoptimalizálás</strong><span>TBSZ lejáratok, adómegtakarítás</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('savings_impact')">
+              <span class="quick-btn-icon">💰</span>
+              <span class="quick-btn-text"><strong>megtakarítás hatása</strong><span>mi változik magasabb havi összeggel</span></span>
+            </button>
+            <button class="quick-btn" onclick="aiQuickAnalysis('dkj_october')">
+              <span class="quick-btn-icon">📅</span>
+              <span class="quick-btn-text"><strong>DKJ október</strong><span>optimális újraallokáció lejáratkor</span></span>
+            </button>
           </div>
         </div>
 
@@ -3249,7 +3296,13 @@ const aiQuickPrompts = {
   portfolio: 'Ertekeld roviden a portfoliomat! Mik az erossegek es gyengesegek?',
   diversification: 'Elemezd a portfolio diverzifikaciojat! Mennyire vagyok kiteve kulonbozo kockaza toknak?',
   fixmap_vs_etf: 'Hogyan latod a FixMAP vs ETF aranyomat? Erdemes-e valtoztatni?',
-  cashflow: 'Elemezd a varhato cashflow-mat a kovetkezo 1-2 evben!'
+  cashflow: 'Elemezd a varhato cashflow-mat a kovetkezo 1-2 evben!',
+  fixmap_2031: 'A FixMAP 2031 januarban jar le, 40M Ft nominalerteken. Mi legyen ezzel az osszeggel lejaratkor? Vedd figyelembe az EUR/HUF arfolyamot, az esetleges ERM-II csatlakozast, es a rendelkezesre allo befektetesi lehetosegeket. Konkret javaslatot kerek!',
+  fi_timeline: 'Mikor erhetek el penzugyi fuggetlenseget a jelenlegi portfolio es megtakaritasi utem mellett? Szamold ki konkret evszamot, es azt is, hogy mi valtozna ha 200 000 Ft-ot vagy 300 000 Ft-ot takaritanek meg havonta. Hatarozd meg mi lenne a szukseges FI-toke (pl. 4%-os kiveteli rata alapjan)!',
+  risk: 'Vegezz kockazatelemzest! Mi tortenne a portfoliommal ha: 1) a VWCE 30%-ot esne, 2) az EUR/HUF 450 fole menne, 3) mindketto egyidejuleg bekvetkezne? Szamszeru hatas, es mit tehetek ellene?',
+  tax: 'Elemezd az adooptimalizalasi lehetosegeimet! TBSZ szamlak lejáratai, mikor erdemes eladni, mennyit sporolhatok adoban, van-e jobb struktura?',
+  savings_impact: 'Mutasd meg konkret szamokkal, hogy mi valtozna a portfolio 5 es 10 eves tavlatan ha havi 150 000, 200 000 vagy 300 000 Ft-ot takaritanek meg! Tablazatos formaban is mutasd meg a kulonbseget.',
+  dkj_october: 'A DKJ szamlam oktoberre lejár kb. 2.21M Ft ertekben. Mire ajanlod fordítani ezt az osszeget? Vedd figyelembe a jelenlegi allampapir kamatokat, a VWCE arfolyamot, es az aktualis penzszamla egyenlegemet!'
 };
 
 function aiQuickAnalysis(type) {
