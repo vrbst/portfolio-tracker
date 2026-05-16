@@ -161,7 +161,6 @@ tr:hover td{background:rgba(255,255,255,.015)}
 
 /* BLUR */
 .blurred{filter:blur(6px);transition:filter .2s;user-select:none}
-.blurred:hover{filter:blur(0)}
 canvas.blurred{filter:blur(8px);transition:filter .2s}
 canvas.blurred:hover{filter:blur(0)}
 
@@ -1723,6 +1722,7 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice,theadIdOverride){
   }).join('');
 
   document.getElementById(bodyId).innerHTML=summaryRow+rows;
+  if(blurOn) applyBlur();
 }
 
 function deleteEtfTx(id){
@@ -2804,7 +2804,6 @@ function toggleBlur(){
 function applyBlur(){
   document.querySelectorAll('.blurable').forEach(el=>{
     if(el.tagName==='CANVAS') return;
-    if(el.classList.contains('pct-value')) return;
     el.classList.toggle('blurred',blurOn);
   });
   // Fő összeg: *****  blur esetén
