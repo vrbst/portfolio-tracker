@@ -3470,26 +3470,47 @@ function parseLightyearCSV(text, accountId) {
     return obj;
   });
 
-  // Build FX rate map: Reference → EUR/HUF rate (from EUR Conversion rows)
+  // Build FX rate map: Reference → EUR/HUF rate
   const fxMap = {};
-  // Also build date-based map for fallback
   const fxByDate = {};
+
+  // Pair HUF and EUR conversion rows by Reference to compute exact rate
+  const convByRef = {};
   rows.forEach(r => {
-    if(r.Type==='Conversion' && r.Ticker==='EUR' && r['FX Rate']) {
-      const rate = parseFloat(r['FX Rate']);
-      fxMap[r.Reference] = rate;
-      // Date key: "05/05/2026 12:20:37" → "2026-05-05"
-      const [dp] = r.Date.split(' ');
+    if(r.Type==='Conversion') {
+      if(!convByRef[r.Reference]) convByRef[r.Reference] = {};
+      convByRef[r.Reference][r.Ticker] = r;
+    }
+  });
+
+  // For each Reference that has both HUF and EUR conversion rows, compute exact rate
+  Object.entries(convByRef).forEach(([ref, byTicker]) => {
+    const eurRow = byTicker['EUR'];
+    const hufRow = byTicker['HUF'];
+    if(eurRow && hufRow) {
+      const eurAmt = Math.abs(parseFloat(eurRow['Gross Amount'])||0);
+      const hufAmt = Math.abs(parseFloat(hufRow['Gross Amount'])||0);
+      if(eurAmt > 0 && hufAmt > 0) {
+        const rate = hufAmt / eurAmt;
+        fxMap[ref] = rate;
+        // Date key for fallback
+        const [dp] = eurRow.Date.split(' ');
+        const [dd,mm,yyyy] = dp.split('/');
+        fxByDate[`${yyyy}-${mm}-${dd}`] = rate;
+      }
+    } else if(eurRow && eurRow['FX Rate']) {
+      // Fallback: use FX Rate column directly
+      const rate = parseFloat(eurRow['FX Rate']);
+      fxMap[ref] = rate;
+      const [dp] = eurRow.Date.split(' ');
       const [dd,mm,yyyy] = dp.split('/');
-      const dateKey = `${yyyy}-${mm}-${dd}`;
-      fxByDate[dateKey] = rate; // last one wins per date
+      fxByDate[`${yyyy}-${mm}-${dd}`] = rate;
     }
   });
 
   // Helper: find closest prior conversion rate by date
   function getFxRate(ref, dateStr) {
     if(fxMap[ref]) return fxMap[ref];
-    // Fallback: find closest date in fxByDate that is <= dateStr
     const dates = Object.keys(fxByDate).sort();
     let best = null;
     for(const d of dates) {
