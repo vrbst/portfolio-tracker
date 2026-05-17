@@ -1019,7 +1019,7 @@ function etfCostBasis(ticker){
   }
   return buys.filter(b=>b.remaining>0).map(b=>({
     ...b, shares:b.remaining,
-    costHuf: b.remaining*b.priceEur*b.fxRate+(b.fee||0)*(b.remaining/b.shares)*b.fxRate
+    costHuf: b.remaining*b.priceEur*b.fxRate + (b.remaining/b.shares)*(b.feeCurrency==='EUR'?(b.fee||0)*b.fxRate:(b.fee||0))
   }));
 }
 
@@ -1771,7 +1771,7 @@ function tbszAccountCostBasis(ticker, accountId) {
   return buys.filter(b => b.remaining > 0.0001).map(b => ({
     ...b,
     shares: b.remaining,
-    costHuf: b.remaining * b.priceEur * b.fxRate + (b.remaining/b.shares)*(b.fee||0)*b.fxRate,
+    costHuf: b.remaining * b.priceEur * b.fxRate + (b.remaining/b.shares)*(b.feeCurrency==='EUR'?(b.fee||0)*b.fxRate:(b.fee||0)),
   }));
 }
 
@@ -3000,7 +3000,7 @@ function submitETFBuy(ticker){
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
   const fxBase=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
   const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
-  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,tbszYear,note});
+  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,feeCurrency:'HUF',tbszYear,note});
   closeModal(); renderAll(); saveData(); toast(ticker+' vétel rögzítve');
 }
 
@@ -3018,7 +3018,7 @@ function submitETFBuyAcc(){
   const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
   const acc=data.tbszAccounts.find(a=>a.id===accountId);
   const tbszYear=acc?acc.year:new Date().getFullYear();
-  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,tbszYear,accountId,note});
+  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,feeCurrency:'HUF',tbszYear,accountId,note});
   closeModal();
   renderTbszAccount(accountId);
   renderDashboard();
@@ -3631,7 +3631,7 @@ function confirmImport() {
       priceEur: r.priceEur,
       fxRate: r.fxRate,
       fee: r.fee,
-      tbszYear: r.tbszYear,
+      feeCurrency: 'EUR',
       accountId: r.accountId,
       note: 'Lightyear import',
       lyRef: r.ref,
