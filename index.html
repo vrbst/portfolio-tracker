@@ -285,6 +285,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .range-btns{display:flex;gap:3px;align-self:flex-start;margin-top:4px;flex-wrap:nowrap;flex-shrink:0}
 .pie-wrap{position:relative;width:260px;height:260px}
 
+.db-switch-btn{padding:4px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .15s}
+.db-switch-btn:hover{border-color:var(--amber);color:var(--amber)}
+.db-switch-btn.v2{border-color:var(--green);color:var(--green);background:rgba(61,214,140,0.08)}
+
 /* RANGE BUTTONS (dashboard chart) */
 .range-btn{padding:3px 7px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-family:var(--font-mono);font-size:10px;cursor:pointer;transition:all .15s;letter-spacing:.02em;white-space:nowrap}
 .range-btn:hover{border-color:var(--border2);color:var(--text2)}
@@ -400,6 +404,13 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 <div id="app">
   <div class="header">
     <div class="header-logo">portfólió<span>.</span></div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <div style="font-size:10px;color:var(--text3);letter-spacing:.06em">adatbázis:</div>
+      <button class="db-switch-btn" id="dbSwitchBtn" onclick="switchDB()" title="Adatbázis váltás">
+        <span id="dbSwitchLabel">portfolio.json</span>
+        <span style="opacity:.5;margin-left:4px">⇄</span>
+      </button>
+    </div>
     <div class="header-right">
       <button class="hbtn" id="hideBtn" onclick="toggleBlur()" title="Összegek elrejtése">👁 <span class="lbl">elrejt</span></button>
       <button class="hbtn" onclick="saveData()"><div class="sync-dot" id="syncDot"></div><span class="lbl" id="syncLabel">mentés</span></button>
@@ -419,10 +430,12 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       <div class="nav-section" style="margin-top:4px">áttekintés</div>
       <button class="nav-item active" onclick="showTab('dashboard',this)"><span class="ni">◈</span>dashboard</button>
       <button class="nav-item" onclick="showTab('tranzakciok',this)"><span class="ni">≡</span>tranzakciók</button>
+      <button class="nav-item" onclick="showTab('import',this)"><span class="ni">↓</span>importálás</button>
       <button class="nav-item" onclick="showTab('ai',this)"><span class="ni">✦</span>AI elemzés</button>
       <div class="nav-section">portfóliók</div>
       <button class="nav-item" onclick="showTab('kincstar',this)"><span class="ni" style="font-size:8px;opacity:.5">●</span>állampapír</button>
-      <button class="nav-item" onclick="showTab('tbsz',this)"><span class="ni" style="font-size:8px;opacity:.5">●</span>tbsz</button>
+      <div id="tbsz-nav-items"></div>
+      <button class="nav-item" onclick="addTbszAccount()" style="color:var(--text3);font-size:11px"><span class="ni" style="opacity:.5">+</span>új tbsz számla</button>
     </nav>
   </div>
 
@@ -572,66 +585,8 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
     </div>
 
-    <!-- TBSZ -->
-    <div id="page-tbsz" class="page">
-      <!-- Összesítő kártyák -->
-      <div class="card-row cards-6" id="tbszCards"></div>
-
-      <!-- Lista nézet -->
-      <div id="tbszListView">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">pozíciók</div>
-          <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf','VWCE')">+ új vétel</button>
-        </div>
-        <div class="panel" style="margin-top:0;padding:0">
-          <div class="tbl-wrap">
-          <table style="width:100%">
-            <thead><tr>
-              <th style="padding:10px 16px;text-align:left;font-size:11px;color:var(--text3);font-weight:400;letter-spacing:.06em;border-bottom:1px solid var(--border)">eszköz</th>
-              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">darabszám</th>
-              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">befektetett</th>
-              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">aktuális érték</th>
-              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">P&L</th>
-              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">live ár</th>
-              <th style="padding:10px 16px;border-bottom:1px solid var(--border)"></th>
-            </tr></thead>
-            <tbody id="tbszInstrumentList"></tbody>
-          </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- Részlet nézet -->
-      <div id="tbszDetailView" style="display:none">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-          <button class="btn btn-ghost btn-sm" onclick="tbszBack()">← vissza</button>
-          <div id="tbszDetailHeader" style="font-family:var(--font-head);font-size:16px;font-weight:600"></div>
-          <span id="tbszDetailPill" class="live-pill est"><span class="live-dot"></span><span id="tbszDetailPriceLabel"></span></span>
-          <div style="flex:1"></div>
-          <button class="btn btn-primary btn-sm" id="tbszDetailBuyBtn">+ vétel</button>
-          <button class="btn btn-ghost btn-sm" id="tbszDetailSellBtn">− eladás</button>
-        </div>
-        <div class="panel" style="margin-top:0">
-          <div class="tbl-wrap" style="max-height:500px;overflow-y:auto;overflow-x:auto;background:var(--bg2)"><table>
-            <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr id="tbszDetailThead"></tr></thead>
-            <tbody id="tbszDetailBody"></tbody>
-          </table></div>
-          <div class="empty" id="tbszDetailEmpty" style="display:none">Még nincs tétel.</div>
-        </div>
-      </div>
-
-      <!-- Hidden elements needed for original renderTBSZ -->
-      <div style="display:none">
-        <span id="vwcePill"><span id="vwcePriceLabel"></span></span>
-        <span id="vwcePriceHuf"></span>
-        <span id="wbitPill"><span id="wbitPriceLabel"></span></span>
-        <span id="wbitPriceHuf"></span>
-        <table><thead><tr id="vwce-thead"></tr></thead><tbody id="vwceBody"></tbody></table>
-        <table><thead><tr id="wbit-thead"></tr></thead><tbody id="wbitBody"></tbody></table>
-        <div id="vwceEmpty"></div>
-        <div id="wbitEmpty"></div>
-      </div>
-    </div>
+    <!-- TBSZ (dinamikus, számlánként generált) -->
+    <div id="tbsz-pages-container"></div>
 
     <!-- AI ELEMZÉS -->
     <div id="page-ai" class="page">
@@ -739,6 +694,70 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       </div>
     </div>
 
+    <!-- IMPORTÁLÁS -->
+    <div id="page-import" class="page">
+      <div class="panel" style="max-width:700px">
+        <div class="panel-header">
+          <div class="panel-title">Lightyear CSV importálás</div>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:20px;line-height:1.7">
+          Töltsd fel a Lightyear számlakivonat CSV fájlját. Az app automatikusan felismeri a vételeket és befizetéseket, előnézetet mutat, majd te döntöd el melyik TBSZ számlára kerüljenek.
+        </div>
+
+        <!-- Számla választó -->
+        <div class="form-group" style="margin-bottom:16px">
+          <div class="form-label">Célszámla (TBSZ)</div>
+          <select class="form-select" id="importAccountSelect">
+            <option value="">– válassz számlát –</option>
+          </select>
+        </div>
+
+        <!-- Fájl feltöltés -->
+        <div id="importDropzone" style="border:2px dashed var(--border2);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px"
+          onclick="document.getElementById('importFileInput').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--green)'"
+          ondragleave="this.style.borderColor='var(--border2)'"
+          ondrop="event.preventDefault();this.style.borderColor='var(--border2)';handleImportDrop(event)">
+          <div style="font-size:28px;margin-bottom:8px">📂</div>
+          <div style="font-size:13px;color:var(--text2)">Húzd ide a CSV fájlt, vagy kattints a feltöltéshez</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Lightyear CSV számlakivonat (hu vagy en)</div>
+          <input type="file" id="importFileInput" accept=".csv" style="display:none" onchange="handleImportFile(this.files[0])">
+        </div>
+
+        <!-- Előnézet -->
+        <div id="importPreview" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">beolvasott tranzakciók</div>
+            <div id="importStats" style="font-size:11px;color:var(--text2)"></div>
+          </div>
+          <div class="tbl-wrap" style="max-height:400px;overflow-y:auto">
+            <table style="width:100%">
+              <thead>
+                <tr>
+                  <th style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);text-align:left">
+                    <input type="checkbox" id="importSelectAll" onchange="importToggleAll(this.checked)" style="margin-right:6px">
+                    dátum
+                  </th>
+                  <th style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">típus</th>
+                  <th style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">ticker</th>
+                  <th class="r" style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">mennyiség</th>
+                  <th class="r" style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">ár (EUR)</th>
+                  <th class="r" style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">EUR/HUF</th>
+                  <th class="r" style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">díj (EUR)</th>
+                  <th style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">státusz</th>
+                </tr>
+              </thead>
+              <tbody id="importPreviewBody"></tbody>
+            </table>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn btn-ghost" onclick="resetImport()">mégsem</button>
+            <button class="btn btn-primary" onclick="confirmImport()" id="importConfirmBtn">✓ kijelöltek importálása</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TRANZAKCIÓK -->
     <div id="page-tranzakciok" class="page">
       <div class="panel">
@@ -798,7 +817,40 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 // ═══════════════════════════════════════════════
 // CONFIG & STATE
 // ═══════════════════════════════════════════════
-const GIST_FILE = 'portfolio-tracker-v2.json';
+const DB_FILES = {
+  v1: 'portfolio-tracker-v2.json',   // eredeti adatbázis
+  v2: 'portfolio-tracker-v2-new.json' // új, import-alapú adatbázis
+};
+let currentDB = localStorage.getItem('activeDB') || 'v1';
+let GIST_FILE = DB_FILES[currentDB];
+
+function switchDB() {
+  const newDB = currentDB === 'v1' ? 'v2' : 'v1';
+  if(!confirm(`Átváltasz a ${newDB==='v2'?'ÚJ (import)':'EREDETI'} adatbázisra?\nAz aktuális adatok mentve maradnak.`)) return;
+  currentDB = newDB;
+  GIST_FILE = DB_FILES[currentDB];
+  localStorage.setItem('activeDB', currentDB);
+  updateDBSwitchBtn();
+  // Újratöltés az új adatbázissal
+  data = JSON.parse(JSON.stringify({...DEFAULT_DATA}));
+  gistId = null;
+  showApp._reloading = true;
+  toast('Átváltás... újratöltés folyamatban');
+  setTimeout(() => location.reload(), 800);
+}
+
+function updateDBSwitchBtn() {
+  const btn = document.getElementById('dbSwitchBtn');
+  const lbl = document.getElementById('dbSwitchLabel');
+  if(!btn||!lbl) return;
+  if(currentDB === 'v2') {
+    btn.classList.add('v2');
+    lbl.textContent = 'portfolio-new.json';
+  } else {
+    btn.classList.remove('v2');
+    lbl.textContent = 'portfolio.json';
+  }
+}
 let token='', gistId='', blurOn=false;
 let liveVwce=null, liveWbit=null, liveFx=null, liveVwcePct=null, liveWbitPct=null;
 let anthropicKey=null;
@@ -806,11 +858,13 @@ let charts={};
 
 const DEFAULT_DATA = {
   cashTx: [],         // {id,date,type,amount,note}
-  fixmapSeries: [],   // {id,name,couponRate,issueDate,nextCoupon,maturity} – sorozat definíciók
-  fixmap: [],         // {id,seriesId,date,faceValue,buyPrice,active} – vételek
-  dkjSeries: [],      // {id,name,maturity} – sorozat definíciók
+  fixmapSeries: [],   // {id,name,couponRate,issueDate,nextCoupon,maturity}
+  fixmap: [],         // {id,seriesId,date,faceValue,buyPrice,active}
+  dkjSeries: [],      // {id,name,maturity}
   dkj: [],            // {id,seriesId,date,faceValue,buyPrice,active}
-  etfTx: [],          // {id,date,ticker,type,shares,priceEur,fxRate,note,tbszYear}
+  etfTx: [],          // {id,date,ticker,type,shares,priceEur,fxRate,note,tbszYear,accountId}
+  tbszAccounts: [],   // {id,name,year,openDate} – pl. {id:'tbsz2026',name:'TBSZ 2026',year:2026,openDate:'2026-01-02'}
+  tbszCashTx: [],     // {id,accountId,date,type,amount,currency,note} – HUF/EUR befizetés/kifizetés TBSZ-en belül
 };
 
 let data = null;
@@ -897,7 +951,7 @@ function logout(){localStorage.removeItem('gh_token');location.reload();}
 function showApp(){
   document.getElementById('setup-screen').style.display='none';
   document.getElementById('app').style.display='block';
-  // Mobilon mutassuk a bottom nav-ot
+  updateDBSwitchBtn();
   if(window.innerWidth<=700){
     const nav=document.getElementById('mobile-nav');
     if(nav)nav.style.display='flex';
@@ -925,11 +979,13 @@ function mobileNav(name, btn){
 function showTab(name,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(t=>t.classList.remove('active'));
-  document.getElementById('page-'+name).classList.add('active');
+  const page=document.getElementById('page-'+name);
+  if(page) page.classList.add('active');
   if(el)el.classList.add('active');
   if(name==='kincstar') setTimeout(renderCashflowChart, 50);
   if(name==='ai') setTimeout(updateApiKeyStatus, 50);
   if(name==='dashboard') setTimeout(renderDashMiniChart, 50);
+  if(name==='import') setTimeout(initImportPage, 50);
 }
 
 // ═══════════════════════════════════════════════
@@ -991,9 +1047,13 @@ function nextCouponDate(maturity){
 function renderAll(){
   renderDashboard();
   renderKincstar();
-  renderTBSZ();
   renderTranzakciok();
-  renderTBSZInstruments();
+  // TBSZ: sidebar + oldalak generálása
+  getTbszAccounts(); // migráció ha kell
+  renderTbszSidebar();
+  renderTbszPages();
+  // Ha van aktív számla, rendereljük
+  if(activeTbszAccountId) renderTbszAccount(activeTbszAccountId);
   if(blurOn)setTimeout(applyBlur,50);
 }
 
@@ -1099,8 +1159,10 @@ function renderPie(cb,ap,tbsz){
 
 function renderUpcoming(){
   const now=new Date();
+  const todayStr=new Date().toISOString().split('T')[0];
   const events=[];
-  // FixMáP coupons – all future quarterly dates per series
+
+  // FixMáP coupons
   const fmCouponMap={};
   data.fixmap.filter(f=>f.active).forEach(f=>{
     const sr=data.fixmapSeries.find(x=>x.id===(f.seriesId||''));
@@ -1112,38 +1174,61 @@ function renderUpcoming(){
     const startDate=sr.nextCoupon||nextCouponDate(sr.maturity);
     if(!startDate)return;
     const matDate=new Date(sr.maturity);
-    let d=new Date(startDate+"T00:00:00Z");
+    let d=new Date(startDate+'T00:00:00Z');
     let isFirst=true;
     let safety=0;
     while(d<=matDate&&safety<100){
       const ds=d.toISOString().split('T')[0];
       if(new Date(ds)>new Date()){
-        const pastFirst=sr.firstCouponAmount&&new Date(ds)<new Date();const amount=isFirst&&sr.firstCouponAmount&&!pastFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
-        events.push({date:ds,label:'FixMáP kamat ('+sr.name+')',amount,color:'var(--blue)'});
+        const amount=isFirst&&sr.firstCouponAmount?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
+        events.push({date:ds,series:sr.name,type:'kamat',amount,color:'var(--blue)'});
       }
       isFirst=false;
       d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+3,d.getUTCDate()));
       safety++;
     }
   });
-  // DKJ lejáratok – grouped by maturity
+
+  // DKJ lejáratok
   const dkjExpireMap={};
   data.dkj.filter(d=>d.active).forEach(d=>{
     if(new Date(d.maturity)<=now)return;
-    if(!dkjExpireMap[d.maturity])dkjExpireMap[d.maturity]={maturity:d.maturity,totalFace:0};
+    if(!dkjExpireMap[d.maturity])dkjExpireMap[d.maturity]={maturity:d.maturity,totalFace:0,name:''};
+    const sr=data.dkjSeries?.find(s=>s.maturity===d.maturity);
     dkjExpireMap[d.maturity].totalFace+=d.faceValue;
+    dkjExpireMap[d.maturity].name=sr?sr.name:'D'+d.maturity.replace(/-/g,'').slice(2);
   });
-  Object.values(dkjExpireMap).forEach(({maturity,totalFace})=>{
-    const name='D'+maturity.replace(/-/g,'').slice(2);
-    events.push({date:maturity,label:'DKJ lejárat ('+name+')',amount:totalFace,color:'var(--purple)'});
+  Object.values(dkjExpireMap).forEach(({maturity,totalFace,name})=>{
+    events.push({date:maturity,series:name,type:'lejárat',amount:totalFace,color:'var(--purple)'});
   });
+
   events.sort((a,b)=>a.date.localeCompare(b.date));
-  const upcoming=events;
-  document.getElementById('upcomingEvents').innerHTML=upcoming.length
-    ? upcoming.map(e=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
-        <div><span style="color:${e.color};margin-right:6px">●</span>${e.label}</div>
-        <div style="text-align:right"><div style="color:var(--text3);font-size:10px">${e.date}</div><div class="blurable pos">+${fmt(e.amount)}</div></div>
-      </div>`).join('')
+
+  function daysUntil(dateStr){
+    const diff=Math.round((new Date(dateStr+' 00:00:00')-new Date(todayStr+' 00:00:00'))/(1000*60*60*24));
+    if(diff===0)return {label:'ma',col:'var(--amber)'};
+    if(diff===1)return {label:'holnap',col:'var(--amber)'};
+    if(diff<0)return {label:Math.abs(diff)+' napja',col:'var(--text3)'};
+    return {label:diff+' nap múlva',col:diff<=14?'var(--amber)':'var(--text2)'};
+  }
+
+  document.getElementById('upcomingEvents').innerHTML=events.length
+    ? events.map(e=>{
+        const {label,col}=daysUntil(e.date);
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:${e.color};font-size:8px">●</span>
+            <div>
+              <div style="font-size:13px;font-weight:500;color:${col}">${label}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">${e.series} · ${e.type}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div class="blurable" style="font-size:13px;color:var(--green);font-weight:500">+${fmt(e.amount)} Ft</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${e.date}</div>
+          </div>
+        </div>`;
+      }).join('')
     : '<div class="empty">Nincs közelgő esemény.</div>';
 }
 
@@ -1530,128 +1615,454 @@ function sellDKJ(id){
 // ═══════════════════════════════════════════════
 let tbszSelectedTicker = null;
 
-function selectInstrument(ticker) {
-  tbszSelectedTicker = ticker;
-  document.getElementById('tbszListView').style.display = 'none';
-  document.getElementById('tbszDetailView').style.display = '';
-  renderTBSZDetail(ticker);
+// ═══════════════════════════════════════════════
+// TBSZ MULTI-ACCOUNT
+// ═══════════════════════════════════════════════
+
+let activeTbszAccountId = null;
+let activeTbszTicker = null;
+
+function getTbszAccounts() {
+  if(!data.tbszAccounts) data.tbszAccounts = [];
+  // Ha nincs egyetlen számla sem, de van etfTx, hozzunk létre egy alapértelmezettet
+  if(data.tbszAccounts.length === 0 && data.etfTx && data.etfTx.length > 0) {
+    const years = [...new Set(data.etfTx.map(t=>t.tbszYear||2026))].sort();
+    years.forEach(yr => {
+      const id = 'tbsz'+yr;
+      data.tbszAccounts.push({id, name:'TBSZ '+yr, year:yr, openDate:yr+'-01-02'});
+      // Számlához rendelés ha nincs accountId
+      data.etfTx.forEach(t => { if((t.tbszYear||2026)===yr && !t.accountId) t.accountId=id; });
+    });
+  }
+  return data.tbszAccounts;
 }
 
-function renderTBSZInstruments() {
-  const instruments = [
-    { ticker:'VWCE', name:'Vanguard FTSE All-World', shares:etfShares('VWCE'), price:liveVwce, pct:liveVwcePct,
-      cost:etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0) },
-    { ticker:'WBIT', name:'WisdomTree Bitcoin', shares:etfShares('WBIT'), price:liveWbit, pct:liveWbitPct,
-      cost:etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0) },
-  ].filter(i => i.shares > 0).map(i => ({
-    ...i,
-    val: (i.price||0) * i.shares * (liveFx||395)
+function renderTbszSidebar() {
+  const accounts = getTbszAccounts();
+  const nav = document.getElementById('tbsz-nav-items');
+  if(!nav) return;
+  nav.innerHTML = accounts.map(acc => `
+    <button class="nav-item ${activeTbszAccountId===acc.id?'active':''}"
+      onclick="showTbszAccount('${acc.id}', this)">
+      <span class="ni" style="font-size:8px;opacity:.5">●</span>${acc.name}
+    </button>
+  `).join('');
+}
+
+function renderTbszPages() {
+  const accounts = getTbszAccounts();
+  const container = document.getElementById('tbsz-pages-container');
+  if(!container) return;
+  // Töröljük a régi oldalakat
+  container.innerHTML = accounts.map(acc => `
+    <div id="page-tbsz-${acc.id}" class="page">
+      <div class="tbsz-account-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <div style="font-family:var(--font-head);font-size:20px;font-weight:700">${acc.name}</div>
+          <div style="font-size:11px;color:var(--text3)">Nyitva: ${acc.openDate} · Adómentes: ${acc.year+3} után, optimális: ${acc.year+5} után</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="openTbszCashModal('deposit','${acc.id}')">+ befizetés</button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteTbszAccount('${acc.id}')">× számla</button>
+        </div>
+      </div>
+      <!-- Összesítő kártyák -->
+      <div class="card-row cards-4 blurable" id="tbsz-cards-${acc.id}" style="margin-bottom:16px"></div>
+      <!-- Pénzszámla egyenleg -->
+      <div class="card-row cards-2" id="tbsz-cash-${acc.id}" style="margin-bottom:16px"></div>
+      <!-- Lista nézet -->
+      <div id="tbsz-list-${acc.id}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">pozíciók</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf-acc','VWCE','${acc.id}')">+ VWCE vétel</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('buy-etf-acc','WBIT','${acc.id}')">+ WBIT vétel</button>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:0;padding:0">
+          <div class="tbl-wrap">
+            <table style="width:100%">
+              <thead><tr>
+                <th style="padding:10px 16px;text-align:left;font-size:11px;color:var(--text3);font-weight:400;letter-spacing:.06em;border-bottom:1px solid var(--border)">eszköz</th>
+                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">darabszám</th>
+                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">befektetett</th>
+                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">aktuális érték</th>
+                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">P&L</th>
+                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">live ár</th>
+                <th style="padding:10px 16px;border-bottom:1px solid var(--border)"></th>
+              </tr></thead>
+              <tbody id="tbsz-inst-${acc.id}"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- Részlet nézet -->
+      <div id="tbsz-detail-${acc.id}" style="display:none">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <button class="btn btn-ghost btn-sm" onclick="tbszAccountBack('${acc.id}')">← vissza</button>
+          <div id="tbsz-detail-hdr-${acc.id}" style="font-family:var(--font-head);font-size:16px;font-weight:600"></div>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary btn-sm" id="tbsz-buy-btn-${acc.id}">+ vétel</button>
+          <button class="btn btn-ghost btn-sm" id="tbsz-sell-btn-${acc.id}">− eladás (FIFO)</button>
+        </div>
+        <div class="panel" style="margin-top:0">
+          <div class="tbl-wrap" style="max-height:500px;overflow-y:auto">
+            <table>
+              <thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
+                <tr id="tbsz-detail-thead-${acc.id}"></tr>
+              </thead>
+              <tbody id="tbsz-detail-body-${acc.id}"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="tbsz-detail-empty-${acc.id}" style="display:none">Még nincs tétel.</div>
+        </div>
+        <!-- Realizált P&L -->
+        <div id="tbsz-realized-${acc.id}" style="margin-top:12px;display:none"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function showTbszAccount(accountId, navEl) {
+  activeTbszAccountId = accountId;
+  activeTbszTicker = null;
+  // Minden page-t elrejtünk
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // Aktiváljuk a megfelelőt
+  const page = document.getElementById('page-tbsz-'+accountId);
+  if(page) page.classList.add('active');
+  // Sidebar nav active
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  if(navEl) navEl.classList.add('active');
+  renderTbszAccount(accountId);
+}
+
+function renderTbszAccount(accountId) {
+  renderTbszCards(accountId);
+  renderTbszCash(accountId);
+  renderTbszInstrumentList(accountId);
+}
+
+function tbszAccountShares(ticker, accountId) {
+  return data.etfTx
+    .filter(t => t.ticker===ticker && t.accountId===accountId)
+    .reduce((s,t) => s + (t.type==='buy'?t.shares:-t.shares), 0);
+}
+
+function tbszAccountCostBasis(ticker, accountId) {
+  // FIFO: returns remaining lots with their cost
+  const buys = data.etfTx
+    .filter(t => t.ticker===ticker && t.accountId===accountId && t.type==='buy')
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .map(t => ({...t, remaining: t.shares}));
+  const sells = data.etfTx
+    .filter(t => t.ticker===ticker && t.accountId===accountId && t.type==='sell')
+    .sort((a,b) => a.date.localeCompare(b.date));
+  // FIFO alkalmazása
+  sells.forEach(sell => {
+    let toSell = sell.shares;
+    for(const buy of buys) {
+      if(toSell <= 0) break;
+      const used = Math.min(buy.remaining, toSell);
+      buy.remaining -= used;
+      toSell -= used;
+    }
+  });
+  return buys.filter(b => b.remaining > 0.0001).map(b => ({
+    ...b,
+    shares: b.remaining,
+    costHuf: b.remaining * b.priceEur * b.fxRate + (b.remaining/b.shares)*(b.fee||0),
   }));
+}
 
-  const el = document.getElementById('tbszInstrumentList');
+function tbszRealizedPL(ticker, accountId) {
+  // Számítsuk ki a realizált P&L-t FIFO alapján
+  const buys = data.etfTx
+    .filter(t => t.ticker===ticker && t.accountId===accountId && t.type==='buy')
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .map(t => ({...t, remaining: t.shares}));
+  const sells = data.etfTx
+    .filter(t => t.ticker===ticker && t.accountId===accountId && t.type==='sell')
+    .sort((a,b) => a.date.localeCompare(b.date));
+  let totalRealizedEur = 0;
+  let totalRealizedHuf = 0;
+  sells.forEach(sell => {
+    let toSell = sell.shares;
+    const sellEur = sell.priceEur;
+    const sellFx = sell.fxRate;
+    for(const buy of buys) {
+      if(toSell <= 0) break;
+      const used = Math.min(buy.remaining, toSell);
+      buy.remaining -= used;
+      toSell -= used;
+      totalRealizedEur += used * (sellEur - buy.priceEur);
+      totalRealizedHuf += used * (sellEur * sellFx - buy.priceEur * buy.fxRate);
+    }
+  });
+  return {eur: totalRealizedEur, huf: totalRealizedHuf};
+}
+
+function tbszAccountCashBalance(accountId, currency='HUF') {
+  if(!data.tbszCashTx) return 0;
+  return data.tbszCashTx
+    .filter(t => t.accountId===accountId && t.currency===currency)
+    .reduce((s,t) => s + (['deposit','sell_proceed'].includes(t.type)?t.amount:-t.amount), 0);
+}
+
+function renderTbszCards(accountId) {
+  const el = document.getElementById('tbsz-cards-'+accountId);
   if(!el) return;
+  const fx = liveFx||395;
+  const tickers = ['VWCE','WBIT'];
+  let totalVal = 0, totalCost = 0;
+  tickers.forEach(ticker => {
+    const basis = tbszAccountCostBasis(ticker, accountId);
+    const lp = ticker==='VWCE'?liveVwce:liveWbit;
+    const cost = basis.reduce((s,b)=>s+b.costHuf,0);
+    const val = lp ? basis.reduce((s,b)=>s+b.shares,0)*lp*fx : 0;
+    totalVal += val; totalCost += cost;
+  });
+  const pl = totalVal - totalCost;
+  const plPct = totalCost > 0 ? pl/totalCost*100 : 0;
+  const plCol = pl>=0?'var(--green)':'var(--red)';
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-label">portfólió érték</div><div class="stat-value blurable">${totalVal>0?fmtM(totalVal):'–'}</div><div class="stat-sub blurable">${totalVal>0?fmtEur(totalVal/fx,0):'–'}</div></div>
+    <div class="stat-card"><div class="stat-label">befektetett</div><div class="stat-value blurable">${fmtM(totalCost)}</div></div>
+    <div class="stat-card"><div class="stat-label">P&L (unrealized)</div><div class="stat-value blurable" style="color:${plCol}">${totalCost>0?(pl>=0?'+':'')+fmtM(pl):'–'}</div><div class="stat-sub" style="color:${plCol}">${totalCost>0?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</div></div>
+    <div class="stat-card"><div class="stat-label">EUR / HUF</div><div class="stat-value">${fx.toFixed(2)} Ft</div><div class="stat-sub">${liveFx?'live':'becsült'}</div></div>
+  `;
+}
 
+function renderTbszCash(accountId) {
+  const el = document.getElementById('tbsz-cash-'+accountId);
+  if(!el) return;
+  const huf = tbszAccountCashBalance(accountId, 'HUF');
+  const eur = tbszAccountCashBalance(accountId, 'EUR');
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-label">TBSZ pénzszámla (HUF)</div><div class="stat-value blurable">${fmt(huf)}</div><div class="stat-sub"><button class="btn btn-ghost btn-sm" onclick="openTbszCashModal('deposit','${accountId}','HUF')" style="font-size:10px;padding:2px 6px">+ befizetés</button></div></div>
+    <div class="stat-card"><div class="stat-label">TBSZ pénzszámla (EUR)</div><div class="stat-value blurable">${fmtEur(eur)}</div><div class="stat-sub"><button class="btn btn-ghost btn-sm" onclick="openTbszCashModal('deposit','${accountId}','EUR')" style="font-size:10px;padding:2px 6px">+ EUR befizetés</button></div></div>
+  `;
+}
+
+function renderTbszInstrumentList(accountId) {
+  const el = document.getElementById('tbsz-inst-'+accountId);
+  if(!el) return;
+  const fx = liveFx||395;
+  const instruments = ['VWCE','WBIT'].map(ticker => {
+    const basis = tbszAccountCostBasis(ticker, accountId);
+    const shares = basis.reduce((s,b)=>s+b.shares,0);
+    const cost = basis.reduce((s,b)=>s+b.costHuf,0);
+    const lp = ticker==='VWCE'?liveVwce:liveWbit;
+    const val = lp ? shares*lp*fx : 0;
+    const pct = ticker==='VWCE'?liveVwcePct:liveWbitPct;
+    return {ticker, shares, cost, val, lp, pct,
+      name: ticker==='VWCE'?'Vanguard FTSE All-World':'WisdomTree Bitcoin'};
+  }).filter(i => i.shares > 0.0001);
+
+  if(!instruments.length) {
+    el.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Még nincs pozíció ezen a számlán.</td></tr>`;
+    return;
+  }
   el.innerHTML = instruments.map(ins => {
     const pl = ins.val - ins.cost;
-    const plPct = ins.cost > 0 ? pl/ins.cost*100 : 0;
-    const plCol = pl >= 0 ? 'var(--green)' : 'var(--red)';
-    const pctCol = (ins.pct||0) >= 0 ? 'var(--green)' : 'var(--red)';
-    const fx = liveFx||395;
-    // Tényleges befektetett EUR = costHuf tételekből (eredeti árfolyamon)
-    const costEur = etfCostBasis(ins.ticker).reduce((s,b)=>s+b.remaining*b.priceEur,0);
-    const valEur = ins.val / fx;
-    const plEur = valEur - costEur;
-    const plEurPct = costEur > 0 ? plEur/costEur*100 : 0;
+    const plPct = ins.cost>0?pl/ins.cost*100:0;
+    const plCol = pl>=0?'var(--green)':'var(--red)';
+    const pctCol = (ins.pct||0)>=0?'var(--green)':'var(--red)';
     const avatarClass = ins.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit';
-    return `<tr onclick="selectInstrument('${ins.ticker}')" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+    return `<tr onclick="selectTbszInstrument('${accountId}','${ins.ticker}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <td style="padding:14px 16px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px">
           <div class="ins-avatar ${avatarClass}">${ins.ticker.slice(0,2)}</div>
-          <div>
-            <div style="font-family:var(--font-head);font-size:14px;font-weight:600">${ins.ticker}</div>
-            <div style="font-size:11px;color:var(--text2)">${ins.name}</div>
-          </div>
+          <div><div style="font-family:var(--font-head);font-size:14px;font-weight:600">${ins.ticker}</div><div style="font-size:11px;color:var(--text2)">${ins.name}</div></div>
         </div>
       </td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.shares.toFixed(2)} db</td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">
-        ${fmtM(ins.cost)}
-        <div style="font-size:10px;color:var(--text3)">${fmtEur(costEur,0)}</div>
-      </td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">
-        ${ins.val>0?fmtM(ins.val):'–'}
-        <div style="font-size:10px;color:var(--text3)">${ins.val>0?fmtEur(valEur,0):'–'}</div>
-      </td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">
-        <div style="color:${plCol}">${pl>=0?'+':''}${fmtM(pl)} <span style="font-size:10px">(${plPct>=0?'+':''}${plPct.toFixed(2)}%)</span></div>
-        <div style="font-size:10px;color:${plEur>=0?'var(--green)':'var(--red)'}">
-          ${plEur>=0?'+':''}${fmtEur(Math.abs(plEur),0)}
-          <span style="color:${plEurPct>=0?'var(--green)':'var(--red)'};">(${plEurPct>=0?'+':''}${plEurPct.toFixed(2)}%)</span>
-        </div>
-      </td>
-      <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.price?fmtEur(ins.price):'–'}${ins.pct!==null?`<br><span style="font-size:10px;color:${pctCol}">${ins.pct>=0?'+':''}${ins.pct.toFixed(2)}%</span>`:''}</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.shares.toFixed(4)} db</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${fmtM(ins.cost)}</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.val>0?fmtM(ins.val):'–'}</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol}">${ins.cost>0?(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span>':'–'}</td>
+      <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.lp?fmtEur(ins.lp):'–'}${ins.pct!==null?'<br><span style="font-size:10px;color:'+pctCol+'">'+(ins.pct>=0?'+':'')+ins.pct.toFixed(2)+'%</span>':''}</td>
       <td style="padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text3);font-size:16px">›</td>
     </tr>`;
   }).join('');
 }
 
-function tbszBack() {
-  document.getElementById('tbszListView').style.display = '';
-  document.getElementById('tbszDetailView').style.display = 'none';
-  tbszSelectedTicker = null;
-}
-
-function renderTBSZDetail(ticker) {
-  const livePrice = ticker === 'VWCE' ? liveVwce : liveWbit;
-  const livePct = ticker === 'VWCE' ? liveVwcePct : liveWbitPct;
-  const name = ticker === 'VWCE' ? 'Vanguard FTSE All-World' : 'WisdomTree Bitcoin';
-
+function selectTbszInstrument(accountId, ticker) {
+  activeTbszAccountId = accountId;
+  activeTbszTicker = ticker;
+  document.getElementById('tbsz-list-'+accountId).style.display = 'none';
+  document.getElementById('tbsz-detail-'+accountId).style.display = '';
   // Header
-  const hdr = document.getElementById('tbszDetailHeader');
-  if(hdr) hdr.textContent = ticker + ' pozíciók';
-
-  // Pill
-  const pill = document.getElementById('tbszDetailPill');
-  const pillLabel = document.getElementById('tbszDetailPriceLabel');
-  if(pill && pillLabel) {
-    pill.className = 'live-pill ' + (livePrice ? 'live' : 'est');
-    pillLabel.innerHTML = livePrice
-      ? fmtEur(livePrice) + (livePct!==null ? ` <span style="color:${livePct>=0?'var(--green)':'var(--red)'}">${livePct>=0?'+':''}${livePct.toFixed(2)}%${ticker==='WBIT'?' (BTC)':''}</span>` : '')
-      : 'betöltés...';
-  }
-
+  const hdr = document.getElementById('tbsz-detail-hdr-'+accountId);
+  if(hdr) hdr.textContent = ticker + ' tételek';
   // Buttons
-  const buyBtn = document.getElementById('tbszDetailBuyBtn');
-  const sellBtn = document.getElementById('tbszDetailSellBtn');
-  if(buyBtn) buyBtn.onclick = () => openModal('buy-etf', ticker);
-  if(sellBtn) sellBtn.onclick = () => openModal('sell-etf', ticker);
-
-  // Table
-  renderETFTable(ticker, 'tbszDetailBody', 'tbszDetailEmpty', livePrice, 'tbszDetailThead');
+  const buyBtn = document.getElementById('tbsz-buy-btn-'+accountId);
+  const sellBtn = document.getElementById('tbsz-sell-btn-'+accountId);
+  if(buyBtn) buyBtn.onclick = () => openModal('buy-etf-acc', ticker, accountId);
+  if(sellBtn) sellBtn.onclick = () => openModal('sell-etf-acc', ticker, accountId);
+  renderTbszDetailTable(accountId, ticker);
 }
 
-function renderTBSZ(){
-  const vwceShares=etfShares('VWCE');
-  const wbitShares=etfShares('WBIT');
-  const vwceCost=etfCostBasis('VWCE').reduce((s,b)=>s+b.costHuf,0);
-  const wbitCost=etfCostBasis('WBIT').reduce((s,b)=>s+b.costHuf,0);
-  const vwceVal=liveVwce?liveVwce*vwceShares*liveFx:0;
-  const wbitVal=liveWbit?liveWbit*wbitShares*liveFx:0;
+function tbszAccountBack(accountId) {
+  activeTbszTicker = null;
+  document.getElementById('tbsz-list-'+accountId).style.display = '';
+  document.getElementById('tbsz-detail-'+accountId).style.display = 'none';
+}
 
-  const totalFees=data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+(t.fee||0),0);
-  document.getElementById('tbszCards').innerHTML=`
-    <div class="stat-card"><div class="stat-label">EUR / HUF árfolyam</div><div class="stat-value">${liveFx?liveFx.toFixed(2)+' Ft':'–'} ${getFxChangeHtml()}</div><div class="stat-sub">${liveFx?'live':'betöltés...'}</div></div>
-    <div class="stat-card"><div class="stat-label">VWCE darabszám</div><div class="stat-value blurable">${vwceShares.toFixed(2)} db</div><div class="stat-sub">${liveVwce?fmtEur(liveVwce)+'/db'+(liveVwcePct!==null?' <span style="color:'+(liveVwcePct>=0?'var(--green)':'var(--red)')+'">'+(liveVwcePct>=0?'+':'')+liveVwcePct.toFixed(2)+'%</span>':''): 'nincs live adat'}</div></div>
-    <div class="stat-card"><div class="stat-label">VWCE aktuális érték</div><div class="stat-value blurable">${vwceVal>0?fmtM(vwceVal):'–'}</div><div class="stat-sub blurable">${vwceCost>0?'befektetett: '+fmtM(vwceCost):'–'}</div></div>
-    <div class="stat-card"><div class="stat-label">WBIT darabszám</div><div class="stat-value blurable">${wbitShares.toFixed(2)} db</div><div class="stat-sub">${liveWbit?fmtEur(liveWbit)+'/db'+(liveWbitPct!==null?' <span style="color:'+(liveWbitPct>=0?'var(--green)':'var(--red)')+'">'+(liveWbitPct>=0?'+':'')+liveWbitPct.toFixed(2)+'% (BTC)</span>':''): 'nincs live adat'}</div></div>
-    <div class="stat-card"><div class="stat-label">WBIT aktuális érték</div><div class="stat-value blurable">${wbitVal>0?fmtM(wbitVal):'–'}</div><div class="stat-sub blurable">${wbitCost>0?'befektetett: '+fmtM(wbitCost):'–'}</div></div>
-    <div class="stat-card"><div class="stat-label">váltási díjak</div><div class="stat-value blurable">${fmtM(totalFees)}</div><div class="stat-sub">${data.etfTx.filter(t=>t.fee>0).length} tranzakció</div></div>
+function renderTbszDetailTable(accountId, ticker) {
+  const bodyEl = document.getElementById('tbsz-detail-body-'+accountId);
+  const emptyEl = document.getElementById('tbsz-detail-empty-'+accountId);
+  const theadEl = document.getElementById('tbsz-detail-thead-'+accountId);
+  const realizedEl = document.getElementById('tbsz-realized-'+accountId);
+  if(!bodyEl) return;
+  const lp = ticker==='VWCE'?liveVwce:liveWbit;
+  const fx = liveFx||395;
+  const basis = tbszAccountCostBasis(ticker, accountId);
+  if(!basis.length) {
+    emptyEl.style.display='block'; bodyEl.innerHTML=''; return;
+  }
+  emptyEl.style.display='none';
+  // Thead
+  if(theadEl) theadEl.innerHTML=`
+    <th style="background:var(--bg2)">dátum</th>
+    <th class="r" style="background:var(--bg2)">db (maradék)</th>
+    <th class="r" style="background:var(--bg2)">vételi ár (EUR)</th>
+    <th class="r" style="background:var(--bg2)">HUF/EUR</th>
+    <th class="r" style="background:var(--bg2)">befekt. Ft</th>
+    <th class="r" style="background:var(--bg2)">akt. Ft</th>
+    <th class="r" style="background:var(--bg2)">P&L Ft</th>
+    <th class="r" style="background:var(--bg2)">P&L %</th>
+    <th style="background:var(--bg2)"></th>
   `;
+  // Summary
+  const totShares = basis.reduce((s,b)=>s+b.shares,0);
+  const totCost = basis.reduce((s,b)=>s+b.costHuf,0);
+  const totVal = lp ? totShares*lp*fx : null;
+  const totPl = totVal!==null ? totVal-totCost : null;
+  const totPlPct = totPl!==null&&totCost>0 ? totPl/totCost*100 : null;
+  const plCol = totPl!==null?(totPl>=0?'var(--green)':'var(--red)'):'';
+  bodyEl.innerHTML = `
+    <tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--green);font-weight:500;background:var(--bg3)">
+      <td style="font-size:11px;color:var(--text2)">összesítés</td>
+      <td class="r blurable">${totShares.toFixed(4)}</td>
+      <td class="r" colspan="2" style="color:var(--text3);font-size:11px">∅ ${fmtEur(basis.reduce((s,b)=>s+b.priceEur*b.shares,0)/totShares)}</td>
+      <td class="r blurable">${fmtM(totCost)}</td>
+      <td class="r blurable">${totVal!==null?fmtM(totVal):'–'}</td>
+      <td class="r blurable" style="color:${plCol}">${totPl!==null?(totPl>=0?'+':'')+fmtM(totPl):'–'}</td>
+      <td class="r" style="color:${plCol}">${totPlPct!==null?(totPlPct>=0?'+':'')+totPlPct.toFixed(2)+'%':'–'}</td>
+      <td></td>
+    </tr>
+  ` + basis.map(b => {
+    const valFt = lp ? b.shares*lp*fx : null;
+    const plFt = valFt!==null ? valFt-b.costHuf : null;
+    const plPct = plFt!==null&&b.costHuf>0 ? plFt/b.costHuf*100 : null;
+    const col = plFt!==null?(plFt>=0?'var(--green)':'var(--red)'):'';
+    return `<tr>
+      <td>${b.date}</td>
+      <td class="r blurable">${b.shares.toFixed(4)}</td>
+      <td class="r blurable">${fmtEur(b.priceEur)}</td>
+      <td class="r">${b.fxRate.toFixed(1)}</td>
+      <td class="r blurable">${fmtM(b.costHuf)}</td>
+      <td class="r blurable">${valFt!==null?fmtM(valFt):'–'}</td>
+      <td class="r blurable" style="color:${col}">${plFt!==null?(plFt>=0?'+':'')+fmtM(plFt):'–'}</td>
+      <td class="r" style="color:${col}">${plPct!==null?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteEtfTx('${b.id}')">×</button></td>
+    </tr>`;
+  }).join('');
 
-  renderETFTable('VWCE','vwceBody','vwceEmpty',liveVwce);
-  renderETFTable('WBIT','wbitBody','wbitEmpty',liveWbit);
+  // Realizált P&L
+  const realized = tbszRealizedPL(ticker, accountId);
+  if(realizedEl) {
+    if(Math.abs(realized.huf) > 0.01) {
+      realizedEl.style.display = '';
+      const rCol = realized.huf>=0?'var(--green)':'var(--red)';
+      realizedEl.innerHTML = `<div class="panel" style="border:1px solid ${rCol}22">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;letter-spacing:.06em;text-transform:uppercase">realizált P&L (FIFO)</div>
+        <div style="display:flex;gap:24px">
+          <div><div style="font-size:11px;color:var(--text2)">HUF</div><div class="blurable" style="color:${rCol};font-weight:600">${realized.huf>=0?'+':''}${fmtM(realized.huf)}</div></div>
+          <div><div style="font-size:11px;color:var(--text2)">EUR</div><div class="blurable" style="color:${rCol};font-weight:600">${realized.eur>=0?'+':''}${fmtEur(Math.abs(realized.eur),2)}</div></div>
+          <div style="font-size:11px;color:var(--text3);align-self:flex-end">TBSZ-en belül adómentes</div>
+        </div>
+      </div>`;
+    } else {
+      realizedEl.style.display = 'none';
+    }
+  }
+  if(blurOn) applyBlur();
 }
 
+function addTbszAccount() {
+  const year = parseInt(prompt('TBSZ számla éve:', new Date().getFullYear()));
+  if(!year || year < 2020 || year > 2040) return;
+  if(!data.tbszAccounts) data.tbszAccounts = [];
+  if(data.tbszAccounts.find(a=>a.year===year)) {
+    toast('Már létezik TBSZ számla erre az évre!'); return;
+  }
+  const id = 'tbsz'+year;
+  data.tbszAccounts.push({id, name:'TBSZ '+year, year, openDate:year+'-01-02'});
+  renderTbszSidebar();
+  renderTbszPages();
+  saveData();
+  // Megnyitjuk az új számlát
+  const navBtns = document.querySelectorAll('#tbsz-nav-items .nav-item');
+  const newBtn = [...navBtns].find(b=>b.textContent.includes('TBSZ '+year));
+  showTbszAccount(id, newBtn);
+  toast('TBSZ '+year+' számla létrehozva!');
+}
+
+function deleteTbszAccount(accountId) {
+  const acc = data.tbszAccounts.find(a=>a.id===accountId);
+  if(!acc) return;
+  const hasTx = data.etfTx.some(t=>t.accountId===accountId);
+  if(hasTx) { toast('Nem törölhető: van tranzakció ezen a számlán!'); return; }
+  if(!confirm('Biztosan törlöd a '+acc.name+' számlát?')) return;
+  data.tbszAccounts = data.tbszAccounts.filter(a=>a.id!==accountId);
+  renderTbszSidebar();
+  renderTbszPages();
+  showTab('dashboard', document.querySelector('.nav-item'));
+  saveData();
+  toast(acc.name+' törölve.');
+}
+
+function openTbszCashModal(type, accountId, currency='HUF') {
+  const acc = data.tbszAccounts.find(a=>a.id===accountId);
+  document.getElementById('modalTitle').textContent = (type==='deposit'?'Befizetés':'Kifizetés')+' – '+acc.name+' ('+currency+')';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="form-group"><div class="form-label">Dátum</div><input class="form-input" id="tc-date" type="date" value="${today()}"></div>
+    <div class="form-group"><div class="form-label">Összeg (${currency})</div><input class="form-input" id="tc-amount" type="number" placeholder="0"></div>
+    <div class="form-group"><div class="form-label">Megjegyzés</div><input class="form-input" id="tc-note" type="text" placeholder=""></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="saveTbszCashTx('${type}','${accountId}','${currency}')">Mentés</button>
+  `;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+function saveTbszCashTx(type, accountId, currency) {
+  const date = document.getElementById('tc-date').value;
+  const amount = parseFloat(document.getElementById('tc-amount').value);
+  const note = document.getElementById('tc-note').value;
+  if(!date||!amount) { toast('Töltsd ki a kötelező mezőket!'); return; }
+  if(!data.tbszCashTx) data.tbszCashTx = [];
+  data.tbszCashTx.push({id:uid(), accountId, date, type, amount, currency, note});
+  closeModal();
+  renderTbszCash(accountId);
+  saveData();
+  toast('Mentve!');
+}
+
+// Old functions kept for compatibility
+function selectInstrument(ticker) {
+  if(activeTbszAccountId) selectTbszInstrument(activeTbszAccountId, ticker);
+}
+function tbszBack() {
+  if(activeTbszAccountId) tbszAccountBack(activeTbszAccountId);
+}
+function renderTBSZ(){ /* replaced by renderTbszAccount */ }
+function renderTBSZInstruments(){ if(activeTbszAccountId) renderTbszInstrumentList(activeTbszAccountId); }
+function renderTBSZDetail(ticker){ if(activeTbszAccountId) renderTbszDetailTable(activeTbszAccountId, ticker); }
+
+
+// ═══════════════════════════════════════════════
+// ETF TABLE (legacy, used by tranzakciok)
+// ═══════════════════════════════════════════════
 const etfSortState={VWCE:{col:'date',dir:-1},WBIT:{col:'date',dir:-1}};
 
 function sortETF(ticker,col){
@@ -1895,12 +2306,75 @@ function deleteTx(kind, id){
 // ═══════════════════════════════════════════════
 // MODALS
 // ═══════════════════════════════════════════════
-function openModal(type, param){
+function openModal(type, param, param2){
   document.getElementById('modalBackdrop').classList.add('open');
   const title=document.getElementById('modalTitle');
   const body=document.getElementById('modalBody');
 
-  if(type==='deposit'){
+  if(type==='buy-etf-acc'){
+    // param = ticker, param2 = accountId
+    const ticker = param||'VWCE';
+    const accountId = param2||activeTbszAccountId;
+    const acc = data.tbszAccounts.find(a=>a.id===accountId);
+    const livePrice = ticker==='WBIT'?liveWbit:liveVwce;
+    title.textContent = ticker+' vétel – '+(acc?acc.name:'TBSZ');
+    body.innerHTML=`
+      <input type="hidden" id="f-account-id" value="${accountId}">
+      <div class="form-row"><div class="form-group"><div class="form-label">ETF típusa</div>
+        <select class="form-select" id="f-ticker">
+          <option value="VWCE" ${ticker==='VWCE'?'selected':''}>VWCE</option>
+          <option value="WBIT" ${ticker==='WBIT'?'selected':''}>WBIT</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">vétel dátuma</div>
+        <input class="form-input" id="f-date" type="date" value="${today()}">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">darabszám</div>
+        <input class="form-input" id="f-shares" type="number" step="0.0001" placeholder="10.5" oninput="recalcETFModal()">
+      </div>
+      <div class="form-group"><div class="form-label">árfolyam (EUR/db)</div>
+        <input class="form-input" id="f-price" type="number" step="0.0001" placeholder="${livePrice?livePrice.toFixed(2):'148.50'}" oninput="recalcETFModal()">
+      </div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">össz. vételár (Ft)</div>
+        <input class="form-input" id="f-huf" type="number" step="1" placeholder="pl. 5 600 000" oninput="recalcETFModalFromHuf()">
+      </div>
+      <div class="form-group"><div class="form-label">váltási díj (Ft)</div>
+        <input class="form-input" id="f-fee" type="number" step="1" placeholder="0" value="0" oninput="onFeeChange(false)">
+      </div></div>
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between">
+        <span>EUR/HUF: <input id="f-fx" type="number" step="0.01" value="${Math.round(liveFx||395)}" oninput="recalcETFModal()" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;padding:0 2px"></span>
+        <span>Befektetett: <strong id="calcHuf" style="color:var(--text)">–</strong></span>
+      </div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div>
+        <input class="form-input" id="f-note" placeholder="opcionális">
+      </div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFBuyAcc()">mentés</button></div>`;
+  }
+  else if(type==='sell-etf-acc'){
+    // param = ticker, param2 = accountId
+    const ticker = param||'VWCE';
+    const accountId = param2||activeTbszAccountId;
+    const acc = data.tbszAccounts.find(a=>a.id===accountId);
+    const totalShares = tbszAccountShares(ticker, accountId);
+    const livePrice = ticker==='VWCE'?liveVwce:liveWbit;
+    const basis = tbszAccountCostBasis(ticker, accountId);
+    const avgCost = basis.length ? basis.reduce((s,b)=>s+b.priceEur*b.shares,0)/totalShares : 0;
+    title.textContent = ticker+' eladás (FIFO) – '+(acc?acc.name:'TBSZ');
+    body.innerHTML=`
+      <input type="hidden" id="f-account-id" value="${accountId}">
+      <input type="hidden" id="f-ticker-sell" value="${ticker}">
+      <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:12px">
+        Elérhető: <strong style="color:var(--text)">${totalShares.toFixed(4)} db</strong> &nbsp;|&nbsp; Átlag bekerülési ár: <strong style="color:var(--text)">${fmtEur(avgCost)}</strong>
+        <div style="margin-top:6px;color:var(--green);font-size:10px">FIFO alapon: a legrégebben vett tételek kerülnek eladásra először.</div>
+      </div>
+      <div class="form-row"><div class="form-group"><div class="form-label">eladás dátuma</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">darabszám</div><input class="form-input" id="f-shares" type="number" step="0.0001" placeholder="${Math.min(totalShares,10).toFixed(4)}" max="${totalShares}"></div></div>
+      <div class="form-row"><div class="form-group"><div class="form-label">eladási ár (EUR/db)</div><input class="form-input" id="f-price" type="number" step="0.01" placeholder="${(livePrice||150).toFixed(2)}"></div>
+      <div class="form-group"><div class="form-label">EUR/HUF árfolyam</div><input class="form-input" id="f-fx" type="number" step="0.01" value="${Math.round(liveFx||395)}"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFSellAcc()">mentés</button></div>`;
+  }
+  else if(type==='deposit'){
     title.textContent='Befizetés';
     body.innerHTML=`
       <div class="form-row"><div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
@@ -2508,16 +2982,37 @@ function submitETFBuy(ticker){
   const priceEur=parseFloat(document.getElementById('f-price').value);
   const hufInput=parseFloat(document.getElementById('f-huf')?.value)||0;
   const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
-  const tbszYear=parseInt(document.getElementById('f-tbsz').value)||new Date().getFullYear();
+  const tbszYear=parseInt(document.getElementById('f-tbsz')?.value)||new Date().getFullYear();
   const note=document.getElementById('f-note').value;
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
-  // fxRate = alap árfolyam díj nélkül (parseFloat(f-fx))
   const fxBase=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
-  // fxRate = tényleges alap árfolyam = (teljes Ft - díj) / (db × EUR)
   const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
   data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,tbszYear,note});
   closeModal(); renderAll(); saveData(); toast(ticker+' vétel rögzítve');
 }
+
+function submitETFBuyAcc(){
+  const accountId=document.getElementById('f-account-id').value;
+  const ticker=document.getElementById('f-ticker').value;
+  const date=document.getElementById('f-date').value;
+  const shares=parseFloat(document.getElementById('f-shares').value);
+  const priceEur=parseFloat(document.getElementById('f-price').value);
+  const hufInput=parseFloat(document.getElementById('f-huf')?.value)||0;
+  const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
+  const note=document.getElementById('f-note').value;
+  if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
+  const fxBase=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
+  const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
+  const acc=data.tbszAccounts.find(a=>a.id===accountId);
+  const tbszYear=acc?acc.year:new Date().getFullYear();
+  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,tbszYear,accountId,note});
+  closeModal();
+  renderTbszAccount(accountId);
+  renderDashboard();
+  saveData();
+  toast(ticker+' vétel rögzítve – '+(acc?acc.name:''));
+}
+
 function submitETFSell(ticker){
   const date=document.getElementById('f-date').value;
   const shares=parseFloat(document.getElementById('f-shares').value);
@@ -2525,10 +3020,40 @@ function submitETFSell(ticker){
   const fxRate=parseFloat(document.getElementById('f-fx').value)||liveFx;
   const note=document.getElementById('f-note').value;
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
-  const huf=shares*priceEur*fxRate;
   data.etfTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,note});
   closeModal(); renderAll(); saveData(); toast(ticker+' eladás rögzítve');
 }
+
+function submitETFSellAcc(){
+  const accountId=document.getElementById('f-account-id').value;
+  const ticker=document.getElementById('f-ticker-sell').value;
+  const date=document.getElementById('f-date').value;
+  const shares=parseFloat(document.getElementById('f-shares').value);
+  const priceEur=parseFloat(document.getElementById('f-price').value);
+  const fxRate=parseFloat(document.getElementById('f-fx').value)||(liveFx||395);
+  const note=document.getElementById('f-note').value;
+  if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
+  // Ellenőrzés: van-e elég darab?
+  const available=tbszAccountShares(ticker, accountId);
+  if(shares>available+0.0001)return toast('Nincs elég darab! Elérhető: '+available.toFixed(4));
+  const acc=data.tbszAccounts.find(a=>a.id===accountId);
+  const tbszYear=acc?acc.year:new Date().getFullYear();
+  // Eladás rögzítése
+  data.etfTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,tbszYear,accountId,note});
+  // EUR bevétel könyvelése TBSZ pénzszámlára
+  if(!data.tbszCashTx)data.tbszCashTx=[];
+  const eurProceeds=shares*priceEur;
+  data.tbszCashTx.push({id:uid(),accountId,date,type:'sell_proceed',amount:eurProceeds,currency:'EUR',note:ticker+' eladás – '+shares.toFixed(4)+' db × '+fmtEur(priceEur)});
+  closeModal();
+  renderTbszAccount(accountId);
+  renderDashboard();
+  // Visszaugrunk a részlet nézetbe
+  setTimeout(()=>selectTbszInstrument(accountId, ticker), 50);
+  saveData();
+  const realized=tbszRealizedPL(ticker,accountId);
+  toast(ticker+' eladás rögzítve. Realizált P&L: '+(realized.eur>=0?'+':'')+fmtEur(Math.abs(realized.eur),2));
+}
+
 
 // ═══════════════════════════════════════════════
 // DASHBOARD MINI CHART
@@ -2772,8 +3297,8 @@ async function fetchLive(){
   // Store prevFx for % calculation
   window._prevFx=prevFx;
 
-  await fetchETFPrice('VWCE.DE','vwcePill','vwcePriceLabel',(p,pct)=>{liveVwce=p;liveVwcePct=pct;});
-  await fetchETFPrice('WBIT-DE','wbitPill','wbitPriceLabel',(p,pct)=>{liveWbit=p;liveWbitPct=pct;});
+  await fetchETFPrice('VWCE.DE','','',( p,pct)=>{liveVwce=p;liveVwcePct=pct;});
+  await fetchETFPrice('WBIT-DE','','',( p,pct)=>{liveWbit=p;liveWbitPct=pct;});
   renderTBSZ(); renderDashboard();
 }
 
@@ -2822,18 +3347,22 @@ async function fetchETFPrice(symbol,pillId,labelId,cb){
     }
     if(price&&price>1){
       cb(price, changePct);
-      document.getElementById(pillId).className='live-pill live';
+      const pillEl=document.getElementById(pillId);
+      const labelEl=document.getElementById(labelId);
+      if(pillEl) pillEl.className='live-pill live';
       const pctHtml=changePct!==null
         ? ` <span style="color:${changePct>=0?'var(--green)':'var(--red)'};font-size:10px">${changePct>=0?'+':''}${changePct.toFixed(2)}%${isCNBC?' (BTC)':''}</span>`
         : '';
-      document.getElementById(labelId).innerHTML=fmtEur(price)+pctHtml;
+      if(labelEl) labelEl.innerHTML=fmtEur(price)+pctHtml;
       const hufEl=document.getElementById(pillId.replace('Pill','PriceHuf'));
       if(hufEl)hufEl.textContent='= '+fmt(Math.round(price*(liveFx||395)));
       return;
     }
   }catch(e){}
-  document.getElementById(pillId).className='live-pill est';
-  document.getElementById(labelId).textContent='nincs live adat';
+  const pillEl2=document.getElementById(pillId);
+  const labelEl2=document.getElementById(labelId);
+  if(pillEl2) pillEl2.className='live-pill est';
+  if(labelEl2) labelEl2.textContent='nincs live adat';
 }
 
 // ═══════════════════════════════════════════════
@@ -2860,6 +3389,193 @@ function applyBlur(){
       ?'<span style="filter:blur(6px);user-select:none">*****</span>'
       :'<span>'+bigEl.dataset.value+'</span>';
   }
+}
+
+// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+// LIGHTYEAR CSV IMPORT
+// ═══════════════════════════════════════════════
+
+let importParsed = []; // parsed rows ready for preview
+
+function initImportPage() {
+  // Populate account selector
+  const sel = document.getElementById('importAccountSelect');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">– válassz számlát –</option>';
+  getTbszAccounts().forEach(acc => {
+    sel.innerHTML += `<option value="${acc.id}">${acc.name}</option>`;
+  });
+}
+
+function handleImportDrop(e) {
+  const file = e.dataTransfer.files[0];
+  if(file) handleImportFile(file);
+}
+
+function handleImportFile(file) {
+  if(!file || !file.name.endsWith('.csv')) return toast('Csak CSV fájl támogatott!');
+  const accountId = document.getElementById('importAccountSelect').value;
+  if(!accountId) return toast('Először válassz TBSZ számlát!');
+  const reader = new FileReader();
+  reader.onload = e => parseLightyearCSV(e.target.result, accountId);
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseLightyearCSV(text, accountId) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const rows = lines.slice(1).map(line => {
+    // Handle quoted CSV properly
+    const vals = [];
+    let cur = '', inQ = false;
+    for(const ch of line) {
+      if(ch==='"') inQ=!inQ;
+      else if(ch===','&&!inQ) { vals.push(cur); cur=''; }
+      else cur+=ch;
+    }
+    vals.push(cur);
+    const obj = {};
+    headers.forEach((h,i) => obj[h] = (vals[i]||'').trim());
+    return obj;
+  });
+
+  // Build FX rate map: Reference → EUR/HUF rate (from EUR Conversion rows)
+  const fxMap = {};
+  rows.forEach(r => {
+    if(r.Type==='Conversion' && r.Ticker==='EUR' && r['FX Rate']) {
+      fxMap[r.Reference] = parseFloat(r['FX Rate']);
+    }
+  });
+
+  // Extract Buy rows only
+  const buys = rows.filter(r => r.Type==='Buy' && r.Ticker && r.Quantity);
+
+  // Get existing tx references to detect duplicates
+  const existingRefs = new Set(data.etfTx.map(t => t.lyRef).filter(Boolean));
+
+  const acc = getTbszAccounts().find(a => a.id===accountId);
+  const tbszYear = acc ? acc.year : new Date().getFullYear();
+
+  importParsed = buys.map(r => {
+    // Parse date: "05/05/2026 12:20:37" → "2026-05-05"
+    const [datePart] = r.Date.split(' ');
+    const [dd,mm,yyyy] = datePart.split('/');
+    const date = `${yyyy}-${mm}-${dd}`;
+
+    const ticker = r.Ticker;
+    const shares = parseFloat(r.Quantity) || 0;
+    const priceEur = parseFloat(r['Price/share']) || 0;
+    const fee = parseFloat(r.Fee) || 0;
+    const ref = r.Reference;
+    const fxRate = fxMap[ref] || (liveFx||395);
+    const isDuplicate = existingRefs.has(ref);
+
+    return {
+      date, ticker, shares, priceEur, fee, fxRate,
+      ref, accountId, tbszYear,
+      isDuplicate,
+      selected: !isDuplicate,
+    };
+  });
+
+  renderImportPreview(accountId);
+}
+
+function renderImportPreview(accountId) {
+  if(!importParsed.length) return toast('Nem találtam vételi tranzakciókat a fájlban.');
+
+  const acc = getTbszAccounts().find(a=>a.id===accountId);
+  const dupes = importParsed.filter(r=>r.isDuplicate).length;
+  const newCount = importParsed.filter(r=>!r.isDuplicate).length;
+
+  document.getElementById('importStats').innerHTML =
+    `<span style="color:var(--green)">${newCount} új</span>` +
+    (dupes ? ` · <span style="color:var(--text3)">${dupes} duplikált (kiszűrve)</span>` : '') +
+    ` · ${acc?acc.name:''}`;
+
+  document.getElementById('importPreviewBody').innerHTML = importParsed.map((r,i) => {
+    const costHuf = r.shares * r.priceEur * r.fxRate;
+    const statusHtml = r.isDuplicate
+      ? `<span style="color:var(--text3);font-size:10px">már létezik</span>`
+      : `<span style="color:var(--green);font-size:10px">új</span>`;
+    return `<tr style="opacity:${r.isDuplicate?0.4:1}">
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">
+        <input type="checkbox" ${r.selected?'checked':''} ${r.isDuplicate?'disabled':''}
+          onchange="importParsed[${i}].selected=this.checked;updateImportBtn()">
+        <span style="margin-left:6px;font-size:12px">${r.date}</span>
+      </td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">vétel</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">
+        <span class="ins-avatar ${r.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit'}" style="width:24px;height:24px;font-size:9px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:6px">${r.ticker.slice(0,2)}</span>
+        <span style="font-size:12px">${r.ticker}</span>
+      </td>
+      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${r.shares.toFixed(6)}</td>
+      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${fmtEur(r.priceEur)}</td>
+      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${r.fxRate.toFixed(2)}</td>
+      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;color:${r.fee>0?'var(--amber)':'var(--text3)'}">${r.fee>0?fmtEur(r.fee):'–'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">${statusHtml}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('importPreview').style.display = '';
+  updateImportBtn();
+}
+
+function importToggleAll(checked) {
+  importParsed.forEach((r,i) => {
+    if(!r.isDuplicate) {
+      r.selected = checked;
+      const cb = document.getElementById('importPreviewBody').querySelectorAll('input[type=checkbox]')[i];
+      if(cb && !cb.disabled) cb.checked = checked;
+    }
+  });
+  updateImportBtn();
+}
+
+function updateImportBtn() {
+  const count = importParsed.filter(r=>r.selected).length;
+  const btn = document.getElementById('importConfirmBtn');
+  if(btn) btn.textContent = `✓ ${count} tranzakció importálása`;
+  if(btn) btn.disabled = count === 0;
+}
+
+function confirmImport() {
+  const toImport = importParsed.filter(r => r.selected);
+  if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
+
+  toImport.forEach(r => {
+    data.etfTx.push({
+      id: uid(),
+      date: r.date,
+      ticker: r.ticker,
+      type: 'buy',
+      shares: r.shares,
+      priceEur: r.priceEur,
+      fxRate: r.fxRate,
+      fee: r.fee,
+      tbszYear: r.tbszYear,
+      accountId: r.accountId,
+      note: 'Lightyear import',
+      lyRef: r.ref, // referencia duplikátum szűréshez
+    });
+  });
+
+  saveData();
+  renderAll();
+  toast(`✓ ${toImport.length} tranzakció importálva!`);
+  resetImport();
+
+  // Navigálás az érintett TBSZ számlára
+  const accountId = toImport[0].accountId;
+  const navBtn = document.querySelector(`#tbsz-nav-items .nav-item`);
+  if(accountId) showTbszAccount(accountId, navBtn);
+}
+
+function resetImport() {
+  importParsed = [];
+  document.getElementById('importPreview').style.display = 'none';
+  document.getElementById('importFileInput').value = '';
 }
 
 // ═══════════════════════════════════════════════
