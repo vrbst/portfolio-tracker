@@ -1659,7 +1659,7 @@ function renderTbszPages() {
       <div class="tbsz-account-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <div>
           <div style="font-family:var(--font-head);font-size:20px;font-weight:700">${acc.name}</div>
-          <div style="font-size:11px;color:var(--text3)">Nyitva: ${acc.openDate} · Adómentes: ${acc.year+3} után, optimális: ${acc.year+5} után</div>
+          <div style="font-size:11px;color:var(--text3)">Nyitva: ${acc.openDate} · Adómentes: ${acc.year+3} után, optimális: ${acc.year+5} után${acc.lyAccountId?` · <span style="color:var(--blue)">${acc.lyAccountId}</span>`:' · <button onclick="setLyAccountId(\''+acc.id+'\')" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer;font-family:var(--font-mono)">+ LY azonosító</button>'}</div>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost btn-sm" onclick="openTbszCashModal('deposit','${acc.id}')">+ befizetés</button>
@@ -1997,16 +1997,29 @@ function addTbszAccount() {
   if(data.tbszAccounts.find(a=>a.year===year)) {
     toast('Már létezik TBSZ számla erre az évre!'); return;
   }
+  const lyId = (prompt('Lightyear számlaazonosító (opcionális, pl. LY-8WRK5A8):', '')||'').trim();
   const id = 'tbsz'+year;
-  data.tbszAccounts.push({id, name:'TBSZ '+year, year, openDate:year+'-01-02'});
+  data.tbszAccounts.push({id, name:'TBSZ '+year, year, openDate:year+'-01-02', lyAccountId: lyId||null});
   renderTbszSidebar();
   renderTbszPages();
   saveData();
-  // Megnyitjuk az új számlát
   const navBtns = document.querySelectorAll('#tbsz-nav-items .nav-item');
   const newBtn = [...navBtns].find(b=>b.textContent.includes('TBSZ '+year));
   showTbszAccount(id, newBtn);
   toast('TBSZ '+year+' számla létrehozva!');
+}
+
+function setLyAccountId(accountId) {
+  const acc = data.tbszAccounts.find(a=>a.id===accountId);
+  if(!acc) return;
+  const lyId = (prompt('Lightyear számlaazonosító (pl. LY-8WRK5A8):', acc.lyAccountId||'')||'').trim();
+  if(lyId === null) return;
+  acc.lyAccountId = lyId || null;
+  renderTbszPages();
+  renderTbszSidebar();
+  if(activeTbszAccountId===accountId) showTbszAccount(accountId, null);
+  saveData();
+  toast('Azonosító mentve: '+lyId);
 }
 
 function deleteTbszAccount(accountId) {
@@ -3415,8 +3428,25 @@ function handleImportDrop(e) {
 
 function handleImportFile(file) {
   if(!file || !file.name.endsWith('.csv')) return toast('Csak CSV fájl támogatott!');
-  const accountId = document.getElementById('importAccountSelect').value;
-  if(!accountId) return toast('Először válassz TBSZ számlát!');
+
+  // Próbáljuk kiolvasni a LY azonosítót a fájlnévből
+  // pl. "AccountStatement-LY-8WRK5A8-2026-01-01_..."
+  const lyMatch = file.name.match(/LY-([A-Z0-9]+)/);
+  const lyId = lyMatch ? 'LY-'+lyMatch[1] : null;
+
+  // Automatikus számla felismerés
+  let accountId = document.getElementById('importAccountSelect').value;
+  if(!accountId && lyId) {
+    const matched = getTbszAccounts().find(a => a.lyAccountId === lyId);
+    if(matched) {
+      accountId = matched.id;
+      document.getElementById('importAccountSelect').value = accountId;
+      toast('Számla automatikusan felismerve: '+matched.name);
+    }
+  }
+
+  if(!accountId) return toast('Először válassz TBSZ számlát! (vagy add meg a Lightyear azonosítót a számlánál)');
+
   const reader = new FileReader();
   reader.onload = e => parseLightyearCSV(e.target.result, accountId);
   reader.readAsText(file, 'UTF-8');
