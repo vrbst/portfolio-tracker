@@ -3442,11 +3442,31 @@ function parseLightyearCSV(text, accountId) {
 
   // Build FX rate map: Reference → EUR/HUF rate (from EUR Conversion rows)
   const fxMap = {};
+  // Also build date-based map for fallback
+  const fxByDate = {};
   rows.forEach(r => {
     if(r.Type==='Conversion' && r.Ticker==='EUR' && r['FX Rate']) {
-      fxMap[r.Reference] = parseFloat(r['FX Rate']);
+      const rate = parseFloat(r['FX Rate']);
+      fxMap[r.Reference] = rate;
+      // Date key: "05/05/2026 12:20:37" → "2026-05-05"
+      const [dp] = r.Date.split(' ');
+      const [dd,mm,yyyy] = dp.split('/');
+      const dateKey = `${yyyy}-${mm}-${dd}`;
+      fxByDate[dateKey] = rate; // last one wins per date
     }
   });
+
+  // Helper: find closest prior conversion rate by date
+  function getFxRate(ref, dateStr) {
+    if(fxMap[ref]) return fxMap[ref];
+    // Fallback: find closest date in fxByDate that is <= dateStr
+    const dates = Object.keys(fxByDate).sort();
+    let best = null;
+    for(const d of dates) {
+      if(d <= dateStr) best = fxByDate[d];
+    }
+    return best || (liveFx||395);
+  }
 
   // Extract Buy rows only
   const buys = rows.filter(r => r.Type==='Buy' && r.Ticker && r.Quantity);
@@ -3468,7 +3488,7 @@ function parseLightyearCSV(text, accountId) {
     const priceEur = parseFloat(r['Price/share']) || 0;
     const fee = parseFloat(r.Fee) || 0;
     const ref = r.Reference;
-    const fxRate = fxMap[ref] || (liveFx||395);
+    const fxRate = getFxRate(ref, date);
     const isDuplicate = existingRefs.has(ref);
 
     return {
@@ -3809,7 +3829,8 @@ function exportCSV(){
 // DELETE DB
 // ═══════════════════════════════════════════════
 async function confirmDeleteDB(){
-  if(!confirm('Biztosan törlöd az összes adatot? Ez visszafordíthatatlan!'))return;
+  const dbName = currentDB==='v2'?'ÚJ (portfolio-new.json)':'EREDETI (portfolio.json)';
+  if(!confirm(`Biztosan törlöd a(z) ${dbName} adatbázist?\nEz visszafordíthatatlan!`))return;
   if(!confirm('Megerősítés: az összes tranzakció, pozíció és sorozat törlődik!'))return;
   data=JSON.parse(JSON.stringify({cashTx:[],fixmapSeries:[],fixmap:[],dkj:[],etfTx:[]}));
   await saveData();
