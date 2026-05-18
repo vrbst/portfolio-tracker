@@ -1239,7 +1239,8 @@ function renderUpcoming(){
     while(d<=matDate&&safety<100){
       const ds=d.toISOString().split('T')[0];
       if(new Date(ds)>new Date()){
-        const amount=isFirst&&sr.firstCouponAmount?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
+        const useFirst=isFirst&&sr.firstCouponAmount&&sr.firstCouponDate&&ds===sr.firstCouponDate;
+        const amount=useFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
         events.push({date:ds,series:sr.name,type:'kamat',amount,color:'var(--blue)'});
       }
       isFirst=false;
@@ -1349,8 +1350,8 @@ function renderCashflowChart(){
       const ds=d.toISOString().split('T')[0];
       if(ds.startsWith(year)){
         const m=parseInt(ds.split('-')[1])-1;
-        const pastFirst=sr.firstCouponAmount&&new Date(ds)<new Date();
-        const amount=isFirst&&sr.firstCouponAmount&&!pastFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
+        const useFirst=isFirst&&sr.firstCouponAmount&&sr.firstCouponDate&&ds===sr.firstCouponDate;
+        const amount=useFirst?sr.firstCouponAmount:totalFace*sr.couponRate/100/4;
         // Csak ha még nem volt rögzítve valós tételként
         const alreadyReal=details[m].some(d=>d.real&&d.label.includes('Kamat'));
         if(!alreadyReal){
@@ -1555,7 +1556,7 @@ function renderAllampapir(){
       nextCoupon=d.toISOString().split('T')[0];
     }
     const nextCouponPast=false; // már előreléptettük, sosem múltbeli
-    const isFirstCoupon=sr&&sr.firstCouponAmount&&!nextCouponPast;
+    const isFirstCoupon=sr&&sr.firstCouponAmount&&sr.firstCouponDate&&nextCoupon===sr.firstCouponDate;
     const qCoupon=s.active&&couponRate?(isFirstCoupon?sr.firstCouponAmount:s.totalFace*couponRate/100/4):0;
     const rowId='fm-'+s.seriesId.replace(/[^a-z0-9]/gi,'');
 
