@@ -4080,8 +4080,11 @@ async function handleImportFiles(files) {
     // Ha nincs még számla ehhez az azonosítóhoz, automatikusan létrehozzuk
     let autoAcc = matchedAcc;
     if(!autoAcc && lyId) {
-      const hasTbszBuy = rows.some(r=>r.Type==='Buy'&&r.Ticker&&r.Quantity&&r.ISIN&&r.ISIN.length>5);
-      const accType = hasTbszBuy ? 'tbsz' : 'cash';
+      // TBSZ: van IT- Deposit (pénzszámláról érkező átutalás fogadója)
+      // Cash: van IT- Withdrawal (pénzt küld máshova), de nincs IT- Deposit
+      const hasItDeposit = rows.some(r=>r.Type==='Deposit'&&r.Reference?.startsWith('IT-'));
+      const hasItWithdrawal = rows.some(r=>r.Type==='Withdrawal'&&r.Reference?.startsWith('IT-'));
+      const accType = hasItDeposit ? 'tbsz' : 'cash';
       const tbszYear = new Date().getFullYear();
       const accName = accType==='tbsz' ? `TBSZ ${tbszYear}` : 'Lightyear normál';
       autoAcc = {
