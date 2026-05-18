@@ -434,8 +434,8 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       <button class="nav-item" onclick="showTab('ai',this)"><span class="ni">✦</span>AI elemzés</button>
       <div class="nav-section">portfóliók</div>
       <button class="nav-item" onclick="showTab('kincstar',this)"><span class="ni" style="font-size:8px;opacity:.5">●</span>állampapír</button>
-      <div id="tbsz-nav-items"></div>
-      <button class="nav-item" onclick="addTbszAccount()" style="color:var(--text3);font-size:11px"><span class="ni" style="opacity:.5">+</span>új tbsz számla</button>
+      <div id="ly-nav-items"></div>
+      <button class="nav-item" onclick="addLyAccount()" style="color:var(--text3);font-size:11px"><span class="ni" style="opacity:.5">+</span>új számla</button>
     </nav>
   </div>
 
@@ -585,8 +585,8 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
     </div>
 
-    <!-- TBSZ (dinamikus, számlánként generált) -->
-    <div id="tbsz-pages-container"></div>
+    <!-- LIGHTYEAR SZÁMLÁK (dinamikus) -->
+    <div id="ly-pages-container"></div>
 
     <!-- AI ELEMZÉS -->
     <div id="page-ai" class="page">
@@ -916,14 +916,15 @@ let anthropicKey=null;
 let charts={};
 
 const DEFAULT_DATA = {
-  cashTx: [],         // {id,date,type,amount,note}
-  fixmapSeries: [],   // {id,name,couponRate,issueDate,nextCoupon,maturity}
-  fixmap: [],         // {id,seriesId,date,faceValue,buyPrice,active}
-  dkjSeries: [],      // {id,name,maturity}
-  dkj: [],            // {id,seriesId,date,faceValue,buyPrice,active}
-  etfTx: [],          // {id,date,ticker,type,shares,priceEur,fxRate,note,tbszYear,accountId}
-  tbszAccounts: [],   // {id,name,year,openDate} – pl. {id:'tbsz2026',name:'TBSZ 2026',year:2026,openDate:'2026-01-02'}
-  tbszCashTx: [],     // {id,accountId,date,type,amount,currency,note} – HUF/EUR befizetés/kifizetés TBSZ-en belül
+  cashTx: [],         // Állampapír pénzszámla: {id,date,type,amount,note,mkRef}
+  fixmapSeries: [],
+  fixmap: [],
+  dkjSeries: [],
+  dkj: [],
+  // Lightyear számlák
+  lyAccounts: [],     // {id, name, lyAccountId, type:'cash'|'tbsz', tbszYear}
+  lyTx: [],           // {id, accountId, date, type:'buy'|'sell', ticker, shares, priceEur, fxRate, fee, feeCurrency, ref}
+  lyCashTx: [],       // {id, accountId, date, type:'deposit'|'withdraw'|'transfer_in'|'transfer_out', amount, currency, ref, note}
 };
 
 let data = null;
@@ -976,13 +977,14 @@ async function loadOrCreateGist(){
     const j=await d.json();
     data=JSON.parse(j.files[GIST_FILE].content);
     // migrate old data if needed
+    if(data.lyAccounts===undefined) data.lyAccounts=[];
+    if(data.lyTx===undefined) data.lyTx=[];
+    if(data.lyCashTx===undefined) data.lyCashTx=[];
     if(!data.cashTx)data.cashTx=[];
     if(!data.fixmapSeries)data.fixmapSeries=[];
     if(!data.dkjSeries)data.dkjSeries=[];
-    if(!data.dkjSeries)data.dkjSeries=[];
     if(!data.fixmap)data.fixmap=[];
     if(!data.dkj)data.dkj=[];
-    if(!data.etfTx)data.etfTx=[];
     // API key NOT stored in Gist - use localStorage instead
     const lsKey=localStorage.getItem('anthropic_api_key');
     if(lsKey){anthropicKey=lsKey;console.log('API key loaded from localStorage:',lsKey.slice(0,15)+'...');}
@@ -1045,6 +1047,7 @@ function showTab(name,el){
   if(name==='ai') setTimeout(updateApiKeyStatus, 50);
   if(name==='dashboard') setTimeout(renderDashMiniChart, 50);
   if(name==='import') setTimeout(initImportPage, 50);
+  if(name==='ly') { /* handled by showLyAccount */ }
 }
 
 // ═══════════════════════════════════════════════
@@ -1058,27 +1061,108 @@ function cashBalance(){
   },0);
 }
 
-function etfShares(ticker){
-  return data.etfTx.filter(t=>t.ticker===ticker).reduce((s,t)=>{
-    return t.type==='buy'?s+t.shares:s-t.shares;
-  },0);
+function lyAccountShares(accountId, ticker) {
+  return (data.lyTx||[])
+    .filter(t => t.accountId===accountId && t.ticker===ticker)
+    .reduce((s,t) => s + (t.type==='buy' ? t.shares : -t.shares), 0);
 }
 
-function etfCostBasis(ticker){
-  // FIFO: returns {totalShares, totalCost}
-  const buys = data.etfTx.filter(t=>t.ticker===ticker&&t.type==='buy').map(t=>({...t,remaining:t.shares}));
-  const sells = data.etfTx.filter(t=>t.ticker===ticker&&t.type==='sell');
-  for(const sell of sells){
-    let toSell=sell.shares;
-    for(const buy of buys){
-      if(toSell<=0)break;
-      const used=Math.min(buy.remaining,toSell);
-      buy.remaining-=used; toSell-=used;
+function lyAccountCostBasis(accountId, ticker) {
+  // FIFO: returns remaining lots with costHuf
+  const buys = (data.lyTx||[])
+    .filter(t => t.accountId===accountId && t.ticker===ticker && t.type==='buy')
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .map(t => ({...t, remaining: t.shares}));
+  const sells = (data.lyTx||[])
+    .filter(t => t.accountId===accountId && t.ticker===ticker && t.type==='sell')
+    .sort((a,b) => a.date.localeCompare(b.date));
+  sells.forEach(sell => {
+    let toSell = sell.shares;
+    for(const buy of buys) {
+      if(toSell <= 0) break;
+      const used = Math.min(buy.remaining, toSell);
+      buy.remaining -= used;
+      toSell -= used;
     }
+  });
+  return buys.filter(b => b.remaining > 0.0001).map(b => ({
+    ...b,
+    shares: b.remaining,
+    costHuf: b.remaining * b.priceEur * b.fxRate +
+      (b.remaining/b.shares) * (b.feeCurrency==='EUR' ? (b.fee||0)*b.fxRate : (b.fee||0)),
+  }));
+}
+
+function lyAccountRealizedPL(accountId, ticker) {
+  const buys = (data.lyTx||[])
+    .filter(t => t.accountId===accountId && t.ticker===ticker && t.type==='buy')
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .map(t => ({...t, remaining: t.shares}));
+  const sells = (data.lyTx||[])
+    .filter(t => t.accountId===accountId && t.ticker===ticker && t.type==='sell')
+    .sort((a,b) => a.date.localeCompare(b.date));
+  let totalEur = 0, totalHuf = 0;
+  sells.forEach(sell => {
+    let toSell = sell.shares;
+    for(const buy of buys) {
+      if(toSell <= 0) break;
+      const used = Math.min(buy.remaining, toSell);
+      buy.remaining -= used;
+      toSell -= used;
+      totalEur += used * (sell.priceEur - buy.priceEur);
+      totalHuf += used * (sell.priceEur * sell.fxRate - buy.priceEur * buy.fxRate);
+    }
+  });
+  return {eur: totalEur, huf: totalHuf};
+}
+
+function lyAccountCashBalance(accountId, currency='HUF') {
+  return (data.lyCashTx||[])
+    .filter(t => t.accountId===accountId && t.currency===currency)
+    .reduce((s,t) => {
+      if(['deposit','transfer_in'].includes(t.type)) return s + t.amount;
+      if(['withdraw','transfer_out'].includes(t.type)) return s - t.amount;
+      return s;
+    }, 0);
+}
+
+// Összes befektetett tőke = DT- deposit összegek az összes lyAccount-ból
+function lyTotalInvested() {
+  return (data.lyCashTx||[])
+    .filter(t => t.type==='deposit' && t.currency==='HUF')
+    .reduce((s,t) => s + t.amount, 0);
+}
+
+// Összes LY ETF érték HUF-ban (aktuális áron)
+function lyTotalValue() {
+  const fx = liveFx||395;
+  let total = 0;
+  (data.lyAccounts||[]).forEach(acc => {
+    ['VWCE','WBIT'].forEach(ticker => {
+      const basis = lyAccountCostBasis(acc.id, ticker);
+      const shares = basis.reduce((s,b)=>s+b.shares,0);
+      const lp = ticker==='VWCE' ? liveVwce : liveWbit;
+      if(lp) total += shares * lp * fx;
+    });
+  });
+  return total;
+}
+
+// Régi kompatibilitás (dashboard, chart)
+function etfShares(ticker){
+  return (data.lyTx||[]).filter(t=>t.ticker===ticker)
+    .reduce((s,t)=>s+(t.type==='buy'?t.shares:-t.shares),0);
+}
+function etfCostBasis(ticker){
+  const allBuys = (data.lyTx||[]).filter(t=>t.ticker===ticker&&t.type==='buy').map(t=>({...t,remaining:t.shares}));
+  const allSells = (data.lyTx||[]).filter(t=>t.ticker===ticker&&t.type==='sell');
+  for(const sell of allSells){
+    let toSell=sell.shares;
+    for(const buy of allBuys){if(toSell<=0)break;const used=Math.min(buy.remaining,toSell);buy.remaining-=used;toSell-=used;}
   }
-  return buys.filter(b=>b.remaining>0).map(b=>({
-    ...b, shares:b.remaining,
-    costHuf: b.remaining*b.priceEur*b.fxRate + (b.remaining/b.shares)*(b.feeCurrency==='EUR'?(b.fee||0)*b.fxRate:(b.fee||0))
+  return allBuys.filter(b=>b.remaining>0).map(b=>({
+    ...b,shares:b.remaining,
+    costHuf:b.remaining*b.priceEur*b.fxRate+(b.remaining/b.shares)*(b.feeCurrency==='EUR'?(b.fee||0)*b.fxRate:(b.fee||0))
   }));
 }
 
@@ -1104,7 +1188,6 @@ function nextCouponDate(maturity){
 // RENDER ALL
 // ═══════════════════════════════════════════════
 function renderAll(){
-  // Meglévő sorozatoknál firstCouponDate pótlása ha hiányzik
   data.fixmapSeries.forEach(sr => {
     if(sr.firstCouponAmount && !sr.firstCouponDate && sr.nextCoupon) {
       sr.firstCouponDate = sr.nextCoupon;
@@ -1113,12 +1196,9 @@ function renderAll(){
   renderDashboard();
   renderKincstar();
   renderTranzakciok();
-  // TBSZ: sidebar + oldalak generálása
-  getTbszAccounts(); // migráció ha kell
-  renderTbszSidebar();
-  renderTbszPages();
-  // Ha van aktív számla, rendereljük
-  if(activeTbszAccountId) renderTbszAccount(activeTbszAccountId);
+  renderLyAccountsSidebar();
+  renderLyAccountsPages();
+  if(activeLyAccountId) renderLyAccount(activeLyAccountId);
   if(blurOn)setTimeout(applyBlur,50);
 }
 
@@ -1142,17 +1222,10 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce&&liveFx;
 
-  // Összes befektetett tőke = aktív állampapírok + ETF befizetések
-  // Ha van Lightyear pénzszámla import (cashTx-ben lyRef-es deposit), azt használjuk
-  const lyDeposits = data.cashTx.filter(t=>t.type==='deposit'&&t.lyRef).reduce((s,t)=>s+t.amount,0);
-  const lyWithdraws = data.cashTx.filter(t=>t.type==='withdraw'&&t.lyRef).reduce((s,t)=>s+t.amount,0);
-  const etfInvested = lyDeposits > 0
-    ? lyDeposits - lyWithdraws  // tényleges nettó befizetés a Lightyear pénzszámlára
-    : data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.feeCurrency==='EUR'?(t.fee||0)*t.fxRate:(t.fee||0)),0)
-      -data.etfTx.filter(t=>t.type==='sell').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate,0);
-  const totalInvested=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+(f.buyPrice||0),0)
-    +data.dkj.filter(d=>d.active).reduce((s,d)=>s+(d.buyPrice||0),0)
-    +etfInvested;
+  // Befektetett tőke = állampapír vételárak + külső LY befizetések (DT- deposit)
+  const totalInvested = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+(f.buyPrice||0),0)
+    + data.dkj.filter(d=>d.active).reduce((s,d)=>s+(d.buyPrice||0),0)
+    + lyTotalInvested();
 
   // Nagy értékkijelző
   const bigEl=document.getElementById('dashTotalBig');
@@ -1195,7 +1268,7 @@ function renderDashboard(){
   renderDashMiniChart();
   if(blurOn)applyBlur();
   renderTBSZInstruments();
-  if(tbszSelectedTicker) renderTBSZDetail(tbszSelectedTicker);
+  if(activeLyAccountId && activeLyTicker) renderLyDetailTable(activeLyAccountId, activeLyTicker);
 }
 
 function renderPie(cb,ap,tbsz){
@@ -1684,221 +1757,151 @@ function sellDKJ(id){
   openModal('sell-dkj', id);
 }
 // ═══════════════════════════════════════════════
-// TBSZ
-// ═══════════════════════════════════════════════
-let tbszSelectedTicker = null;
-
-// ═══════════════════════════════════════════════
-// TBSZ MULTI-ACCOUNT
+// LIGHTYEAR SZÁMLÁK
 // ═══════════════════════════════════════════════
 
-let activeTbszAccountId = null;
-let activeTbszTicker = null;
+let activeLyAccountId = null;
+let activeLyTicker = null;
 
-function getTbszAccounts() {
-  if(!data.tbszAccounts) data.tbszAccounts = [];
-  // Ha nincs egyetlen számla sem, de van etfTx, hozzunk létre egy alapértelmezettet
-  if(data.tbszAccounts.length === 0 && data.etfTx && data.etfTx.length > 0) {
-    const years = [...new Set(data.etfTx.map(t=>t.tbszYear||2026))].sort();
-    years.forEach(yr => {
-      const id = 'tbsz'+yr;
-      data.tbszAccounts.push({id, name:'TBSZ '+yr, year:yr, openDate:yr+'-01-02'});
-      // Számlához rendelés ha nincs accountId
-      data.etfTx.forEach(t => { if((t.tbszYear||2026)===yr && !t.accountId) t.accountId=id; });
-    });
-  }
-  return data.tbszAccounts;
+const LY_TICKERS = ['VWCE','WBIT'];
+
+function getLyAccounts() {
+  if(!data.lyAccounts) data.lyAccounts = [];
+  return data.lyAccounts;
 }
 
-function renderTbszSidebar() {
-  const accounts = getTbszAccounts();
-  const nav = document.getElementById('tbsz-nav-items');
+function getLyAccount(id) {
+  return (data.lyAccounts||[]).find(a=>a.id===id);
+}
+
+function renderLyAccountsSidebar() {
+  const nav = document.getElementById('ly-nav-items');
   if(!nav) return;
-  nav.innerHTML = accounts.map(acc => `
-    <button class="nav-item ${activeTbszAccountId===acc.id?'active':''}"
-      onclick="showTbszAccount('${acc.id}', this)">
-      <span class="ni" style="font-size:8px;opacity:.5">●</span>${acc.name}
+  nav.innerHTML = getLyAccounts().map(acc => `
+    <button class="nav-item ${activeLyAccountId===acc.id?'active':''}"
+      onclick="showLyAccount('${acc.id}', this)">
+      <span class="ni" style="font-size:8px;opacity:.5;color:${acc.type==='tbsz'?'var(--green)':'var(--blue)'}">●</span>${acc.name}
     </button>
   `).join('');
 }
 
-function renderTbszPages() {
-  const accounts = getTbszAccounts();
-  const container = document.getElementById('tbsz-pages-container');
+function renderLyAccountsPages() {
+  const container = document.getElementById('ly-pages-container');
   if(!container) return;
-  // Töröljük a régi oldalakat
-  container.innerHTML = accounts.map(acc => `
-    <div id="page-tbsz-${acc.id}" class="page">
-      <div class="tbsz-account-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+  container.innerHTML = getLyAccounts().map(acc => {
+    const isTbsz = acc.type === 'tbsz';
+    const typeLabel = isTbsz
+      ? `TBSZ ${acc.tbszYear} · Adómentes: ${acc.tbszYear+3} után · Optimális: ${acc.tbszYear+5} után`
+      : 'Normál Lightyear számla';
+    return `
+    <div id="page-ly-${acc.id}" class="page">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <div>
           <div style="font-family:var(--font-head);font-size:20px;font-weight:700">${acc.name}</div>
-          <div style="font-size:11px;color:var(--text3)">Nyitva: ${acc.openDate} · Adómentes: ${acc.year+3} után, optimális: ${acc.year+5} után${acc.lyAccountId?` · <span style="color:var(--blue)">${acc.lyAccountId}</span>`:' · <button onclick="setLyAccountId(\''+acc.id+'\')" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer;font-family:var(--font-mono)">+ LY azonosító</button>'}</div>
+          <div style="font-size:11px;color:var(--text3)">${typeLabel}${acc.lyAccountId?` · <span style="color:var(--blue)">${acc.lyAccountId}</span>`:''}</div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost btn-sm" onclick="openTbszCashModal('deposit','${acc.id}')">+ befizetés</button>
-          <button class="btn btn-ghost btn-sm" onclick="deleteTbszAccount('${acc.id}')">× számla</button>
+          <button class="btn btn-ghost btn-sm" onclick="editLyAccount('${acc.id}')">✎ szerkesztés</button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteLyAccount('${acc.id}')">× törlés</button>
         </div>
       </div>
       <!-- Összesítő kártyák -->
-      <div class="card-row cards-4 blurable" id="tbsz-cards-${acc.id}" style="margin-bottom:16px"></div>
-      <!-- Pénzszámla egyenleg -->
-      <div class="card-row cards-2" id="tbsz-cash-${acc.id}" style="margin-bottom:16px"></div>
-      <!-- Lista nézet -->
-      <div id="tbsz-list-${acc.id}">
+      <div class="card-row cards-4 blurable" id="ly-cards-${acc.id}" style="margin-bottom:16px"></div>
+      <!-- Pénzszámla -->
+      <div class="card-row cards-2" id="ly-cash-${acc.id}" style="margin-bottom:16px"></div>
+      <!-- Pozíciók lista -->
+      <div id="ly-list-${acc.id}">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">pozíciók</div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-primary btn-sm" onclick="openModal('buy-etf-acc','VWCE','${acc.id}')">+ VWCE vétel</button>
-            <button class="btn btn-ghost btn-sm" onclick="openModal('buy-etf-acc','WBIT','${acc.id}')">+ WBIT vétel</button>
+            <button class="btn btn-primary btn-sm" onclick="openLyBuyModal('VWCE','${acc.id}')">+ VWCE</button>
+            <button class="btn btn-ghost btn-sm" onclick="openLyBuyModal('WBIT','${acc.id}')">+ WBIT</button>
           </div>
         </div>
         <div class="panel" style="margin-top:0;padding:0">
-          <div class="tbl-wrap">
-            <table style="width:100%">
-              <thead><tr>
-                <th style="padding:10px 16px;text-align:left;font-size:11px;color:var(--text3);font-weight:400;letter-spacing:.06em;border-bottom:1px solid var(--border)">eszköz</th>
-                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">darabszám</th>
-                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">befektetett</th>
-                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">aktuális érték</th>
-                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">P&L</th>
-                <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">live ár</th>
-                <th style="padding:10px 16px;border-bottom:1px solid var(--border)"></th>
-              </tr></thead>
-              <tbody id="tbsz-inst-${acc.id}"></tbody>
-            </table>
-          </div>
+          <div class="tbl-wrap"><table style="width:100%">
+            <thead><tr>
+              <th style="padding:10px 16px;text-align:left;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">eszköz</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">darabszám</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">befektetett</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">aktuális érték</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">P&L</th>
+              <th class="r" style="padding:10px 16px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">live ár</th>
+              <th style="padding:10px 16px;border-bottom:1px solid var(--border)"></th>
+            </tr></thead>
+            <tbody id="ly-inst-${acc.id}"></tbody>
+          </table></div>
         </div>
       </div>
       <!-- Részlet nézet -->
-      <div id="tbsz-detail-${acc.id}" style="display:none">
+      <div id="ly-detail-${acc.id}" style="display:none">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-          <button class="btn btn-ghost btn-sm" onclick="tbszAccountBack('${acc.id}')">← vissza</button>
-          <div id="tbsz-detail-hdr-${acc.id}" style="font-family:var(--font-head);font-size:16px;font-weight:600"></div>
+          <button class="btn btn-ghost btn-sm" onclick="lyAccountBack('${acc.id}')">← vissza</button>
+          <div id="ly-detail-hdr-${acc.id}" style="font-family:var(--font-head);font-size:16px;font-weight:600"></div>
           <div style="flex:1"></div>
-          <button class="btn btn-primary btn-sm" id="tbsz-buy-btn-${acc.id}">+ vétel</button>
-          <button class="btn btn-ghost btn-sm" id="tbsz-sell-btn-${acc.id}">− eladás (FIFO)</button>
+          <button class="btn btn-primary btn-sm" id="ly-buy-btn-${acc.id}">+ vétel</button>
+          <button class="btn btn-ghost btn-sm" id="ly-sell-btn-${acc.id}">− eladás (FIFO)</button>
         </div>
         <div class="panel" style="margin-top:0">
           <div class="tbl-wrap" style="max-height:500px;overflow-y:auto">
-            <table>
-              <thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
-                <tr id="tbsz-detail-thead-${acc.id}"></tr>
-              </thead>
-              <tbody id="tbsz-detail-body-${acc.id}"></tbody>
-            </table>
+            <table><thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
+              <tr id="ly-detail-thead-${acc.id}"></tr>
+            </thead><tbody id="ly-detail-body-${acc.id}"></tbody></table>
           </div>
-          <div class="empty" id="tbsz-detail-empty-${acc.id}" style="display:none">Még nincs tétel.</div>
+          <div class="empty" id="ly-detail-empty-${acc.id}" style="display:none">Még nincs tétel.</div>
         </div>
-        <!-- Realizált P&L -->
-        <div id="tbsz-realized-${acc.id}" style="margin-top:12px;display:none"></div>
+        <div id="ly-realized-${acc.id}" style="margin-top:12px;display:none"></div>
       </div>
-    </div>
-  `).join('');
+      <!-- Tranzakciók -->
+      <div class="panel" style="margin-top:12px" id="ly-tx-panel-${acc.id}">
+        <div class="panel-header">
+          <div class="panel-title">pénzmozgások</div>
+          <button class="btn btn-ghost btn-sm" onclick="openLyCashModal('deposit','${acc.id}')">+ befizetés</button>
+        </div>
+        <div class="tbl-wrap" style="max-height:250px;overflow-y:auto"><table>
+          <thead style="position:sticky;top:0;background:var(--bg2)"><tr>
+            <th>dátum</th><th>típus</th><th>pénznem</th><th class="r">összeg</th><th>megjegyzés</th><th></th>
+          </tr></thead>
+          <tbody id="ly-cashtx-${acc.id}"></tbody>
+        </table></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function showTbszAccount(accountId, navEl) {
-  activeTbszAccountId = accountId;
-  activeTbszTicker = null;
-  // Minden page-t elrejtünk
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  // Aktiváljuk a megfelelőt
-  const page = document.getElementById('page-tbsz-'+accountId);
+function showLyAccount(accountId, navEl) {
+  activeLyAccountId = accountId;
+  activeLyTicker = null;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const page = document.getElementById('page-ly-'+accountId);
   if(page) page.classList.add('active');
-  // Sidebar nav active
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   if(navEl) navEl.classList.add('active');
-  renderTbszAccount(accountId);
+  renderLyAccount(accountId);
 }
 
-function renderTbszAccount(accountId) {
-  renderTbszCards(accountId);
-  renderTbszCash(accountId);
-  renderTbszInstrumentList(accountId);
+function renderLyAccount(accountId) {
+  renderLyCards(accountId);
+  renderLyCash(accountId);
+  renderLyInstrumentList(accountId);
+  renderLyCashTx(accountId);
 }
 
-function tbszAccountShares(ticker, accountId) {
-  return data.etfTx
-    .filter(t => t.ticker===ticker && t.accountId===accountId)
-    .reduce((s,t) => s + (t.type==='buy'?t.shares:-t.shares), 0);
-}
-
-function tbszAccountCostBasis(ticker, accountId) {
-  // FIFO: returns remaining lots with their cost
-  const buys = data.etfTx
-    .filter(t => t.ticker===ticker && t.accountId===accountId && t.type==='buy')
-    .sort((a,b) => a.date.localeCompare(b.date))
-    .map(t => ({...t, remaining: t.shares}));
-  const sells = data.etfTx
-    .filter(t => t.ticker===ticker && t.accountId===accountId && t.type==='sell')
-    .sort((a,b) => a.date.localeCompare(b.date));
-  // FIFO alkalmazása
-  sells.forEach(sell => {
-    let toSell = sell.shares;
-    for(const buy of buys) {
-      if(toSell <= 0) break;
-      const used = Math.min(buy.remaining, toSell);
-      buy.remaining -= used;
-      toSell -= used;
-    }
-  });
-  return buys.filter(b => b.remaining > 0.0001).map(b => ({
-    ...b,
-    shares: b.remaining,
-    costHuf: b.remaining * b.priceEur * b.fxRate + (b.remaining/b.shares)*(b.feeCurrency==='EUR'?(b.fee||0)*b.fxRate:(b.fee||0)),
-  }));
-}
-
-function tbszRealizedPL(ticker, accountId) {
-  // Számítsuk ki a realizált P&L-t FIFO alapján
-  const buys = data.etfTx
-    .filter(t => t.ticker===ticker && t.accountId===accountId && t.type==='buy')
-    .sort((a,b) => a.date.localeCompare(b.date))
-    .map(t => ({...t, remaining: t.shares}));
-  const sells = data.etfTx
-    .filter(t => t.ticker===ticker && t.accountId===accountId && t.type==='sell')
-    .sort((a,b) => a.date.localeCompare(b.date));
-  let totalRealizedEur = 0;
-  let totalRealizedHuf = 0;
-  sells.forEach(sell => {
-    let toSell = sell.shares;
-    const sellEur = sell.priceEur;
-    const sellFx = sell.fxRate;
-    for(const buy of buys) {
-      if(toSell <= 0) break;
-      const used = Math.min(buy.remaining, toSell);
-      buy.remaining -= used;
-      toSell -= used;
-      totalRealizedEur += used * (sellEur - buy.priceEur);
-      totalRealizedHuf += used * (sellEur * sellFx - buy.priceEur * buy.fxRate);
-    }
-  });
-  return {eur: totalRealizedEur, huf: totalRealizedHuf};
-}
-
-function tbszAccountCashBalance(accountId, currency='HUF') {
-  if(!data.tbszCashTx) return 0;
-  return data.tbszCashTx
-    .filter(t => t.accountId===accountId && t.currency===currency)
-    .reduce((s,t) => s + (['deposit','sell_proceed'].includes(t.type)?t.amount:-t.amount), 0);
-}
-
-function renderTbszCards(accountId) {
-  const el = document.getElementById('tbsz-cards-'+accountId);
+function renderLyCards(accountId) {
+  const el = document.getElementById('ly-cards-'+accountId);
   if(!el) return;
   const fx = liveFx||395;
-  const tickers = ['VWCE','WBIT'];
-  let totalVal = 0, totalCost = 0;
-  tickers.forEach(ticker => {
-    const basis = tbszAccountCostBasis(ticker, accountId);
+  let totalVal=0, totalCost=0;
+  LY_TICKERS.forEach(ticker => {
+    const basis = lyAccountCostBasis(accountId, ticker);
     const lp = ticker==='VWCE'?liveVwce:liveWbit;
     const cost = basis.reduce((s,b)=>s+b.costHuf,0);
     const val = lp ? basis.reduce((s,b)=>s+b.shares,0)*lp*fx : 0;
-    totalVal += val; totalCost += cost;
+    totalVal+=val; totalCost+=cost;
   });
-  const pl = totalVal - totalCost;
-  const plPct = totalCost > 0 ? pl/totalCost*100 : 0;
-  const plCol = pl>=0?'var(--green)':'var(--red)';
-  el.innerHTML = `
+  const pl=totalVal-totalCost, plPct=totalCost>0?pl/totalCost*100:0;
+  const plCol=pl>=0?'var(--green)':'var(--red)';
+  el.innerHTML=`
     <div class="stat-card"><div class="stat-label">portfólió érték</div><div class="stat-value blurable">${totalVal>0?fmtM(totalVal):'–'}</div><div class="stat-sub blurable">${totalVal>0?fmtEur(totalVal/fx,0):'–'}</div></div>
     <div class="stat-card"><div class="stat-label">befektetett</div><div class="stat-value blurable">${fmtM(totalCost)}</div></div>
     <div class="stat-card"><div class="stat-label">P&L (unrealized)</div><div class="stat-value blurable" style="color:${plCol}">${totalCost>0?(pl>=0?'+':'')+fmtM(pl):'–'}</div><div class="stat-sub" style="color:${plCol}">${totalCost>0?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</div></div>
@@ -1906,46 +1909,43 @@ function renderTbszCards(accountId) {
   `;
 }
 
-function renderTbszCash(accountId) {
-  const el = document.getElementById('tbsz-cash-'+accountId);
+function renderLyCash(accountId) {
+  const el = document.getElementById('ly-cash-'+accountId);
   if(!el) return;
-  const huf = tbszAccountCashBalance(accountId, 'HUF');
-  const eur = tbszAccountCashBalance(accountId, 'EUR');
-  el.innerHTML = `
-    <div class="stat-card"><div class="stat-label">TBSZ pénzszámla (HUF)</div><div class="stat-value blurable">${fmt(huf)}</div><div class="stat-sub"><button class="btn btn-ghost btn-sm" onclick="openTbszCashModal('deposit','${accountId}','HUF')" style="font-size:10px;padding:2px 6px">+ befizetés</button></div></div>
-    <div class="stat-card"><div class="stat-label">TBSZ pénzszámla (EUR)</div><div class="stat-value blurable">${fmtEur(eur)}</div><div class="stat-sub"><button class="btn btn-ghost btn-sm" onclick="openTbszCashModal('deposit','${accountId}','EUR')" style="font-size:10px;padding:2px 6px">+ EUR befizetés</button></div></div>
+  const huf = lyAccountCashBalance(accountId,'HUF');
+  const eur = lyAccountCashBalance(accountId,'EUR');
+  el.innerHTML=`
+    <div class="stat-card"><div class="stat-label">pénzszámla (HUF)</div><div class="stat-value blurable">${fmt(huf)}</div></div>
+    <div class="stat-card"><div class="stat-label">pénzszámla (EUR)</div><div class="stat-value blurable">${fmtEur(eur)}</div></div>
   `;
 }
 
-function renderTbszInstrumentList(accountId) {
-  const el = document.getElementById('tbsz-inst-'+accountId);
+function renderLyInstrumentList(accountId) {
+  const el = document.getElementById('ly-inst-'+accountId);
   if(!el) return;
   const fx = liveFx||395;
-  const instruments = ['VWCE','WBIT'].map(ticker => {
-    const basis = tbszAccountCostBasis(ticker, accountId);
+  const instruments = LY_TICKERS.map(ticker => {
+    const basis = lyAccountCostBasis(accountId, ticker);
     const shares = basis.reduce((s,b)=>s+b.shares,0);
     const cost = basis.reduce((s,b)=>s+b.costHuf,0);
     const lp = ticker==='VWCE'?liveVwce:liveWbit;
-    const val = lp ? shares*lp*fx : 0;
+    const val = lp?shares*lp*fx:0;
     const pct = ticker==='VWCE'?liveVwcePct:liveWbitPct;
-    return {ticker, shares, cost, val, lp, pct,
-      name: ticker==='VWCE'?'Vanguard FTSE All-World':'WisdomTree Bitcoin'};
-  }).filter(i => i.shares > 0.0001);
-
-  if(!instruments.length) {
-    el.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Még nincs pozíció ezen a számlán.</td></tr>`;
+    return {ticker,shares,cost,val,lp,pct,name:ticker==='VWCE'?'Vanguard FTSE All-World':'WisdomTree Bitcoin'};
+  }).filter(i=>i.shares>0.0001);
+  if(!instruments.length){
+    el.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Még nincs pozíció.</td></tr>`;
     return;
   }
-  el.innerHTML = instruments.map(ins => {
-    const pl = ins.val - ins.cost;
-    const plPct = ins.cost>0?pl/ins.cost*100:0;
-    const plCol = pl>=0?'var(--green)':'var(--red)';
-    const pctCol = (ins.pct||0)>=0?'var(--green)':'var(--red)';
-    const avatarClass = ins.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit';
-    return `<tr onclick="selectTbszInstrument('${accountId}','${ins.ticker}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+  el.innerHTML=instruments.map(ins=>{
+    const pl=ins.val-ins.cost, plPct=ins.cost>0?pl/ins.cost*100:0;
+    const plCol=pl>=0?'var(--green)':'var(--red)';
+    const pctCol=(ins.pct||0)>=0?'var(--green)':'var(--red)';
+    const av=ins.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit';
+    return `<tr onclick="selectLyInstrument('${accountId}','${ins.ticker}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <td style="padding:14px 16px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px">
-          <div class="ins-avatar ${avatarClass}">${ins.ticker.slice(0,2)}</div>
+          <div class="ins-avatar ${av}">${ins.ticker.slice(0,2)}</div>
           <div><div style="font-family:var(--font-head);font-size:14px;font-weight:600">${ins.ticker}</div><div style="font-size:11px;color:var(--text2)">${ins.name}</div></div>
         </div>
       </td>
@@ -1959,42 +1959,37 @@ function renderTbszInstrumentList(accountId) {
   }).join('');
 }
 
-function selectTbszInstrument(accountId, ticker) {
-  activeTbszAccountId = accountId;
-  activeTbszTicker = ticker;
-  document.getElementById('tbsz-list-'+accountId).style.display = 'none';
-  document.getElementById('tbsz-detail-'+accountId).style.display = '';
-  // Header
-  const hdr = document.getElementById('tbsz-detail-hdr-'+accountId);
-  if(hdr) hdr.textContent = ticker + ' tételek';
-  // Buttons
-  const buyBtn = document.getElementById('tbsz-buy-btn-'+accountId);
-  const sellBtn = document.getElementById('tbsz-sell-btn-'+accountId);
-  if(buyBtn) buyBtn.onclick = () => openModal('buy-etf-acc', ticker, accountId);
-  if(sellBtn) sellBtn.onclick = () => openModal('sell-etf-acc', ticker, accountId);
-  renderTbszDetailTable(accountId, ticker);
+function selectLyInstrument(accountId, ticker) {
+  activeLyAccountId = accountId;
+  activeLyTicker = ticker;
+  document.getElementById('ly-list-'+accountId).style.display='none';
+  document.getElementById('ly-detail-'+accountId).style.display='';
+  const hdr=document.getElementById('ly-detail-hdr-'+accountId);
+  if(hdr) hdr.textContent=ticker+' tételek';
+  const buyBtn=document.getElementById('ly-buy-btn-'+accountId);
+  const sellBtn=document.getElementById('ly-sell-btn-'+accountId);
+  if(buyBtn) buyBtn.onclick=()=>openLyBuyModal(ticker,accountId);
+  if(sellBtn) sellBtn.onclick=()=>openLySellModal(ticker,accountId);
+  renderLyDetailTable(accountId, ticker);
 }
 
-function tbszAccountBack(accountId) {
-  activeTbszTicker = null;
-  document.getElementById('tbsz-list-'+accountId).style.display = '';
-  document.getElementById('tbsz-detail-'+accountId).style.display = 'none';
+function lyAccountBack(accountId) {
+  activeLyTicker=null;
+  document.getElementById('ly-list-'+accountId).style.display='';
+  document.getElementById('ly-detail-'+accountId).style.display='none';
 }
 
-function renderTbszDetailTable(accountId, ticker) {
-  const bodyEl = document.getElementById('tbsz-detail-body-'+accountId);
-  const emptyEl = document.getElementById('tbsz-detail-empty-'+accountId);
-  const theadEl = document.getElementById('tbsz-detail-thead-'+accountId);
-  const realizedEl = document.getElementById('tbsz-realized-'+accountId);
+function renderLyDetailTable(accountId, ticker) {
+  const bodyEl=document.getElementById('ly-detail-body-'+accountId);
+  const emptyEl=document.getElementById('ly-detail-empty-'+accountId);
+  const theadEl=document.getElementById('ly-detail-thead-'+accountId);
+  const realizedEl=document.getElementById('ly-realized-'+accountId);
   if(!bodyEl) return;
-  const lp = ticker==='VWCE'?liveVwce:liveWbit;
-  const fx = liveFx||395;
-  const basis = tbszAccountCostBasis(ticker, accountId);
-  if(!basis.length) {
-    emptyEl.style.display='block'; bodyEl.innerHTML=''; return;
-  }
+  const lp=ticker==='VWCE'?liveVwce:liveWbit;
+  const fx=liveFx||395;
+  const basis=lyAccountCostBasis(accountId,ticker);
+  if(!basis.length){emptyEl.style.display='block';bodyEl.innerHTML='';return;}
   emptyEl.style.display='none';
-  // Thead
   if(theadEl) theadEl.innerHTML=`
     <th style="background:var(--bg2)">dátum</th>
     <th class="r" style="background:var(--bg2)">db (maradék)</th>
@@ -2004,16 +1999,16 @@ function renderTbszDetailTable(accountId, ticker) {
     <th class="r" style="background:var(--bg2)">akt. Ft</th>
     <th class="r" style="background:var(--bg2)">P&L Ft</th>
     <th class="r" style="background:var(--bg2)">P&L %</th>
-    <th style="background:var(--bg2)"></th>
-  `;
-  // Summary
-  const totShares = basis.reduce((s,b)=>s+b.shares,0);
-  const totCost = basis.reduce((s,b)=>s+b.costHuf,0);
-  const totVal = lp ? totShares*lp*fx : null;
-  const totPl = totVal!==null ? totVal-totCost : null;
-  const totPlPct = totPl!==null&&totCost>0 ? totPl/totCost*100 : null;
-  const plCol = totPl!==null?(totPl>=0?'var(--green)':'var(--red)'):'';
-  bodyEl.innerHTML = `
+    <th style="background:var(--bg2)"></th>`;
+  const totShares=basis.reduce((s,b)=>s+b.shares,0);
+  const totCost=basis.reduce((s,b)=>s+b.costHuf,0);
+  const totVal=lp?totShares*lp*fx:null;
+  const totPl=totVal!==null?totVal-totCost:null;
+  const totPlPct=totPl!==null&&totCost>0?totPl/totCost*100:null;
+  const plCol=totPl!==null?(totPl>=0?'var(--green)':'var(--red)'):'';
+  const acc=getLyAccount(accountId);
+  const isTbsz=acc&&acc.type==='tbsz';
+  bodyEl.innerHTML=`
     <tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--green);font-weight:500;background:var(--bg3)">
       <td style="font-size:11px;color:var(--text2)">összesítés</td>
       <td class="r blurable">${totShares.toFixed(4)}</td>
@@ -2023,12 +2018,11 @@ function renderTbszDetailTable(accountId, ticker) {
       <td class="r blurable" style="color:${plCol}">${totPl!==null?(totPl>=0?'+':'')+fmtM(totPl):'–'}</td>
       <td class="r" style="color:${plCol}">${totPlPct!==null?(totPlPct>=0?'+':'')+totPlPct.toFixed(2)+'%':'–'}</td>
       <td></td>
-    </tr>
-  ` + basis.map(b => {
-    const valFt = lp ? b.shares*lp*fx : null;
-    const plFt = valFt!==null ? valFt-b.costHuf : null;
-    const plPct = plFt!==null&&b.costHuf>0 ? plFt/b.costHuf*100 : null;
-    const col = plFt!==null?(plFt>=0?'var(--green)':'var(--red)'):'';
+    </tr>`+basis.map(b=>{
+    const valFt=lp?b.shares*lp*fx:null;
+    const plFt=valFt!==null?valFt-b.costHuf:null;
+    const plPct=plFt!==null&&b.costHuf>0?plFt/b.costHuf*100:null;
+    const col=plFt!==null?(plFt>=0?'var(--green)':'var(--red)'):'';
     return `<tr>
       <td>${b.date}</td>
       <td class="r blurable">${b.shares.toFixed(4)}</td>
@@ -2038,116 +2032,250 @@ function renderTbszDetailTable(accountId, ticker) {
       <td class="r blurable">${valFt!==null?fmtM(valFt):'–'}</td>
       <td class="r blurable" style="color:${col}">${plFt!==null?(plFt>=0?'+':'')+fmtM(plFt):'–'}</td>
       <td class="r" style="color:${col}">${plPct!==null?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteEtfTx('${b.id}')">×</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteLyTx('${b.id}')">×</button></td>
     </tr>`;
   }).join('');
-
-  // Realizált P&L
-  const realized = tbszRealizedPL(ticker, accountId);
-  if(realizedEl) {
-    if(Math.abs(realized.huf) > 0.01) {
-      realizedEl.style.display = '';
-      const rCol = realized.huf>=0?'var(--green)':'var(--red)';
-      realizedEl.innerHTML = `<div class="panel" style="border:1px solid ${rCol}22">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;letter-spacing:.06em;text-transform:uppercase">realizált P&L (FIFO)</div>
+  if(realizedEl){
+    const realized=lyAccountRealizedPL(accountId,ticker);
+    if(Math.abs(realized.huf)>0.01){
+      realizedEl.style.display='';
+      const rCol=realized.huf>=0?'var(--green)':'var(--red)';
+      const taxNote=isTbsz?'TBSZ-en belül adómentes':'Adóköteles lehet!';
+      realizedEl.innerHTML=`<div class="panel" style="border:1px solid ${rCol}22">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">realizált P&L (FIFO)</div>
         <div style="display:flex;gap:24px">
           <div><div style="font-size:11px;color:var(--text2)">HUF</div><div class="blurable" style="color:${rCol};font-weight:600">${realized.huf>=0?'+':''}${fmtM(realized.huf)}</div></div>
           <div><div style="font-size:11px;color:var(--text2)">EUR</div><div class="blurable" style="color:${rCol};font-weight:600">${realized.eur>=0?'+':''}${fmtEur(Math.abs(realized.eur),2)}</div></div>
-          <div style="font-size:11px;color:var(--text3);align-self:flex-end">TBSZ-en belül adómentes</div>
+          <div style="font-size:11px;color:var(--text3);align-self:flex-end">${taxNote}</div>
         </div>
       </div>`;
-    } else {
-      realizedEl.style.display = 'none';
-    }
+    } else realizedEl.style.display='none';
   }
   if(blurOn) applyBlur();
 }
 
-function addTbszAccount() {
-  const year = parseInt(prompt('TBSZ számla éve:', new Date().getFullYear()));
-  if(!year || year < 2020 || year > 2040) return;
-  if(!data.tbszAccounts) data.tbszAccounts = [];
-  if(data.tbszAccounts.find(a=>a.year===year)) {
-    toast('Már létezik TBSZ számla erre az évre!'); return;
+function renderLyCashTx(accountId) {
+  const el=document.getElementById('ly-cashtx-'+accountId);
+  if(!el) return;
+  const txs=(data.lyCashTx||[]).filter(t=>t.accountId===accountId).sort((a,b)=>b.date.localeCompare(a.date));
+  const typeLabel={deposit:'befizetés',withdraw:'kifizetés',transfer_in:'átutalás be',transfer_out:'átutalás ki'};
+  const typeCol={deposit:'var(--green)',withdraw:'var(--red)',transfer_in:'var(--blue)',transfer_out:'var(--amber)'};
+  el.innerHTML=txs.map(t=>`<tr>
+    <td>${t.date}</td>
+    <td style="color:${typeCol[t.type]||'var(--text2)'}">${typeLabel[t.type]||t.type}</td>
+    <td>${t.currency}</td>
+    <td class="r blurable">${t.currency==='HUF'?fmt(t.amount):fmtEur(t.amount)}</td>
+    <td style="color:var(--text3);font-size:11px">${t.note||'–'}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteLyCashTx('${t.id}')">×</button></td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">Nincs mozgás.</td></tr>';
+}
+
+function addLyAccount() {
+  const typeOpt = prompt('Számla típusa (tbsz/cash):', 'tbsz');
+  if(!typeOpt) return;
+  const type = typeOpt.toLowerCase().trim() === 'tbsz' ? 'tbsz' : 'cash';
+  const name = prompt('Számla neve:', type==='tbsz'?'TBSZ 2026':'Lightyear normál');
+  if(!name) return;
+  const lyAccountId = (prompt('Lightyear számlaazonosító (pl. LY-8WRK5A8):', '')||'').trim();
+  const id = 'ly-'+(Date.now().toString(36));
+  const acc = {id, name, lyAccountId:lyAccountId||null, type};
+  if(type==='tbsz') {
+    const year = parseInt(prompt('TBSZ év:', new Date().getFullYear()));
+    if(year) acc.tbszYear = year;
   }
-  const lyId = (prompt('Lightyear számlaazonosító (opcionális, pl. LY-8WRK5A8):', '')||'').trim();
-  const id = 'tbsz'+year;
-  data.tbszAccounts.push({id, name:'TBSZ '+year, year, openDate:year+'-01-02', lyAccountId: lyId||null});
-  renderTbszSidebar();
-  renderTbszPages();
+  if(!data.lyAccounts) data.lyAccounts=[];
+  data.lyAccounts.push(acc);
+  renderLyAccountsSidebar();
+  renderLyAccountsPages();
   saveData();
-  const navBtns = document.querySelectorAll('#tbsz-nav-items .nav-item');
-  const newBtn = [...navBtns].find(b=>b.textContent.includes('TBSZ '+year));
-  showTbszAccount(id, newBtn);
-  toast('TBSZ '+year+' számla létrehozva!');
+  const btn=[...document.querySelectorAll('#ly-nav-items .nav-item')].find(b=>b.textContent.includes(name));
+  showLyAccount(id, btn);
+  toast(name+' számla létrehozva!');
 }
 
-function setLyAccountId(accountId) {
-  const acc = data.tbszAccounts.find(a=>a.id===accountId);
+function editLyAccount(accountId) {
+  const acc=getLyAccount(accountId);
   if(!acc) return;
-  const lyId = (prompt('Lightyear számlaazonosító (pl. LY-8WRK5A8):', acc.lyAccountId||'')||'').trim();
-  if(lyId === null) return;
-  acc.lyAccountId = lyId || null;
-  renderTbszPages();
-  renderTbszSidebar();
-  if(activeTbszAccountId===accountId) showTbszAccount(accountId, null);
-  saveData();
-  toast('Azonosító mentve: '+lyId);
-}
-
-function deleteTbszAccount(accountId) {
-  const acc = data.tbszAccounts.find(a=>a.id===accountId);
-  if(!acc) return;
-  const hasTx = data.etfTx.some(t=>t.accountId===accountId);
-  if(hasTx) { toast('Nem törölhető: van tranzakció ezen a számlán!'); return; }
-  if(!confirm('Biztosan törlöd a '+acc.name+' számlát?')) return;
-  data.tbszAccounts = data.tbszAccounts.filter(a=>a.id!==accountId);
-  renderTbszSidebar();
-  renderTbszPages();
-  showTab('dashboard', document.querySelector('.nav-item'));
-  saveData();
-  toast(acc.name+' törölve.');
-}
-
-function openTbszCashModal(type, accountId, currency='HUF') {
-  const acc = data.tbszAccounts.find(a=>a.id===accountId);
-  document.getElementById('modalTitle').textContent = (type==='deposit'?'Befizetés':'Kifizetés')+' – '+acc.name+' ('+currency+')';
-  document.getElementById('modalBody').innerHTML = `
-    <div class="form-group"><div class="form-label">Dátum</div><input class="form-input" id="tc-date" type="date" value="${today()}"></div>
-    <div class="form-group"><div class="form-label">Összeg (${currency})</div><input class="form-input" id="tc-amount" type="number" placeholder="0"></div>
-    <div class="form-group"><div class="form-label">Megjegyzés</div><input class="form-input" id="tc-note" type="text" placeholder=""></div>
-    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="saveTbszCashTx('${type}','${accountId}','${currency}')">Mentés</button>
-  `;
-  document.getElementById('modalBackdrop').classList.add('open');
-}
-
-function saveTbszCashTx(type, accountId, currency) {
-  const date = document.getElementById('tc-date').value;
-  const amount = parseFloat(document.getElementById('tc-amount').value);
-  const note = document.getElementById('tc-note').value;
-  if(!date||!amount) { toast('Töltsd ki a kötelező mezőket!'); return; }
-  if(!data.tbszCashTx) data.tbszCashTx = [];
-  data.tbszCashTx.push({id:uid(), accountId, date, type, amount, currency, note});
-  closeModal();
-  renderTbszCash(accountId);
+  const name=prompt('Számla neve:',acc.name)||acc.name;
+  const lyId=(prompt('Lightyear azonosító:',acc.lyAccountId||'')||'').trim();
+  acc.name=name;
+  acc.lyAccountId=lyId||null;
+  renderLyAccountsSidebar();
+  renderLyAccountsPages();
+  if(activeLyAccountId===accountId) showLyAccount(accountId,null);
   saveData();
   toast('Mentve!');
 }
 
-// Old functions kept for compatibility
-function selectInstrument(ticker) {
-  if(activeTbszAccountId) selectTbszInstrument(activeTbszAccountId, ticker);
+function deleteLyAccount(accountId) {
+  const acc=getLyAccount(accountId);
+  if(!acc) return;
+  if((data.lyTx||[]).some(t=>t.accountId===accountId)){toast('Nem törölhető: van tranzakció!');return;}
+  if(!confirm('Biztosan törlöd: '+acc.name+'?')) return;
+  data.lyAccounts=data.lyAccounts.filter(a=>a.id!==accountId);
+  data.lyCashTx=(data.lyCashTx||[]).filter(t=>t.accountId!==accountId);
+  renderLyAccountsSidebar();
+  renderLyAccountsPages();
+  showTab('dashboard',document.querySelector('.nav-item'));
+  saveData();
+  toast(acc.name+' törölve.');
 }
-function tbszBack() {
-  if(activeTbszAccountId) tbszAccountBack(activeTbszAccountId);
-}
-function renderTBSZ(){ /* replaced by renderTbszAccount */ }
-function renderTBSZInstruments(){ if(activeTbszAccountId) renderTbszInstrumentList(activeTbszAccountId); }
-function renderTBSZDetail(ticker){ if(activeTbszAccountId) renderTbszDetailTable(activeTbszAccountId, ticker); }
 
+function deleteLyTx(id) {
+  data.lyTx=(data.lyTx||[]).filter(t=>t.id!==id);
+  if(activeLyAccountId) renderLyAccount(activeLyAccountId);
+  renderDashboard();
+  saveData();
+  toast('Törölve');
+}
+
+function deleteLyCashTx(id) {
+  data.lyCashTx=(data.lyCashTx||[]).filter(t=>t.id!==id);
+  if(activeLyAccountId) renderLyCash(activeLyAccountId);
+  saveData();
+  toast('Törölve');
+}
+
+function openLyBuyModal(ticker, accountId) {
+  const acc=getLyAccount(accountId);
+  const lp=ticker==='VWCE'?liveVwce:liveWbit;
+  document.getElementById('modalTitle').textContent=ticker+' vétel – '+(acc?acc.name:'');
+  document.getElementById('modalBody').innerHTML=`
+    <input type="hidden" id="f-account-id" value="${accountId}">
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">ETF</div>
+        <select class="form-select" id="f-ticker">
+          <option value="VWCE" ${ticker==='VWCE'?'selected':''}>VWCE</option>
+          <option value="WBIT" ${ticker==='WBIT'?'selected':''}>WBIT</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">darabszám</div><input class="form-input" id="f-shares" type="number" step="0.0001" oninput="recalcETFModal()"></div>
+      <div class="form-group"><div class="form-label">árfolyam (EUR/db)</div><input class="form-input" id="f-price" type="number" step="0.0001" placeholder="${lp?lp.toFixed(2):'148.50'}" oninput="recalcETFModal()"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">össz. vételár (Ft)</div><input class="form-input" id="f-huf" type="number" oninput="recalcETFModalFromHuf()"></div>
+      <div class="form-group"><div class="form-label">díj (HUF)</div><input class="form-input" id="f-fee" type="number" value="0" oninput="recalcETFModal()"></div>
+    </div>
+    <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between">
+      <span>EUR/HUF: <input id="f-fx" type="number" step="0.01" value="${Math.round(liveFx||395)}" oninput="recalcETFModal()" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;padding:0 2px"></span>
+      <span>Befektetett: <strong id="calcHuf" style="color:var(--text)">–</strong></span>
+    </div>
+    <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitLyBuy()">mentés</button></div>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+function submitLyBuy() {
+  const accountId=document.getElementById('f-account-id').value;
+  const ticker=document.getElementById('f-ticker').value;
+  const date=document.getElementById('f-date').value;
+  const shares=parseFloat(document.getElementById('f-shares').value);
+  const priceEur=parseFloat(document.getElementById('f-price').value);
+  const hufInput=parseFloat(document.getElementById('f-huf')?.value)||0;
+  const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
+  const note=document.getElementById('f-note').value;
+  if(!date||!shares||!priceEur) return toast('Töltsd ki a kötelező mezőket!');
+  const fxBase=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
+  const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
+  if(!data.lyTx) data.lyTx=[];
+  data.lyTx.push({id:uid(),accountId,date,ticker,type:'buy',shares,priceEur,fxRate,fee,feeCurrency:'HUF',note});
+  closeModal();
+  renderLyAccount(accountId);
+  renderDashboard();
+  saveData();
+  toast(ticker+' vétel rögzítve');
+}
+
+function openLySellModal(ticker, accountId) {
+  const acc=getLyAccount(accountId);
+  const shares=lyAccountShares(accountId,ticker);
+  const basis=lyAccountCostBasis(accountId,ticker);
+  const avgCost=basis.length?basis.reduce((s,b)=>s+b.priceEur*b.shares,0)/shares:0;
+  const lp=ticker==='VWCE'?liveVwce:liveWbit;
+  document.getElementById('modalTitle').textContent=ticker+' eladás (FIFO) – '+(acc?acc.name:'');
+  document.getElementById('modalBody').innerHTML=`
+    <input type="hidden" id="f-account-id" value="${accountId}">
+    <input type="hidden" id="f-ticker-sell" value="${ticker}">
+    <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:12px">
+      Elérhető: <strong>${shares.toFixed(4)} db</strong> &nbsp;|&nbsp; ∅ bekerülési: <strong>${fmtEur(avgCost)}</strong>
+      <div style="margin-top:4px;color:var(--green);font-size:10px">FIFO: legrégebbi tételek kerülnek eladásra először.</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">darabszám</div><input class="form-input" id="f-shares" type="number" step="0.0001" max="${shares}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">eladási ár (EUR/db)</div><input class="form-input" id="f-price" type="number" step="0.01" placeholder="${(lp||150).toFixed(2)}"></div>
+      <div class="form-group"><div class="form-label">EUR/HUF</div><input class="form-input" id="f-fx" type="number" value="${Math.round(liveFx||395)}"></div>
+    </div>
+    <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitLySell()">mentés</button></div>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+function submitLySell() {
+  const accountId=document.getElementById('f-account-id').value;
+  const ticker=document.getElementById('f-ticker-sell').value;
+  const date=document.getElementById('f-date').value;
+  const shares=parseFloat(document.getElementById('f-shares').value);
+  const priceEur=parseFloat(document.getElementById('f-price').value);
+  const fxRate=parseFloat(document.getElementById('f-fx').value)||(liveFx||395);
+  const note=document.getElementById('f-note').value;
+  if(!date||!shares||!priceEur) return toast('Töltsd ki a kötelező mezőket!');
+  const available=lyAccountShares(accountId,ticker);
+  if(shares>available+0.0001) return toast('Nincs elég darab!');
+  if(!data.lyTx) data.lyTx=[];
+  data.lyTx.push({id:uid(),accountId,date,ticker,type:'sell',shares,priceEur,fxRate,note});
+  // Eladási bevétel → lyCashTx
+  if(!data.lyCashTx) data.lyCashTx=[];
+  data.lyCashTx.push({id:uid(),accountId,date,type:'transfer_in',amount:shares*priceEur,currency:'EUR',note:ticker+' eladási bevétel'});
+  closeModal();
+  renderLyAccount(accountId);
+  renderDashboard();
+  setTimeout(()=>selectLyInstrument(accountId,ticker),50);
+  saveData();
+  const realized=lyAccountRealizedPL(accountId,ticker);
+  toast(ticker+' eladás rögzítve. P&L: '+(realized.eur>=0?'+':'')+fmtEur(Math.abs(realized.eur),2));
+}
+
+function openLyCashModal(type, accountId) {
+  const acc=getLyAccount(accountId);
+  document.getElementById('modalTitle').textContent=(type==='deposit'?'Befizetés':'Kifizetés')+' – '+(acc?acc.name:'');
+  document.getElementById('modalBody').innerHTML=`
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
+      <div class="form-group"><div class="form-label">pénznem</div>
+        <select class="form-select" id="f-currency"><option value="HUF">HUF</option><option value="EUR">EUR</option></select>
+      </div>
+    </div>
+    <div class="form-row full"><div class="form-group"><div class="form-label">összeg</div><input class="form-input" id="f-amount" type="number" placeholder="0"></div></div>
+    <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="submitLyCash('${type}','${accountId}')">Mentés</button>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+function submitLyCash(type, accountId) {
+  const date=document.getElementById('f-date').value;
+  const amount=parseFloat(document.getElementById('f-amount').value);
+  const currency=document.getElementById('f-currency').value;
+  const note=document.getElementById('f-note').value;
+  if(!date||!amount) return toast('Töltsd ki a kötelező mezőket!');
+  if(!data.lyCashTx) data.lyCashTx=[];
+  data.lyCashTx.push({id:uid(),accountId,date,type,amount,currency,note});
+  closeModal();
+  renderLyCash(accountId);
+  renderLyCashTx(accountId);
+  saveData();
+  toast('Mentve!');
+}
 
 // ═══════════════════════════════════════════════
 // ETF TABLE (legacy, used by tranzakciok)
+// ═══════════════════════════════════════════════
+
 // ═══════════════════════════════════════════════
 const etfSortState={VWCE:{col:'date',dir:-1},WBIT:{col:'date',dir:-1}};
 
@@ -2269,10 +2397,7 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice,theadIdOverride){
   if(blurOn) applyBlur();
 }
 
-function deleteEtfTx(id){
-  data.etfTx=data.etfTx.filter(t=>t.id!==id);
-  renderTBSZ(); renderDashboard(); renderTranzakciok(); toast('Törölve');
-}
+function deleteEtfTx(id){ deleteLyTx(id); }
 
 // ═══════════════════════════════════════════════
 // TRANZAKCIÓK
@@ -2318,7 +2443,7 @@ function renderTranzakciok(){
     });
   });
   // ETF vételek/eladások
-  data.etfTx.forEach(t=>all.push({
+  (data.lyTx||[]).forEach(t=>all.push({
     date:t.date, type:t.type, asset:t.ticker,
     vetelar:fmt(Math.round(t.shares*t.priceEur*t.fxRate)),
     nevd:t.shares.toFixed(4)+' db',
@@ -2382,7 +2507,7 @@ function deleteTx(kind, id){
     data.dkj=data.dkj.filter(d=>d.id!==id);
   }
   else if(kind==='etf'){
-    data.etfTx=data.etfTx.filter(t=>t.id!==id);
+    data.lyTx=(data.lyTx||[]).filter(t=>t.id!==id);
   }
 
   renderAll();
@@ -2398,10 +2523,14 @@ function openModal(type, param, param2){
   const body=document.getElementById('modalBody');
 
   if(type==='buy-etf-acc'){
+    openLyBuyModal(param||'VWCE', param2||activeLyAccountId);
+    return;
+  }
+  if(type==='_old_buy_etf_acc'){
     // param = ticker, param2 = accountId
     const ticker = param||'VWCE';
-    const accountId = param2||activeTbszAccountId;
-    const acc = data.tbszAccounts.find(a=>a.id===accountId);
+    const accountId = param2||activeLyAccountId;
+    const acc = getLyAccount(accountId);
     const livePrice = ticker==='WBIT'?liveWbit:liveVwce;
     title.textContent = ticker+' vétel – '+(acc?acc.name:'TBSZ');
     body.innerHTML=`
@@ -2437,10 +2566,14 @@ function openModal(type, param, param2){
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitETFBuyAcc()">mentés</button></div>`;
   }
   else if(type==='sell-etf-acc'){
+    openLySellModal(param||'VWCE', param2||activeLyAccountId);
+    return;
+  }
+  else if(type==='_old_sell_etf_acc'){
     // param = ticker, param2 = accountId
     const ticker = param||'VWCE';
-    const accountId = param2||activeTbszAccountId;
-    const acc = data.tbszAccounts.find(a=>a.id===accountId);
+    const accountId = param2||activeLyAccountId;
+    const acc = getLyAccount(accountId);
     const totalShares = tbszAccountShares(ticker, accountId);
     const livePrice = ticker==='VWCE'?liveVwce:liveWbit;
     const basis = tbszAccountCostBasis(ticker, accountId);
@@ -3080,11 +3213,12 @@ function submitETFBuy(ticker){
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
   const fxBase=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
   const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
-  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,feeCurrency:'HUF',tbszYear,note});
+  data.lyTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,feeCurrency:'HUF',note});
   closeModal(); renderAll(); saveData(); toast(ticker+' vétel rögzítve');
 }
 
-function submitETFBuyAcc(){
+function submitETFBuyAcc(){ submitLyBuy(); }
+function _submitETFBuyAcc_old(){
   const accountId=document.getElementById('f-account-id').value;
   const ticker=document.getElementById('f-ticker').value;
   const date=document.getElementById('f-date').value;
@@ -3096,14 +3230,14 @@ function submitETFBuyAcc(){
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
   const fxBase=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
   const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
-  const acc=data.tbszAccounts.find(a=>a.id===accountId);
+  const acc=getLyAccount(accountId);
   const tbszYear=acc?acc.year:new Date().getFullYear();
-  data.etfTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,feeCurrency:'HUF',tbszYear,accountId,note});
+  data.lyTx.push({id:uid(),date,ticker,type:'buy',shares,priceEur,fxRate,fee,feeCurrency:'HUF',accountId,note});
   closeModal();
-  renderTbszAccount(accountId);
+  if(activeLyAccountId) renderLyAccount(activeLyAccountId);
   renderDashboard();
   saveData();
-  toast(ticker+' vétel rögzítve – '+(acc?acc.name:''));
+  toast(ticker+' vétel rögzítve');
 }
 
 function submitETFSell(ticker){
@@ -3113,11 +3247,12 @@ function submitETFSell(ticker){
   const fxRate=parseFloat(document.getElementById('f-fx').value)||liveFx;
   const note=document.getElementById('f-note').value;
   if(!date||!shares||!priceEur)return toast('Töltsd ki a kötelező mezőket!');
-  data.etfTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,note});
+  data.lyTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,note});
   closeModal(); renderAll(); saveData(); toast(ticker+' eladás rögzítve');
 }
 
-function submitETFSellAcc(){
+function submitETFSellAcc(){ submitLySell(); }
+function _submitETFSellAcc_old(){
   const accountId=document.getElementById('f-account-id').value;
   const ticker=document.getElementById('f-ticker-sell').value;
   const date=document.getElementById('f-date').value;
@@ -3129,16 +3264,17 @@ function submitETFSellAcc(){
   // Ellenőrzés: van-e elég darab?
   const available=tbszAccountShares(ticker, accountId);
   if(shares>available+0.0001)return toast('Nincs elég darab! Elérhető: '+available.toFixed(4));
-  const acc=data.tbszAccounts.find(a=>a.id===accountId);
+  const acc=getLyAccount(accountId);
   const tbszYear=acc?acc.year:new Date().getFullYear();
   // Eladás rögzítése
-  data.etfTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,tbszYear,accountId,note});
+  data.lyTx.push({id:uid(),date,ticker,type:'sell',shares,priceEur,fxRate,accountId,note});
   // EUR bevétel könyvelése TBSZ pénzszámlára
-  if(!data.tbszCashTx)data.tbszCashTx=[];
+  // EUR bevétel a lyCashTx-be
+  if(!data.lyCashTx)data.lyCashTx=[];
   const eurProceeds=shares*priceEur;
-  data.tbszCashTx.push({id:uid(),accountId,date,type:'sell_proceed',amount:eurProceeds,currency:'EUR',note:ticker+' eladás – '+shares.toFixed(4)+' db × '+fmtEur(priceEur)});
+  data.lyCashTx.push({id:uid(),accountId,date,type:'transfer_in',amount:eurProceeds,currency:'EUR',note:ticker+' eladási bevétel'});
   closeModal();
-  renderTbszAccount(accountId);
+  if(accountId) renderLyAccount(accountId);
   renderDashboard();
   // Visszaugrunk a részlet nézetbe
   setTimeout(()=>selectTbszInstrument(accountId, ticker), 50);
@@ -3254,7 +3390,7 @@ function getFirstTransactionDate(){
   data.cashTx.forEach(t=>dates.push(t.date));
   data.fixmap.forEach(f=>dates.push(f.date));
   data.dkj.forEach(d=>dates.push(d.date));
-  data.etfTx.forEach(t=>dates.push(t.date));
+  (data.lyTx||[]).forEach(t=>dates.push(t.date));
   return dates.sort()[0]||new Date().toISOString().split('T')[0];
 }
 
@@ -3341,7 +3477,7 @@ function calcPortfolioOnDate(date){
     if(!inferredSell||inferredSell>date)ap+=d.faceValue;
   });
   const etfHoldings={};
-  data.etfTx.filter(t=>t.date<=date).forEach(t=>{
+  (data.lyTx||[]).filter(t=>t.date<=date).forEach(t=>{
     if(!etfHoldings[t.ticker])etfHoldings[t.ticker]=0;
     etfHoldings[t.ticker]+=t.type==='buy'?t.shares:-t.shares;
   });
@@ -3392,7 +3528,7 @@ async function fetchLive(){
 
   await fetchETFPrice('VWCE.DE','','',( p,pct)=>{liveVwce=p;liveVwcePct=pct;});
   await fetchETFPrice('WBIT-DE','','',( p,pct)=>{liveWbit=p;liveWbitPct=pct;});
-  renderTBSZ(); renderDashboard();
+  renderDashboard();
 }
 
 function getFxChangeHtml(){
@@ -3853,34 +3989,31 @@ function resetMkImport() {
 let importParsed = []; // parsed rows ready for preview
 
 function initImportPage() {
-  // Populate account selector
   const sel = document.getElementById('importAccountSelect');
   if(!sel) return;
   sel.innerHTML = '<option value="">– válassz számlát –</option>';
-  getTbszAccounts().forEach(acc => {
+  getLyAccounts().forEach(acc => {
     sel.innerHTML += `<option value="${acc.id}">${acc.name}</option>`;
   });
 }
+
+let importParsed = [];
 
 function handleImportDrop(e) {
   handleImportFiles(e.dataTransfer.files);
 }
 
 async function handleImportFiles(files) {
-  if(!files || files.length === 0) return;
-
-  // Olvasunk minden CSV-t
-  const csvTexts = await Promise.all([...files].filter(f=>f.name.endsWith('.csv')).map(f =>
-    new Promise(res => { const r=new FileReader(); r.onload=e=>res({name:f.name,text:e.target.result}); r.readAsText(f,'UTF-8'); })
+  if(!files||!files.length) return;
+  const csvTexts = await Promise.all([...files].filter(f=>f.name.endsWith('.csv')).map(f=>
+    new Promise(res=>{const r=new FileReader();r.onload=e=>res({name:f.name,text:e.target.result});r.readAsText(f,'UTF-8');})
   ));
-
   if(!csvTexts.length) return toast('Nem találtam CSV fájlt!');
 
-  // Szétválasztás: TBSZ (van Buy) vs pénzszámla (csak Deposit/Withdrawal)
   const parseRows = text => {
-    const lines = text.trim().split('\n');
-    const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
-    return lines.slice(1).map(line => {
+    const lines=text.trim().split('\n');
+    const headers=lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+    return lines.slice(1).map(line=>{
       const vals=[];let cur='',inQ=false;
       for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
       vals.push(cur);
@@ -3889,369 +4022,232 @@ async function handleImportFiles(files) {
     });
   };
 
-  let tbszRows = [], cashRows = [], allRows = [];
-  let tbszAccountId = document.getElementById('importAccountSelect').value;
-
-  for(const {name, text} of csvTexts) {
+  // Minden CSV-t beolvassuk és azonosítjuk
+  const csvData = csvTexts.map(({name,text}) => {
     const rows = parseRows(text);
-    allRows = allRows.concat(rows);
-    const hasBuy = rows.some(r=>r.Type==='Buy'||r.Type==='Sell');
+    const lyMatch = name.match(/LY-([A-Z0-9]+)/);
+    const lyId = lyMatch ? 'LY-'+lyMatch[1] : null;
+    // Melyik lyAccount-hoz tartozik?
+    const matchedAcc = lyId ? getLyAccounts().find(a=>a.lyAccountId===lyId) : null;
+    return {name, rows, lyId, matchedAcc};
+  });
 
-    if(hasBuy) {
-      tbszRows = tbszRows.concat(rows);
-      // Auto-detect account from filename
-      const lyMatch = name.match(/LY-([A-Z0-9]+)/);
-      const lyId = lyMatch ? 'LY-'+lyMatch[1] : null;
-      if(!tbszAccountId && lyId) {
-        const matched = getTbszAccounts().find(a=>a.lyAccountId===lyId);
-        if(matched) {
-          tbszAccountId = matched.id;
-          document.getElementById('importAccountSelect').value = tbszAccountId;
-          toast('Számla felismerve: '+matched.name);
-        }
+  // Összes sor az FX párosításhoz
+  const allRows = csvData.flatMap(c=>c.rows);
+
+  // Konverziós ráták az összes CSV-ből
+  const convByRef={};
+  allRows.forEach(r=>{
+    if(r.Type==='Conversion'){
+      if(!convByRef[r.Reference])convByRef[r.Reference]={};
+      convByRef[r.Reference][r.Ticker]=r;
+    }
+  });
+  const convRates=[];
+  Object.entries(convByRef).forEach(([ref,byTicker])=>{
+    const eurRow=byTicker['EUR'],hufRow=byTicker['HUF'];
+    if(eurRow&&hufRow){
+      const eurAmt=Math.abs(parseFloat(eurRow['Gross Amount'])||0);
+      const hufAmt=Math.abs(parseFloat(hufRow['Gross Amount'])||0);
+      if(eurAmt>0.1&&hufAmt>0){
+        const [dp]=eurRow.Date.split(' ');const[dd,mm,yyyy]=dp.split('/');
+        convRates.push({ref,eurAmt,hufAmt,rate:hufAmt/eurAmt,date:`${yyyy}-${mm}-${dd}`});
       }
-    } else {
-      cashRows = cashRows.concat(rows);
+    }
+  });
+
+  function getFxForBuy(buyGrossEur, buyDate) {
+    const buyEur=Math.abs(parseFloat(buyGrossEur)||0);
+    if(buyEur>0.1){
+      const exact=convRates.filter(c=>Math.abs(c.eurAmt-buyEur)<0.02);
+      if(exact.length===1) return exact[0].rate;
+      if(exact.length>1){
+        exact.sort((a,b)=>Math.abs(new Date(a.date)-new Date(buyDate))-Math.abs(new Date(b.date)-new Date(buyDate)));
+        return exact[0].rate;
+      }
+    }
+    const sameDate=convRates.filter(c=>c.date===buyDate);
+    if(sameDate.length===1) return sameDate[0].rate;
+    if(sameDate.length>1&&buyEur>0){sameDate.sort((a,b)=>Math.abs(a.eurAmt-buyEur)-Math.abs(b.eurAmt-buyEur));return sameDate[0].rate;}
+    if(sameDate.length) return sameDate[0].rate;
+    const prior=convRates.filter(c=>c.date<=buyDate).sort((a,b)=>b.date.localeCompare(a.date));
+    return prior.length?prior[0].rate:(liveFx||395);
+  }
+
+  importParsed = [];
+  const existingLyRefs = new Set((data.lyTx||[]).map(t=>t.ref).filter(Boolean));
+  const existingCashRefs = new Set((data.lyCashTx||[]).map(t=>t.ref).filter(Boolean));
+
+  for(const {rows, lyId, matchedAcc} of csvData) {
+    // Minden sorhoz meghatározzuk a típust és a célszámlát
+    for(const r of rows) {
+      const [dp]=r.Date.split(' ');const[dd,mm,yyyy]=dp.split('/');
+      const date=`${yyyy}-${mm}-${dd}`;
+      const ref=r.Reference;
+      const amount=Math.abs(parseFloat(r['Gross Amount'])||0);
+
+      if(r.Type==='Buy'&&r.Ticker&&r.Quantity) {
+        // ETF vétel – a számlához rendelt lyAccount-ba
+        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        if(!acc) continue; // nincs számla rendelve, skip
+        const shares=Math.abs(parseFloat(r.Quantity)||0);
+        const priceEur=parseFloat(r['Price/share'])||0;
+        const fee=parseFloat(r.Fee)||0;
+        const fxRate=getFxForBuy(r['Gross Amount'],date);
+        const isDuplicate=existingLyRefs.has(ref);
+        importParsed.push({rowType:'etf-buy',date,accountId:acc.id,accountName:acc.name,
+          ticker:r.Ticker,shares,priceEur,fee,fxRate,ref,isDuplicate,selected:!isDuplicate});
+      }
+      else if(r.Type==='Sell'&&r.Ticker&&r.Quantity) {
+        // ETF eladás
+        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        if(!acc) continue;
+        const shares=Math.abs(parseFloat(r.Quantity)||0);
+        const priceEur=parseFloat(r['Price/share'])||0;
+        const fxRate=getFxForBuy(r['Gross Amount'],date);
+        const isDuplicate=existingLyRefs.has(ref);
+        // Eladási bevétel EUR-ban
+        importParsed.push({rowType:'etf-sell',date,accountId:acc.id,accountName:acc.name,
+          ticker:r.Ticker,shares,priceEur,fxRate,ref,isDuplicate,selected:!isDuplicate,
+          proceeds:amount});
+      }
+      else if(r.Type==='Deposit'&&r.CCY==='HUF'&&ref.startsWith('DT-')) {
+        // Külső befizetés (bankszámláról)
+        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const isDuplicate=existingCashRefs.has(ref);
+        importParsed.push({rowType:'cash-deposit',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
+          amount,currency:'HUF',ref,isDuplicate,selected:!isDuplicate});
+      }
+      else if(r.Type==='Withdrawal'&&r.CCY==='HUF'&&ref.startsWith('IT-')) {
+        // Belső átutalás ki (pénzszámla→TBSZ)
+        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        // A célszámlát a párja alapján derítjük ki (a fogadó IT- Deposit)
+        const isDuplicate=existingCashRefs.has(ref);
+        importParsed.push({rowType:'transfer-out',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
+          amount,currency:'HUF',ref,isDuplicate,selected:!isDuplicate});
+      }
+      else if(r.Type==='Deposit'&&r.CCY==='HUF'&&ref.startsWith('IT-')) {
+        // Belső átutalás be (pénzszámla→TBSZ fogadó oldala)
+        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const isDuplicate=existingCashRefs.has(ref);
+        importParsed.push({rowType:'transfer-in',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
+          amount,currency:'HUF',ref,isDuplicate,selected:!isDuplicate});
+      }
+      else if(r.Type==='Deposit'&&r.CCY==='EUR'&&ref.startsWith('IT-')) {
+        // EUR átutalás be (pl. EUR átküldve TBSZ-re)
+        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const isDuplicate=existingCashRefs.has(ref);
+        importParsed.push({rowType:'transfer-in-eur',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
+          amount,currency:'EUR',ref,isDuplicate,selected:!isDuplicate});
+      }
+      // Conversion, Withdrawal DT- stb. → skip (FX párosításhoz már felhasználtuk)
     }
   }
 
-  if(!tbszAccountId && tbszRows.length) return toast('Válassz TBSZ számlát!');
-
-  // Összevont konverzió lista az összes CSV-ből – így a párosítás pontos lesz
-  importParsed = [];
-
-  if(tbszRows.length) {
-    parseLightyearCSVWithConversions(tbszRows, allRows, tbszAccountId);
-  }
-
-  if(cashRows.length) {
-    // DT- deposit sorok → cashTx
-    const existingRefs = new Set(data.cashTx.map(t=>t.lyRef).filter(Boolean));
-    cashRows.filter(r=>r.Type==='Deposit'&&r.CCY==='HUF'&&r.Reference.startsWith('DT-')).forEach(r => {
-      const [dp]=r.Date.split(' ');const[dd,mm,yyyy]=dp.split('/');
-      const date=`${yyyy}-${mm}-${dd}`;
-      const amount=Math.abs(parseFloat(r['Gross Amount'])||0);
-      const isDuplicate=existingRefs.has(r.Reference);
-      importParsed.push({date,ticker:'HUF',type:'deposit',shares:0,priceEur:0,fee:0,fxRate:1,
-        ref:r.Reference,accountId:null,tbszYear:null,isDuplicate,selected:!isDuplicate,
-        depositAmount:amount,isCashAccount:true});
-    });
-  }
-
-  renderImportPreview(tbszAccountId);
+  renderImportPreview(document.getElementById('importAccountSelect')?.value);
 }
 
 function handleImportFile(file) {
-  if(!file || !file.name.endsWith('.csv')) return toast('Csak CSV fájl támogatott!');
+  if(file) handleImportFiles([file]);
+}
 
-  // Próbáljuk kiolvasni a LY azonosítót a fájlnévből
-  const lyMatch = file.name.match(/LY-([A-Z0-9]+)/);
-  const lyId = lyMatch ? 'LY-'+lyMatch[1] : null;
+function renderImportPreview(selectedAccountId) {
+  if(!importParsed.length) return toast('Nem találtam importálható tranzakciókat.');
 
-  // Automatikus számla felismerés
-  let accountId = document.getElementById('importAccountSelect').value;
-  if(!accountId && lyId) {
-    const matched = getTbszAccounts().find(a => a.lyAccountId === lyId);
-    if(matched) {
-      accountId = matched.id;
-      document.getElementById('importAccountSelect').value = accountId;
-      toast('Számla automatikusan felismerve: '+matched.name);
-    }
-  }
-
-  const reader = new FileReader();
-  reader.onload = e => {
-    // Meghatározzuk a CSV típusát az első néhány sor alapján
-    const text = e.target.result;
-    const lines = text.trim().split('\n');
-    const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
-    const rows = lines.slice(1).map(line => {
-      const vals = [];
-      let cur='', inQ=false;
-      for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
-      vals.push(cur);
-      const obj={};
-      headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim());
-      return obj;
-    });
-
-    // Van-e Buy/Sell? → TBSZ számla
-    const hasBuySell = rows.some(r=>r.Type==='Buy'||r.Type==='Sell');
-    // Csak Deposit/Withdrawal? → pénzszámla
-    const onlyDepWith = !hasBuySell && rows.some(r=>r.Type==='Deposit'||r.Type==='Withdrawal');
-
-    if(onlyDepWith) {
-      // Pénzszámla CSV – accountId nem kell
-      parseLightyearCashCSV(text, lyId);
-    } else {
-      if(!accountId) return toast('Először válassz TBSZ számlát! (vagy add meg a Lightyear azonosítót a számlánál)');
-      parseLightyearCSV(text, accountId);
-    }
+  const typeLabel = {
+    'etf-buy': '<span style="color:var(--green)">ETF vétel</span>',
+    'etf-sell': '<span style="color:var(--red)">ETF eladás</span>',
+    'cash-deposit': '<span style="color:var(--green)">befizetés</span>',
+    'transfer-out': '<span style="color:var(--amber)">átutalás ki</span>',
+    'transfer-in': '<span style="color:var(--blue)">átutalás be</span>',
+    'transfer-in-eur': '<span style="color:var(--blue)">EUR átutalás be</span>',
   };
-  reader.readAsText(file, 'UTF-8');
-}
 
-function parseLightyearCashCSV(text, lyId) {
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
-  const rows = lines.slice(1).map(line => {
-    const vals=[];let cur='',inQ=false;
-    for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
-    vals.push(cur);
-    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim());
-    return obj;
-  });
+  const newCount=importParsed.filter(r=>!r.isDuplicate).length;
+  const dupes=importParsed.filter(r=>r.isDuplicate).length;
 
-  const existingRefs = new Set(data.cashTx.map(t=>t.lyRef).filter(Boolean));
+  document.getElementById('importStats').innerHTML=
+    `<span style="color:var(--green)">${newCount} új</span>`+
+    (dupes?` · <span style="color:var(--text3)">${dupes} duplikált</span>`:'')+
+    ` · összesen ${importParsed.length}`;
 
-  // Csak a DT- kezdetű Deposit ref-ek valódi külső befizetések
-  // IT- ref-ek = belső átutalás a pénzszámla→TBSZ között (skip)
-  const cashRows = rows.filter(r =>
-    r.Type==='Deposit' && r.CCY==='HUF' && r.Reference.startsWith('DT-')
-  );
-
-  importParsed = cashRows.map(r => {
-    const [datePart] = r.Date.split(' ');
-    const [dd,mm,yyyy] = datePart.split('/');
-    const date = `${yyyy}-${mm}-${dd}`;
-    const amount = Math.abs(parseFloat(r['Gross Amount'])||0);
-    const ref = r.Reference;
-    const isDuplicate = existingRefs.has(ref);
-    return { date, ticker:'HUF', type:'deposit', shares:0, priceEur:0, fee:0, fxRate:1,
-             ref, accountId:null, tbszYear:null, isDuplicate,
-             selected: !isDuplicate, depositAmount: amount, isCashAccount: true };
-  });
-
-  toast('Lightyear pénzszámla CSV – '+importParsed.length+' valódi befizetés találva');
-  renderImportPreview(null);
-}
-
-function parseLightyearCSVWithConversions(tbszRows, allRows, accountId) {
-  // === 1. Konverziós ráták az ÖSSZES CSV-ből ===
-  const convByRef = {};
-  allRows.forEach(r => {
-    if(r.Type==='Conversion') {
-      if(!convByRef[r.Reference]) convByRef[r.Reference] = {};
-      convByRef[r.Reference][r.Ticker] = r;
-    }
-  });
-
-  // Minden konverziós ref-hez: {eurAmt, hufAmt, rate, date}
-  const convRates = [];
-  Object.entries(convByRef).forEach(([ref, byTicker]) => {
-    const eurRow = byTicker['EUR'];
-    const hufRow = byTicker['HUF'];
-    if(eurRow && hufRow) {
-      const eurAmt = Math.abs(parseFloat(eurRow['Gross Amount'])||0);
-      const hufAmt = Math.abs(parseFloat(hufRow['Gross Amount'])||0);
-      if(eurAmt > 0.1 && hufAmt > 0) { // min €0.10 hogy a CN-37NKXUS33U (€0.01) ne zavarjon
-        const [dp] = eurRow.Date.split(' ');
-        const [dd,mm,yyyy] = dp.split('/');
-        convRates.push({ref, eurAmt, hufAmt, rate:hufAmt/eurAmt, date:`${yyyy}-${mm}-${dd}`});
-      }
-    }
-  });
-
-  // === 2. Minden Buy-hoz megkeressük a pontos konverziót ===
-  // A Lightyear logika: Buy.GrossAmount == Conversion.EUR.GrossAmount (ugyanaz az összeg)
-  // Ha a konverzió más napon/ref-en van, az EUR összeg egyezés alapján párosítunk
-  function getFxForBuy(buyGrossEur, buyDate) {
-    const buyEur = Math.abs(parseFloat(buyGrossEur)||0);
-    if(buyEur < 0.1) return convRates.find(c=>c.date<=buyDate)?.rate || (liveFx||395);
-
-    // Elsődleges: pontos EUR összeg egyezés (±€0.02)
-    const exactMatches = convRates.filter(c => Math.abs(c.eurAmt - buyEur) < 0.02);
-    if(exactMatches.length === 1) return exactMatches[0].rate;
-    if(exactMatches.length > 1) {
-      // Több egyezés: legközelebbi dátumú (legvalószínűbb párosítás)
-      exactMatches.sort((a,b) => {
-        const da = Math.abs(new Date(a.date)-new Date(buyDate));
-        const db = Math.abs(new Date(b.date)-new Date(buyDate));
-        return da-db;
-      });
-      return exactMatches[0].rate;
-    }
-
-    // Másodlagos: ugyanazon a napon van konverzió
-    const sameDateConv = convRates.filter(c => c.date === buyDate);
-    if(sameDateConv.length === 1) return sameDateConv[0].rate;
-    if(sameDateConv.length > 1) {
-      // Legközelebbi EUR összeg
-      sameDateConv.sort((a,b) => Math.abs(a.eurAmt-buyEur)-Math.abs(b.eurAmt-buyEur));
-      return sameDateConv[0].rate;
-    }
-
-    // Harmadlagos: legközelebbi korábbi konverzió
-    const prior = convRates.filter(c=>c.date<=buyDate).sort((a,b)=>b.date.localeCompare(a.date));
-    return prior.length ? prior[0].rate : (liveFx||395);
-  }
-
-  // === 3. ETF vételek/eladások ===
-  const existingEtfRefs = new Set(data.etfTx.map(t=>t.lyRef).filter(Boolean));
-  const acc = getTbszAccounts().find(a=>a.id===accountId);
-  const tbszYear = acc ? acc.year : new Date().getFullYear();
-
-  tbszRows.filter(r=>(r.Type==='Buy'||r.Type==='Sell')&&r.Ticker&&r.Quantity).forEach(r => {
-    const [dp] = r.Date.split(' ');
-    const [dd,mm,yyyy] = dp.split('/');
-    const date = `${yyyy}-${mm}-${dd}`;
-    const ticker = r.Ticker;
-    const type = r.Type==='Sell' ? 'sell' : 'buy';
-    const shares = Math.abs(parseFloat(r.Quantity)||0);
-    const priceEur = parseFloat(r['Price/share'])||0;
-    const fee = parseFloat(r.Fee)||0;
-    const ref = r.Reference;
-    const fxRate = getFxForBuy(r['Gross Amount'], date);
-    const isDuplicate = existingEtfRefs.has(ref);
-    importParsed.push({date,ticker,type,shares,priceEur,fee,fxRate,
-      ref,accountId,tbszYear,isDuplicate,selected:!isDuplicate});
-  });
-
-  // === 4. DT- Deposit sorok (MINDKÉT CSV-ből) → valódi külső befizetések ===
-  // A DT- ref jelöli a bankszámláról érkező pénzt (TBSZ-en vagy pénzszámlán is lehet)
-  const existingCashRefs = new Set(data.cashTx.map(t=>t.lyRef).filter(Boolean));
-  allRows.filter(r=>r.Type==='Deposit'&&r.CCY==='HUF'&&r.Reference.startsWith('DT-')).forEach(r => {
-    const [dp] = r.Date.split(' ');
-    const [dd,mm,yyyy] = dp.split('/');
-    const date = `${yyyy}-${mm}-${dd}`;
-    const amount = Math.abs(parseFloat(r['Gross Amount'])||0);
-    const isDuplicate = existingCashRefs.has(r.Reference);
-    // Duplikátum-védelemmel (ha mindkét CSV-ben szerepel ugyanaz a DT- ref)
-    if(!importParsed.find(p=>p.ref===r.Reference&&p.type==='deposit')) {
-      importParsed.push({date,ticker:'HUF',type:'deposit',shares:0,priceEur:0,fee:0,fxRate:1,
-        ref:r.Reference,accountId:null,tbszYear:null,isDuplicate,selected:!isDuplicate,
-        depositAmount:amount,isCashAccount:true});
-    }
-  });
-}
-
-function parseLightyearCSV(text, accountId) {
-  // Egyszerű wrapper – csak egy fájl esetén
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
-  const rows = lines.slice(1).map(line => {
-    const vals=[];let cur='',inQ=false;
-    for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
-    vals.push(cur);
-    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim());
-    return obj;
-  });
-  importParsed = [];
-  parseLightyearCSVWithConversions(rows, rows, accountId);
-  renderImportPreview(accountId);
-}
-
-function renderImportPreview(accountId) {
-  if(!importParsed.length) return toast('Nem találtam vételi vagy eladási tranzakciókat a fájlban.');
-
-  const acc = getTbszAccounts().find(a=>a.id===accountId);
-  const dupes = importParsed.filter(r=>r.isDuplicate).length;
-  const newCount = importParsed.filter(r=>!r.isDuplicate).length;
-  const newBuys = importParsed.filter(r=>!r.isDuplicate&&r.type==='buy').length;
-  const newSells = importParsed.filter(r=>!r.isDuplicate&&r.type==='sell').length;
-  const newDeposits = importParsed.filter(r=>!r.isDuplicate&&r.type==='deposit').length;
-
-  document.getElementById('importStats').innerHTML =
-    `<span style="color:var(--green)">${newBuys} vétel</span>` +
-    (newSells ? ` · <span style="color:var(--red)">${newSells} eladás</span>` : '') +
-    (newDeposits ? ` · <span style="color:var(--text2)">${newDeposits} befizetés</span>` : '') +
-    (dupes ? ` · <span style="color:var(--text3)">${dupes} duplikált</span>` : '') +
-    ` · ${acc?acc.name:''}`;
-
-  document.getElementById('importPreviewBody').innerHTML = importParsed.map((r,i) => {
-    const isSell = r.type === 'sell';
-    const isDeposit = r.type === 'deposit';
-    const typeLabel = isDeposit
-      ? `<span style="color:var(--text2)">befizetés</span>`
-      : isSell
-      ? `<span style="color:var(--red)">eladás</span>`
-      : `<span style="color:var(--green)">vétel</span>`;
-    const statusHtml = r.isDuplicate
-      ? `<span style="color:var(--text3);font-size:10px">már létezik</span>`
-      : `<span style="color:var(--green);font-size:10px">új</span>`;
-    const avatarHtml = isDeposit ? '' : `<span class="ins-avatar ${r.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit'}" style="width:24px;height:24px;font-size:9px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:6px">${r.ticker.slice(0,2)}</span>`;
+  document.getElementById('importPreviewBody').innerHTML=importParsed.map((r,i)=>{
+    const desc = r.ticker
+      ? `<span class="ins-avatar ${r.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit'}" style="width:20px;height:20px;font-size:8px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:4px">${r.ticker.slice(0,2)}</span>${r.ticker} ${r.shares?.toFixed(4)||''} db @ ${r.priceEur?fmtEur(r.priceEur):''} (fx: ${r.fxRate?.toFixed(2)||'–'})`
+      : (r.amount?(r.currency==='HUF'?fmt(r.amount):fmtEur(r.amount)):'–');
     return `<tr style="opacity:${r.isDuplicate?0.4:1}">
       <td style="padding:8px 12px;border-bottom:1px solid var(--border)">
         <input type="checkbox" ${r.selected?'checked':''} ${r.isDuplicate?'disabled':''}
           onchange="importParsed[${i}].selected=this.checked;updateImportBtn()">
         <span style="margin-left:6px;font-size:12px">${r.date}</span>
       </td>
-      <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${typeLabel}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">
-        ${avatarHtml}<span style="font-size:12px">${isDeposit ? fmtM(r.depositAmount||0)+' Ft' : r.ticker}</span>
-      </td>
-      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${isDeposit?'–':r.shares.toFixed(6)}</td>
-      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${isDeposit?'–':fmtEur(r.priceEur)}</td>
-      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${isDeposit?'–':r.fxRate.toFixed(2)}</td>
-      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;color:${r.fee>0?'var(--amber)':'var(--text3)'}">${r.fee>0?fmtEur(r.fee):'–'}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">${statusHtml}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${typeLabel[r.rowType]||r.rowType}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)">${r.accountName||'–'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px">${desc}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">${r.isDuplicate?'<span style="color:var(--text3);font-size:10px">már létezik</span>':'<span style="color:var(--green);font-size:10px">új</span>'}</td>
     </tr>`;
   }).join('');
 
-  document.getElementById('importPreview').style.display = '';
+  document.getElementById('importPreview').style.display='';
   updateImportBtn();
 }
 
 function importToggleAll(checked) {
-  importParsed.forEach((r,i) => {
-    if(!r.isDuplicate) {
-      r.selected = checked;
-      const cb = document.getElementById('importPreviewBody').querySelectorAll('input[type=checkbox]')[i];
-      if(cb && !cb.disabled) cb.checked = checked;
+  importParsed.forEach((r,i)=>{
+    if(!r.isDuplicate){
+      r.selected=checked;
+      const cb=document.getElementById('importPreviewBody').querySelectorAll('input[type=checkbox]')[i];
+      if(cb&&!cb.disabled)cb.checked=checked;
     }
   });
   updateImportBtn();
 }
 
 function updateImportBtn() {
-  const count = importParsed.filter(r=>r.selected).length;
-  const btn = document.getElementById('importConfirmBtn');
-  if(btn) btn.textContent = `✓ ${count} tranzakció importálása`;
-  if(btn) btn.disabled = count === 0;
+  const count=importParsed.filter(r=>r.selected).length;
+  const btn=document.getElementById('importConfirmBtn');
+  if(btn){btn.textContent=`✓ ${count} tranzakció importálása`;btn.disabled=count===0;}
 }
 
 function confirmImport() {
-  const toImport = importParsed.filter(r => r.selected);
+  const toImport=importParsed.filter(r=>r.selected);
   if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
 
-  // Tisztítjuk a régi import által létrehozott tbszCashTx tételeket
-  // (csak a sell_proceed és lyRef-es tételeket töröljük, a kézi befizetések maradnak)
-  if(data.tbszCashTx) {
-    data.tbszCashTx = data.tbszCashTx.filter(t => !t.lyRef && t.type !== 'sell_proceed');
-  }
+  if(!data.lyTx) data.lyTx=[];
+  if(!data.lyCashTx) data.lyCashTx=[];
+
+  // IT- ref párokat összegyűjtjük az átutalások irányának meghatározásához
+  const transferPairs={};
+  toImport.filter(r=>['transfer-in','transfer-out','transfer-in-eur'].includes(r.rowType)).forEach(r=>{
+    if(!transferPairs[r.ref]) transferPairs[r.ref]=[];
+    transferPairs[r.ref].push(r);
+  });
 
   toImport.forEach(r => {
-    data.etfTx.push({
-      id: uid(),
-      date: r.date,
-      ticker: r.ticker,
-      type: r.type,
-      shares: r.shares,
-      priceEur: r.priceEur,
-      fxRate: r.fxRate,
-      fee: r.fee,
-      feeCurrency: 'EUR',
-      accountId: r.accountId,
-      note: 'Lightyear import',
-      lyRef: r.ref,
-    });
-    // Eladásnál EUR bevétel könyvelése a TBSZ pénzszámlára
-    if(r.type === 'sell') {
-      if(!data.tbszCashTx) data.tbszCashTx = [];
-      const eurProceeds = r.shares * r.priceEur;
-      data.tbszCashTx.push({
-        id: uid(), accountId: r.accountId, date: r.date,
-        type: 'sell_proceed', amount: eurProceeds, currency: 'EUR',
-        note: r.ticker+' eladás (import) – '+r.shares.toFixed(4)+' db × '+fmtEur(r.priceEur)
-      });
+    if(r.rowType==='etf-buy') {
+      data.lyTx.push({id:uid(),accountId:r.accountId,date:r.date,ticker:r.ticker,
+        type:'buy',shares:r.shares,priceEur:r.priceEur,fxRate:r.fxRate,
+        fee:r.fee,feeCurrency:'EUR',ref:r.ref});
     }
-    // HUF Deposit → cashTx (csak pénzszámla CSV-ből, isCashAccount=true)
-    if(r.type === 'deposit' && r.isCashAccount) {
-      data.cashTx.push({id:uid(), date:r.date, type:'deposit', amount:r.depositAmount||0, note:'Lightyear befizetés', lyRef:r.ref});
+    else if(r.rowType==='etf-sell') {
+      data.lyTx.push({id:uid(),accountId:r.accountId,date:r.date,ticker:r.ticker,
+        type:'sell',shares:r.shares,priceEur:r.priceEur,fxRate:r.fxRate,ref:r.ref});
+      // Eladási bevétel → lyCashTx EUR-ban
+      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
+        type:'transfer_in',amount:r.proceeds,currency:'EUR',ref:r.ref+'-proceed',
+        note:r.ticker+' eladási bevétel'});
     }
-    // Withdrawal → cashTx (csak pénzszámla CSV-ből)
-    if(r.type === 'withdraw' && r.isCashAccount) {
-      data.cashTx.push({id:uid(), date:r.date, type:'withdraw', amount:r.depositAmount||0, note:'Lightyear kifizetés', lyRef:r.ref});
+    else if(r.rowType==='cash-deposit') {
+      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
+        type:'deposit',amount:r.amount,currency:r.currency,ref:r.ref,note:'Külső befizetés'});
+    }
+    else if(r.rowType==='transfer-out') {
+      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
+        type:'transfer_out',amount:r.amount,currency:r.currency,ref:r.ref,note:'Átutalás ki'});
+    }
+    else if(r.rowType==='transfer-in'||r.rowType==='transfer-in-eur') {
+      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
+        type:'transfer_in',amount:r.amount,currency:r.currency,ref:r.ref,note:'Átutalás be'});
     }
   });
 
@@ -4260,20 +4256,23 @@ function confirmImport() {
   toast(`✓ ${toImport.length} tranzakció importálva!`);
   resetImport();
 
-  // Navigálás az érintett TBSZ számlára
-  const accountId = toImport[0].accountId;
-  const navBtn = document.querySelector(`#tbsz-nav-items .nav-item`);
-  if(accountId) showTbszAccount(accountId, navBtn);
+  // Navigálás az első érintett számlára
+  const firstAcc=toImport.find(r=>r.accountId)?.accountId;
+  if(firstAcc) {
+    const navBtn=[...document.querySelectorAll('#ly-nav-items .nav-item')].find(b=>b.onclick?.toString().includes(firstAcc));
+    showLyAccount(firstAcc,navBtn);
+  }
 }
 
 function resetImport() {
-  importParsed = [];
-  document.getElementById('importPreview').style.display = 'none';
-  document.getElementById('importFileInput').value = '';
+  importParsed=[];
+  document.getElementById('importPreview').style.display='none';
+  document.getElementById('importFileInput').value='';
 }
 
 // ═══════════════════════════════════════════════
 // CSV EXPORT
+
 // ═══════════════════════════════════════════════
 function editTx(kind, id){
   document.getElementById('modalBackdrop').classList.add('open');
@@ -4352,7 +4351,7 @@ function editTx(kind, id){
       </div>`;
   }
   else if(kind==='etf'){
-    const t=data.etfTx.find(t=>t.id===id);
+    const t=( data.lyTx||[]).find(t=>t.id===id);
     if(!t)return;
     const calcHuf=Math.round(t.shares*t.priceEur*t.fxRate);
     title.textContent=t.ticker+' '+(t.type==='buy'?'vétel':'eladás')+' szerkesztése';
@@ -4469,7 +4468,7 @@ function saveEditDKJ(id){
 }
 
 function saveEditETF(id){
-  const t=data.etfTx.find(t=>t.id===id);
+  const t=(data.lyTx||[]).find(t=>t.id===id);
   if(!t)return;
   t.ticker=document.getElementById('e-ticker').value||t.ticker;
   t.date=document.getElementById('e-date').value;
@@ -4489,7 +4488,7 @@ function exportCSV(){
   data.cashTx.forEach(t=>rows.push([t.date,t.type,'Pénzszámla',t.amount,'',t.note||'']));
   data.fixmap.forEach(f=>rows.push([f.date,'buy','FixMáP',f.faceValue,'',f.note||'']));
   data.dkj.forEach(d=>rows.push([d.date,'buy','DKJ',d.faceValue,'',d.maturity+' lejárat']));
-  data.etfTx.forEach(t=>rows.push([t.date,t.type,t.ticker,t.shares,t.priceEur,t.note||'']));
+  (data.lyTx||[]).forEach(t=>rows.push([t.date,t.type,t.ticker,t.shares,t.priceEur,t.note||'']));
   rows.sort((a,b)=>b[0].localeCompare(a[0]));
   const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
   const a=document.createElement('a');
@@ -4506,7 +4505,7 @@ async function confirmDeleteDB(){
   const dbName = currentDB==='v2'?'ÚJ (portfolio-new.json)':'EREDETI (portfolio.json)';
   if(!confirm(`Biztosan törlöd a(z) ${dbName} adatbázist?\nEz visszafordíthatatlan!`))return;
   if(!confirm('Megerősítés: az összes tranzakció, pozíció és sorozat törlődik!'))return;
-  data=JSON.parse(JSON.stringify({cashTx:[],fixmapSeries:[],fixmap:[],dkj:[],etfTx:[]}));
+  data=JSON.parse(JSON.stringify({...DEFAULT_DATA}));
   await saveData();
   renderAll();
   toast('Adatbázis törölve');
@@ -4614,7 +4613,7 @@ function getPortfolioContext() {
   const total = cb+apValue+vwceVal+wbitVal;
   const totalInvested = data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
     - data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
-    + data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.fee||0),0);
+    + lyTotalInvested();
 
   const fixmapDesc = data.fixmapSeries.map(sr => {
     const face = data.fixmap.filter(f=>f.active&&f.seriesId===sr.id).reduce((s,f)=>s+f.faceValue,0);
