@@ -1142,11 +1142,15 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce&&liveFx;
 
-  // Összes befektetett tőke = aktív állampapírok vételára + ETF vételek
+  // Összes befektetett tőke = aktív állampapírok + TBSZ befizetések
+  const tbszDeposited = (data.tbszCashTx||[]).filter(t=>t.type==='deposit'&&t.currency==='HUF').reduce((s,t)=>s+t.amount,0);
+  const etfInvested = tbszDeposited > 0
+    ? tbszDeposited  // ha van Lightyear import, a tényleges befizetett összeget használjuk
+    : data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.feeCurrency==='EUR'?(t.fee||0)*t.fxRate:(t.fee||0)),0)
+      -data.etfTx.filter(t=>t.type==='sell').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate,0);
   const totalInvested=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+(f.buyPrice||0),0)
     +data.dkj.filter(d=>d.active).reduce((s,d)=>s+(d.buyPrice||0),0)
-    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.feeCurrency==='EUR'?(t.fee||0)*t.fxRate:(t.fee||0)),0)
-    -data.etfTx.filter(t=>t.type==='sell').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate,0);
+    +etfInvested;
 
   // Nagy értékkijelző
   const bigEl=document.getElementById('dashTotalBig');
@@ -3957,6 +3961,9 @@ function parseLightyearCSV(text, accountId) {
   // Extract Buy AND Sell rows
   const txRows = rows.filter(r => (r.Type==='Buy' || r.Type==='Sell') && r.Ticker && r.Quantity);
 
+  // HUF Deposit sorok → tbszCashTx-be (befizetett tőke nyilvántartáshoz)
+  const depositRows = rows.filter(r => r.Type==='Deposit' && r.CCY==='HUF' && r['Gross Amount']);
+
   // Get existing tx references to detect duplicates
   const existingRefs = new Set(data.etfTx.map(t => t.lyRef).filter(Boolean));
 
@@ -3967,7 +3974,6 @@ function parseLightyearCSV(text, accountId) {
     const [datePart] = r.Date.split(' ');
     const [dd,mm,yyyy] = datePart.split('/');
     const date = `${yyyy}-${mm}-${dd}`;
-
     const ticker = r.Ticker;
     const type = r.Type==='Sell' ? 'sell' : 'buy';
     const shares = Math.abs(parseFloat(r.Quantity) || 0);
@@ -3976,13 +3982,18 @@ function parseLightyearCSV(text, accountId) {
     const ref = r.Reference;
     const fxRate = getFxRate(ref, date);
     const isDuplicate = existingRefs.has(ref);
+    return { date, ticker, type, shares, priceEur, fee, fxRate, ref, accountId, tbszYear, isDuplicate, selected: !isDuplicate };
+  });
 
-    return {
-      date, ticker, type, shares, priceEur, fee, fxRate,
-      ref, accountId, tbszYear,
-      isDuplicate,
-      selected: !isDuplicate,
-    };
+  // HUF deposit sorok hozzáadása
+  depositRows.forEach(r => {
+    const [datePart] = r.Date.split(' ');
+    const [dd,mm,yyyy] = datePart.split('/');
+    const date = `${yyyy}-${mm}-${dd}`;
+    const amount = parseFloat(r['Gross Amount']) || 0;
+    const ref = r.Reference;
+    const isDuplicate = existingRefs.has(ref);
+    importParsed.push({ date, ticker: 'HUF', type: 'deposit', shares: 0, priceEur: 0, fee: 0, fxRate: 1, ref, accountId, tbszYear, isDuplicate, selected: !isDuplicate, depositAmount: amount });
   });
 
   renderImportPreview(accountId);
@@ -3996,21 +4007,27 @@ function renderImportPreview(accountId) {
   const newCount = importParsed.filter(r=>!r.isDuplicate).length;
   const newBuys = importParsed.filter(r=>!r.isDuplicate&&r.type==='buy').length;
   const newSells = importParsed.filter(r=>!r.isDuplicate&&r.type==='sell').length;
+  const newDeposits = importParsed.filter(r=>!r.isDuplicate&&r.type==='deposit').length;
 
   document.getElementById('importStats').innerHTML =
     `<span style="color:var(--green)">${newBuys} vétel</span>` +
     (newSells ? ` · <span style="color:var(--red)">${newSells} eladás</span>` : '') +
+    (newDeposits ? ` · <span style="color:var(--text2)">${newDeposits} befizetés</span>` : '') +
     (dupes ? ` · <span style="color:var(--text3)">${dupes} duplikált</span>` : '') +
     ` · ${acc?acc.name:''}`;
 
   document.getElementById('importPreviewBody').innerHTML = importParsed.map((r,i) => {
     const isSell = r.type === 'sell';
-    const typeLabel = isSell
+    const isDeposit = r.type === 'deposit';
+    const typeLabel = isDeposit
+      ? `<span style="color:var(--text2)">befizetés</span>`
+      : isSell
       ? `<span style="color:var(--red)">eladás</span>`
       : `<span style="color:var(--green)">vétel</span>`;
     const statusHtml = r.isDuplicate
       ? `<span style="color:var(--text3);font-size:10px">már létezik</span>`
       : `<span style="color:var(--green);font-size:10px">új</span>`;
+    const avatarHtml = isDeposit ? '' : `<span class="ins-avatar ${r.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit'}" style="width:24px;height:24px;font-size:9px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:6px">${r.ticker.slice(0,2)}</span>`;
     return `<tr style="opacity:${r.isDuplicate?0.4:1}">
       <td style="padding:8px 12px;border-bottom:1px solid var(--border)">
         <input type="checkbox" ${r.selected?'checked':''} ${r.isDuplicate?'disabled':''}
@@ -4019,12 +4036,11 @@ function renderImportPreview(accountId) {
       </td>
       <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${typeLabel}</td>
       <td style="padding:8px 12px;border-bottom:1px solid var(--border)">
-        <span class="ins-avatar ${r.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit'}" style="width:24px;height:24px;font-size:9px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:6px">${r.ticker.slice(0,2)}</span>
-        <span style="font-size:12px">${r.ticker}</span>
+        ${avatarHtml}<span style="font-size:12px">${isDeposit ? fmtM(r.depositAmount||0)+' Ft' : r.ticker}</span>
       </td>
-      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${r.shares.toFixed(6)}</td>
-      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${fmtEur(r.priceEur)}</td>
-      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${r.fxRate.toFixed(2)}</td>
+      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${isDeposit?'–':r.shares.toFixed(6)}</td>
+      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${isDeposit?'–':fmtEur(r.priceEur)}</td>
+      <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${isDeposit?'–':r.fxRate.toFixed(2)}</td>
       <td class="r" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;color:${r.fee>0?'var(--amber)':'var(--text3)'}">${r.fee>0?fmtEur(r.fee):'–'}</td>
       <td style="padding:8px 12px;border-bottom:1px solid var(--border)">${statusHtml}</td>
     </tr>`;
@@ -4079,6 +4095,15 @@ function confirmImport() {
         id: uid(), accountId: r.accountId, date: r.date,
         type: 'sell_proceed', amount: eurProceeds, currency: 'EUR',
         note: r.ticker+' eladás (import) – '+r.shares.toFixed(4)+' db × '+fmtEur(r.priceEur)
+      });
+    }
+    // HUF Deposit → tbszCashTx (befizetett tőke nyilvántartás)
+    if(r.type === 'deposit') {
+      if(!data.tbszCashTx) data.tbszCashTx = [];
+      data.tbszCashTx.push({
+        id: uid(), accountId: r.accountId, date: r.date,
+        type: 'deposit', amount: r.depositAmount||0, currency: 'HUF',
+        note: 'Lightyear befizetés', lyRef: r.ref
       });
     }
   });
