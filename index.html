@@ -3417,19 +3417,40 @@ function interpolate(prices, date){
 async function fetchHistoricalPrices(symbol, startDate){
   const start=Math.floor(new Date(startDate).getTime()/1000);
   const end=Math.floor(Date.now()/1000);
-  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${start}&period2=${end}`;
-  const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
-  if(!r.ok)return null;
-  const d=await r.json();
-  const result=d?.chart?.result?.[0];
-  if(!result)return null;
-  const timestamps=result.timestamp||[];
-  const closes=result.indicators?.adjclose?.[0]?.adjclose||result.indicators?.quote?.[0]?.close||[];
-  const prices={};
-  timestamps.forEach((ts,i)=>{
-    if(closes[i]){prices[new Date(ts*1000).toISOString().split('T')[0]]=closes[i];}
-  });
-  return prices;
+  // Próbáljuk period1/period2-vel, fallback: 1y range
+  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${start}&period2=${end}&includePrePost=false`;
+  try {
+    const r=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    const result=d?.chart?.result?.[0];
+    if(!result) throw new Error('no result');
+    const timestamps=result.timestamp||[];
+    const closes=result.indicators?.adjclose?.[0]?.adjclose||result.indicators?.quote?.[0]?.close||[];
+    if(timestamps.length < 5) throw new Error('too few: '+timestamps.length);
+    const prices={};
+    timestamps.forEach((ts,i)=>{
+      if(closes[i]){prices[new Date(ts*1000).toISOString().split('T')[0]]=closes[i];}
+    });
+    return prices;
+  } catch(e) {
+    // Fallback: 1y range
+    const url2=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y`;
+    try {
+      const r2=await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url2));
+      if(!r2.ok) return null;
+      const d2=await r2.json();
+      const result2=d2?.chart?.result?.[0];
+      if(!result2) return null;
+      const timestamps2=result2.timestamp||[];
+      const closes2=result2.indicators?.adjclose?.[0]?.adjclose||result2.indicators?.quote?.[0]?.close||[];
+      const prices2={};
+      timestamps2.forEach((ts,i)=>{
+        if(closes2[i]){prices2[new Date(ts*1000).toISOString().split('T')[0]]=closes2[i];}
+      });
+      return prices2;
+    } catch(e2) { return null; }
+  }
 }
 
 async function fetchHistoricalFX(startDate){
@@ -3538,7 +3559,7 @@ async function fetchLive(){
   window._prevFx=prevFx;
 
   await fetchETFPrice('VWCE.DE','','',( p,pct)=>{liveVwce=p;liveVwcePct=pct;});
-  await fetchETFPrice('WBIT-DE','','',( p,pct)=>{liveWbit=p;liveWbitPct=pct;});
+  await fetchETFPrice('WBIT.DE','','',( p,pct)=>{liveWbit=p;liveWbitPct=pct;});
   renderDashboard();
 }
 
