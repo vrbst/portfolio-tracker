@@ -4077,6 +4077,22 @@ async function handleImportFiles(files) {
   const existingCashRefs = new Set((data.lyCashTx||[]).map(t=>t.ref).filter(Boolean));
 
   for(const {rows, lyId, matchedAcc} of csvData) {
+    // Ha nincs még számla ehhez az azonosítóhoz, automatikusan létrehozzuk
+    let autoAcc = matchedAcc;
+    if(!autoAcc && lyId) {
+      const hasTbszBuy = rows.some(r=>r.Type==='Buy'&&r.Ticker&&r.ISIN&&r.Quantity);
+      const accType = hasTbszBuy ? 'tbsz' : 'cash';
+      const tbszYear = new Date().getFullYear();
+      const accName = accType==='tbsz' ? `TBSZ ${tbszYear}` : 'Lightyear normál';
+      autoAcc = {
+        id: 'ly-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+        name: accName, lyAccountId: lyId, type: accType,
+        tbszYear: accType==='tbsz' ? tbszYear : undefined,
+      };
+      if(!data.lyAccounts) data.lyAccounts=[];
+      data.lyAccounts.push(autoAcc);
+    }
+    const resolveAcc = () => autoAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
     // Minden sorhoz meghatározzuk a típust és a célszámlát
     for(const r of rows) {
       const [dp]=r.Date.split(' ');const[dd,mm,yyyy]=dp.split('/');
@@ -4086,7 +4102,7 @@ async function handleImportFiles(files) {
 
       if(r.Type==='Buy'&&r.Ticker&&r.Quantity) {
         // ETF vétel – a számlához rendelt lyAccount-ba
-        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const acc = resolveAcc();
         if(!acc) continue; // nincs számla rendelve, skip
         const shares=Math.abs(parseFloat(r.Quantity)||0);
         const priceEur=parseFloat(r['Price/share'])||0;
@@ -4098,7 +4114,7 @@ async function handleImportFiles(files) {
       }
       else if(r.Type==='Sell'&&r.Ticker&&r.Quantity) {
         // ETF eladás
-        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const acc = resolveAcc();
         if(!acc) continue;
         const shares=Math.abs(parseFloat(r.Quantity)||0);
         const priceEur=parseFloat(r['Price/share'])||0;
@@ -4111,14 +4127,14 @@ async function handleImportFiles(files) {
       }
       else if(r.Type==='Deposit'&&r.CCY==='HUF'&&ref.startsWith('DT-')) {
         // Külső befizetés (bankszámláról)
-        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const acc = resolveAcc();
         const isDuplicate=existingCashRefs.has(ref);
         importParsed.push({rowType:'cash-deposit',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
           amount,currency:'HUF',ref,isDuplicate,selected:!isDuplicate});
       }
       else if(r.Type==='Withdrawal'&&r.CCY==='HUF'&&ref.startsWith('IT-')) {
         // Belső átutalás ki (pénzszámla→TBSZ)
-        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const acc = resolveAcc();
         // A célszámlát a párja alapján derítjük ki (a fogadó IT- Deposit)
         const isDuplicate=existingCashRefs.has(ref);
         importParsed.push({rowType:'transfer-out',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
@@ -4126,14 +4142,14 @@ async function handleImportFiles(files) {
       }
       else if(r.Type==='Deposit'&&r.CCY==='HUF'&&ref.startsWith('IT-')) {
         // Belső átutalás be (pénzszámla→TBSZ fogadó oldala)
-        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const acc = resolveAcc();
         const isDuplicate=existingCashRefs.has(ref);
         importParsed.push({rowType:'transfer-in',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
           amount,currency:'HUF',ref,isDuplicate,selected:!isDuplicate});
       }
       else if(r.Type==='Deposit'&&r.CCY==='EUR'&&ref.startsWith('IT-')) {
         // EUR átutalás be (pl. EUR átküldve TBSZ-re)
-        const acc = matchedAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
+        const acc = resolveAcc();
         const isDuplicate=existingCashRefs.has(ref);
         importParsed.push({rowType:'transfer-in-eur',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
           amount,currency:'EUR',ref,isDuplicate,selected:!isDuplicate});
