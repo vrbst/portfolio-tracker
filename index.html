@@ -696,6 +696,14 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
     <!-- IMPORTÁLÁS -->
     <div id="page-import" class="page">
+      <!-- Tab váltó -->
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="range-btn active" id="import-tab-ly" onclick="switchImportTab('ly',this)">Lightyear CSV</button>
+        <button class="range-btn" id="import-tab-mk" onclick="switchImportTab('mk',this)">Állami Kincstár XLS</button>
+      </div>
+
+      <!-- Lightyear panel -->
+      <div id="import-panel-ly">
       <div class="panel" style="max-width:700px">
         <div class="panel-header">
           <div class="panel-title">Lightyear CSV importálás</div>
@@ -756,6 +764,57 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           </div>
         </div>
       </div>
+      </div><!-- /#import-panel-ly -->
+
+      <!-- Állami Kincstár panel -->
+      <div id="import-panel-mk" style="display:none">
+        <div class="panel" style="max-width:700px">
+          <div class="panel-header">
+            <div class="panel-title">Állami Kincstár XLS importálás</div>
+          </div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:20px;line-height:1.7">
+            Töltsd fel a MobilKincstár / Kincstár tranzakciós XLS exportját. Az app beolvassa a vételeket, eladásokat, kamatfizetéseket és a külső utalásokat.
+          </div>
+          <div id="mkDropzone" style="border:2px dashed var(--border2);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px"
+            onclick="document.getElementById('mkFileInput').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--green)'"
+            ondragleave="this.style.borderColor='var(--border2)'"
+            ondrop="event.preventDefault();this.style.borderColor='var(--border2)';handleMkDrop(event)">
+            <div style="font-size:28px;margin-bottom:8px">🏛</div>
+            <div style="font-size:13px;color:var(--text2)">Húzd ide az XLS fájlt, vagy kattints a feltöltéshez</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px">MobilKincstár / Kincstár tranzakció export (.xls)</div>
+            <input type="file" id="mkFileInput" accept=".xls,.xlsx" style="display:none" onchange="handleMkFile(this.files[0])">
+          </div>
+          <div id="mkStatus" style="display:none;font-size:12px;color:var(--text2);margin-bottom:12px;padding:10px;background:var(--bg3);border-radius:8px"></div>
+          <div id="mkPreview" style="display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">beolvasott tranzakciók</div>
+              <div id="mkStats" style="font-size:11px;color:var(--text2)"></div>
+            </div>
+            <div class="tbl-wrap" style="max-height:400px;overflow-y:auto">
+              <table style="width:100%">
+                <thead>
+                  <tr>
+                    <th style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);text-align:left">
+                      <input type="checkbox" id="mkSelectAll" onchange="mkToggleAll(this.checked)" style="margin-right:6px">dátum
+                    </th>
+                    <th style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">típus</th>
+                    <th style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">értékpapír</th>
+                    <th class="r" style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">névérték</th>
+                    <th class="r" style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">összeg (Ft)</th>
+                    <th style="padding:8px 12px;font-size:11px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">státusz</th>
+                  </tr>
+                </thead>
+                <tbody id="mkPreviewBody"></tbody>
+              </table>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:14px">
+              <button class="btn btn-ghost" onclick="resetMkImport()">mégsem</button>
+              <button class="btn btn-primary" onclick="confirmMkImport()" id="mkConfirmBtn">✓ kijelöltek importálása</button>
+            </div>
+          </div>
+        </div>
+      </div><!-- /#import-panel-mk -->
     </div>
 
     <!-- TRANZAKCIÓK -->
@@ -3405,6 +3464,329 @@ function applyBlur(){
 }
 
 // ═══════════════════════════════════════════════
+function switchImportTab(tab, btn) {
+  document.getElementById('import-panel-ly').style.display = tab==='ly' ? '' : 'none';
+  document.getElementById('import-panel-mk').style.display = tab==='mk' ? '' : 'none';
+  document.querySelectorAll('#page-import .range-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
+// ÁLLAMI KINCSTÁR XLS IMPORT
+// ═══════════════════════════════════════════════
+
+let mkParsed = [];
+
+function handleMkDrop(e) {
+  const file = e.dataTransfer.files[0];
+  if(file) handleMkFile(file);
+}
+
+function handleMkFile(file) {
+  if(!file) return;
+  const status = document.getElementById('mkStatus');
+  status.style.display = '';
+  status.textContent = 'Fájl olvasása...';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      parseMkXLS(e.target.result);
+    } catch(err) {
+      status.textContent = 'Hiba: ' + err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseMkXLS(buffer) {
+  const status = document.getElementById('mkStatus');
+
+  // SheetJS (xlsx library) – already available in the app via CDN
+  // We'll use a simpler approach: convert to CSV via Python-style parsing
+  // Since we're in browser, we need SheetJS
+  if(typeof XLSX === 'undefined') {
+    // Load SheetJS dynamically
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    script.onload = () => parseMkXLSWithSheetJS(buffer);
+    script.onerror = () => { status.textContent = 'Hiba: nem sikerült betölteni az XLS feldolgozót.'; };
+    document.head.appendChild(script);
+  } else {
+    parseMkXLSWithSheetJS(buffer);
+  }
+}
+
+function parseMkXLSWithSheetJS(buffer) {
+  const status = document.getElementById('mkStatus');
+  try {
+    const wb = XLSX.read(buffer, {type:'arraybuffer'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+    const existingIds = new Set([
+      ...data.cashTx.map(t=>t.mkRef),
+      ...data.fixmap.map(t=>t.mkRef),
+      ...data.dkj.map(t=>t.mkRef),
+    ].filter(Boolean));
+
+    mkParsed = [];
+
+    rows.forEach(r => {
+      const type = r['Transaction type'] || r['Tranzakció típusa'] || '';
+      const date = parseMkDate(r['Value date'] || r['Értéknap'] || '');
+      const securities = r['Securities'] || r['Értékpapír'] || '';
+      const faceValueRaw = r['Face value'] || r['Névérték'] || '';
+      const amountRaw = r['Amount'] || r['Összeg'] || '';
+      const txId = r['Transaction ID'] || r['Tranzakció azonosító'] || '';
+      const nominalInterest = r['Nominal interest'] || r['Névleges kamatláb'] || '';
+      const netBuyPrice = r['Net buying price'] || r['Nettó vételár'] || '';
+      const maturityMatch = securities.match(/D(\d{6})/);
+
+      const faceValue = parseMkAmount(faceValueRaw);
+      const amount = parseMkAmount(amountRaw);
+      const isDuplicate = existingIds.has(txId);
+
+      // FixMáP vétel
+      if(type==='Vétel' && securities.includes('Fix Magyar Állampapír')) {
+        const seriesName = securities.replace('Fix Magyar Állampapír ', 'FixMáP ');
+        mkParsed.push({
+          appType: 'fixmap-buy', date, securities, seriesName,
+          faceValue, amount, txId, isDuplicate,
+          nominalInterest, selected: !isDuplicate,
+          label: 'FixMáP vétel',
+        });
+      }
+      // FixMáP eladás
+      else if(type==='Eladás' && securities.includes('Fix Magyar Állampapír')) {
+        mkParsed.push({
+          appType: 'fixmap-sell', date, securities,
+          faceValue, amount, txId, isDuplicate,
+          selected: !isDuplicate, label: 'FixMáP eladás',
+        });
+      }
+      // DKJ vétel
+      else if(type==='Vétel' && securities.includes('Diszkont Kincstárjegy')) {
+        const maturity = maturityMatch ? parseMkDKJMaturity(maturityMatch[1]) : '';
+        mkParsed.push({
+          appType: 'dkj-buy', date, securities,
+          faceValue, amount, txId, isDuplicate, maturity,
+          selected: !isDuplicate, label: 'DKJ vétel',
+        });
+      }
+      // DKJ eladás/lejárat
+      else if((type==='Eladás' || type==='Lejárat') && securities.includes('Diszkont Kincstárjegy')) {
+        const maturity = maturityMatch ? parseMkDKJMaturity(maturityMatch[1]) : '';
+        mkParsed.push({
+          appType: 'dkj-sell', date, securities,
+          faceValue, amount, txId, isDuplicate, maturity,
+          selected: !isDuplicate, label: 'DKJ eladás',
+        });
+      }
+      // Kamatfizetés
+      else if(type==='Esedékesség fizetés') {
+        mkParsed.push({
+          appType: 'coupon', date, securities,
+          faceValue, amount, txId, isDuplicate,
+          selected: !isDuplicate, label: 'Kamatfizetés',
+        });
+      }
+      // Külső befizetés (utalás be)
+      else if(type==='Utalás érkeztetés') {
+        mkParsed.push({
+          appType: 'deposit', date, securities: '–',
+          faceValue: 0, amount, txId, isDuplicate,
+          selected: !isDuplicate, label: 'Befizetés (utalás)',
+        });
+      }
+      // Külső kifizetés (utalás ki)
+      else if(type==='Utalás indítás') {
+        mkParsed.push({
+          appType: 'withdraw', date, securities: '–',
+          faceValue: 0, amount, txId, isDuplicate,
+          selected: !isDuplicate, label: 'Kifizetés (utalás)',
+        });
+      }
+      // Bankkártyás fizetés
+      else if(type==='Bankkártyás fizetés') {
+        mkParsed.push({
+          appType: 'withdraw', date, securities: '–',
+          faceValue: 0, amount, txId, isDuplicate,
+          selected: !isDuplicate, label: 'Bankkártyás fizetés',
+        });
+      }
+      // Pénzszámla befizetés/kifizetés: SKIP – ezek a vétel/eladás párjai
+    });
+
+    status.style.display = 'none';
+    renderMkPreview();
+  } catch(err) {
+    status.textContent = 'Hiba a feldolgozás során: ' + err.message;
+    console.error(err);
+  }
+}
+
+function parseMkDate(raw) {
+  // "2026.04.23." → "2026-04-23"
+  if(!raw) return '';
+  return String(raw).replace(/\./g,'-').replace(/-$/,'').trim();
+}
+
+function parseMkDKJMaturity(code) {
+  // "D261028" → "2026-10-28"
+  return '20'+code.slice(0,2)+'-'+code.slice(2,4)+'-'+code.slice(4,6);
+}
+
+function parseMkAmount(raw) {
+  if(!raw && raw!==0) return 0;
+  return parseFloat(String(raw).replace(/[^0-9.-]/g,'')) || 0;
+}
+
+function renderMkPreview() {
+  if(!mkParsed.length) {
+    document.getElementById('mkStatus').style.display='';
+    document.getElementById('mkStatus').textContent='Nem találtam importálható tranzakciókat.';
+    return;
+  }
+
+  const typeColors = {
+    'fixmap-buy':'var(--blue)', 'fixmap-sell':'var(--red)',
+    'dkj-buy':'var(--purple)', 'dkj-sell':'var(--red)',
+    'coupon':'var(--green)', 'deposit':'var(--green)', 'withdraw':'var(--amber)',
+  };
+
+  const newCount = mkParsed.filter(r=>!r.isDuplicate).length;
+  const dupes = mkParsed.filter(r=>r.isDuplicate).length;
+
+  document.getElementById('mkStats').innerHTML =
+    `<span style="color:var(--green)">${newCount} új</span>` +
+    (dupes ? ` · <span style="color:var(--text3)">${dupes} duplikált</span>` : '');
+
+  document.getElementById('mkPreviewBody').innerHTML = mkParsed.map((r,i) => {
+    const col = typeColors[r.appType] || 'var(--text2)';
+    return `<tr style="opacity:${r.isDuplicate?0.4:1}">
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">
+        <input type="checkbox" ${r.selected?'checked':''} ${r.isDuplicate?'disabled':''}
+          onchange="mkParsed[${i}].selected=this.checked;updateMkBtn()">
+        <span style="margin-left:6px;font-size:12px">${r.date}</span>
+      </td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;color:${col}">${r.label}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)">${r.securities}</td>
+      <td class="r blurable" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">${r.faceValue>0?fmt(r.faceValue):'–'}</td>
+      <td class="r blurable" style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;color:${col}">${fmt(r.amount)} Ft</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">${r.isDuplicate?'<span style="color:var(--text3);font-size:10px">már létezik</span>':'<span style="color:var(--green);font-size:10px">új</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('mkPreview').style.display = '';
+  updateMkBtn();
+}
+
+function mkToggleAll(checked) {
+  mkParsed.forEach((r,i) => {
+    if(!r.isDuplicate) {
+      r.selected = checked;
+      const cbs = document.getElementById('mkPreviewBody').querySelectorAll('input[type=checkbox]');
+      if(cbs[i] && !cbs[i].disabled) cbs[i].checked = checked;
+    }
+  });
+  updateMkBtn();
+}
+
+function updateMkBtn() {
+  const count = mkParsed.filter(r=>r.selected).length;
+  const btn = document.getElementById('mkConfirmBtn');
+  if(btn) { btn.textContent = `✓ ${count} tranzakció importálása`; btn.disabled = count===0; }
+}
+
+function confirmMkImport() {
+  const toImport = mkParsed.filter(r=>r.selected);
+  if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
+
+  toImport.forEach(r => {
+    if(r.appType==='fixmap-buy') {
+      // Keressük meg a megfelelő sorozatot
+      let series = data.fixmapSeries.find(s=>s.name===r.seriesName);
+      if(!series) {
+        // Létrehozzuk ha nem létezik
+        const id = uid();
+        const couponRate = r.nominalInterest ? parseFloat(r.nominalInterest)*100 : 7;
+        const maturityMatch = r.securities.match(/(\d{4})\//);
+        series = {
+          id, name: r.seriesName,
+          couponRate, maturity: maturityMatch?maturityMatch[1]+'-01-01':'2031-01-01',
+          nextCoupon: '', issueDate: r.date,
+        };
+        data.fixmapSeries.push(series);
+      }
+      data.fixmap.push({
+        id: uid(), seriesId: series.id, date: r.date,
+        faceValue: r.faceValue, buyPrice: r.amount,
+        active: true, mkRef: r.txId,
+      });
+    }
+    else if(r.appType==='fixmap-sell') {
+      const series = data.fixmapSeries.find(s=>r.securities.includes(s.name.replace('FixMáP ','')));
+      const items = data.fixmap.filter(f=>f.seriesId===series?.id&&f.active)
+        .sort((a,b)=>a.date.localeCompare(b.date));
+      let toSell = r.faceValue;
+      for(const item of items) {
+        if(toSell<=0) break;
+        if(item.faceValue<=toSell) { item.active=false; item.soldDate=r.date; toSell-=item.faceValue; }
+        else { item.faceValue-=toSell; toSell=0; }
+      }
+      data.cashTx.push({id:uid(), date:r.date, type:'sell', amount:r.amount, note:r.securities+' eladás', mkRef:r.txId});
+    }
+    else if(r.appType==='dkj-buy') {
+      let series = data.dkjSeries?.find(s=>s.maturity===r.maturity);
+      if(!series) {
+        if(!data.dkjSeries) data.dkjSeries=[];
+        const name = 'D'+r.maturity.replace(/-/g,'').slice(2);
+        series = {id:uid(), name, maturity:r.maturity};
+        data.dkjSeries.push(series);
+      }
+      data.dkj.push({
+        id:uid(), seriesId:series.id, date:r.date,
+        faceValue:r.faceValue, buyPrice:r.amount,
+        maturity:r.maturity, active:true, mkRef:r.txId,
+      });
+    }
+    else if(r.appType==='dkj-sell') {
+      const items = data.dkj.filter(d=>d.maturity===r.maturity&&d.active)
+        .sort((a,b)=>a.date.localeCompare(b.date));
+      let toSell = r.faceValue;
+      for(const item of items) {
+        if(toSell<=0) break;
+        if(item.faceValue<=toSell) { item.active=false; item.soldDate=r.date; toSell-=item.faceValue; }
+        else { item.faceValue-=toSell; toSell=0; }
+      }
+      data.cashTx.push({id:uid(), date:r.date, type:'sell', amount:r.amount, note:r.securities+' eladás', mkRef:r.txId});
+    }
+    else if(r.appType==='coupon') {
+      data.cashTx.push({id:uid(), date:r.date, type:'coupon', amount:r.amount, note:r.securities+' kamat', mkRef:r.txId});
+    }
+    else if(r.appType==='deposit') {
+      data.cashTx.push({id:uid(), date:r.date, type:'deposit', amount:r.amount, note:'Befizetés (utalás)', mkRef:r.txId});
+    }
+    else if(r.appType==='withdraw') {
+      data.cashTx.push({id:uid(), date:r.date, type:'withdraw', amount:r.amount, note:r.label, mkRef:r.txId});
+    }
+  });
+
+  saveData();
+  renderAll();
+  toast(`✓ ${toImport.length} kincstári tranzakció importálva!`);
+  resetMkImport();
+  showTab('kincstar', document.querySelector('.nav-item[onclick*="kincstar"]'));
+}
+
+function resetMkImport() {
+  mkParsed = [];
+  document.getElementById('mkPreview').style.display = 'none';
+  document.getElementById('mkStatus').style.display = 'none';
+  document.getElementById('mkFileInput').value = '';
+}
+
 // ═══════════════════════════════════════════════
 // LIGHTYEAR CSV IMPORT
 // ═══════════════════════════════════════════════
