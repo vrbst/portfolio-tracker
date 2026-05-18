@@ -727,9 +727,9 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           ondragleave="this.style.borderColor='var(--border2)'"
           ondrop="event.preventDefault();this.style.borderColor='var(--border2)';handleImportDrop(event)">
           <div style="font-size:28px;margin-bottom:8px">📂</div>
-          <div style="font-size:13px;color:var(--text2)">Húzd ide a CSV fájlt, vagy kattints a feltöltéshez</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Lightyear CSV számlakivonat (hu vagy en)</div>
-          <input type="file" id="importFileInput" accept=".csv" style="display:none" onchange="handleImportFile(this.files[0])">
+          <div style="font-size:13px;color:var(--text2)">Húzd ide a CSV fájl(oka)t, vagy kattints a feltöltéshez</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Egyszerre töltheted fel a TBSZ és a pénzszámla CSV-t is – az app automatikusan szétválasztja</div>
+          <input type="file" id="importFileInput" accept=".csv" style="display:none" multiple onchange="handleImportFiles(this.files)">
         </div>
 
         <!-- Előnézet -->
@@ -3863,8 +3863,82 @@ function initImportPage() {
 }
 
 function handleImportDrop(e) {
-  const file = e.dataTransfer.files[0];
-  if(file) handleImportFile(file);
+  handleImportFiles(e.dataTransfer.files);
+}
+
+async function handleImportFiles(files) {
+  if(!files || files.length === 0) return;
+
+  // Olvasunk minden CSV-t
+  const csvTexts = await Promise.all([...files].filter(f=>f.name.endsWith('.csv')).map(f =>
+    new Promise(res => { const r=new FileReader(); r.onload=e=>res({name:f.name,text:e.target.result}); r.readAsText(f,'UTF-8'); })
+  ));
+
+  if(!csvTexts.length) return toast('Nem találtam CSV fájlt!');
+
+  // Szétválasztás: TBSZ (van Buy) vs pénzszámla (csak Deposit/Withdrawal)
+  const parseRows = text => {
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+    return lines.slice(1).map(line => {
+      const vals=[];let cur='',inQ=false;
+      for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
+      vals.push(cur);
+      const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim());
+      return obj;
+    });
+  };
+
+  let tbszRows = [], cashRows = [], allRows = [];
+  let tbszAccountId = document.getElementById('importAccountSelect').value;
+
+  for(const {name, text} of csvTexts) {
+    const rows = parseRows(text);
+    allRows = allRows.concat(rows);
+    const hasBuy = rows.some(r=>r.Type==='Buy'||r.Type==='Sell');
+
+    if(hasBuy) {
+      tbszRows = tbszRows.concat(rows);
+      // Auto-detect account from filename
+      const lyMatch = name.match(/LY-([A-Z0-9]+)/);
+      const lyId = lyMatch ? 'LY-'+lyMatch[1] : null;
+      if(!tbszAccountId && lyId) {
+        const matched = getTbszAccounts().find(a=>a.lyAccountId===lyId);
+        if(matched) {
+          tbszAccountId = matched.id;
+          document.getElementById('importAccountSelect').value = tbszAccountId;
+          toast('Számla felismerve: '+matched.name);
+        }
+      }
+    } else {
+      cashRows = cashRows.concat(rows);
+    }
+  }
+
+  if(!tbszAccountId && tbszRows.length) return toast('Válassz TBSZ számlát!');
+
+  // Összevont konverzió lista az összes CSV-ből – így a párosítás pontos lesz
+  importParsed = [];
+
+  if(tbszRows.length) {
+    parseLightyearCSVWithConversions(tbszRows, allRows, tbszAccountId);
+  }
+
+  if(cashRows.length) {
+    // DT- deposit sorok → cashTx
+    const existingRefs = new Set(data.cashTx.map(t=>t.lyRef).filter(Boolean));
+    cashRows.filter(r=>r.Type==='Deposit'&&r.CCY==='HUF'&&r.Reference.startsWith('DT-')).forEach(r => {
+      const [dp]=r.Date.split(' ');const[dd,mm,yyyy]=dp.split('/');
+      const date=`${yyyy}-${mm}-${dd}`;
+      const amount=Math.abs(parseFloat(r['Gross Amount'])||0);
+      const isDuplicate=existingRefs.has(r.Reference);
+      importParsed.push({date,ticker:'HUF',type:'deposit',shares:0,priceEur:0,fee:0,fxRate:1,
+        ref:r.Reference,accountId:null,tbszYear:null,isDuplicate,selected:!isDuplicate,
+        depositAmount:amount,isCashAccount:true});
+    });
+  }
+
+  renderImportPreview(tbszAccountId);
 }
 
 function handleImportFile(file) {
@@ -3952,38 +4026,17 @@ function parseLightyearCashCSV(text, lyId) {
   renderImportPreview(null);
 }
 
-function parseLightyearCSV(text, accountId) {
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
-  const rows = lines.slice(1).map(line => {
-    // Handle quoted CSV properly
-    const vals = [];
-    let cur = '', inQ = false;
-    for(const ch of line) {
-      if(ch==='"') inQ=!inQ;
-      else if(ch===','&&!inQ) { vals.push(cur); cur=''; }
-      else cur+=ch;
-    }
-    vals.push(cur);
-    const obj = {};
-    headers.forEach((h,i) => obj[h] = (vals[i]||'').trim());
-    return obj;
-  });
-
-  // Build FX rate map: Reference → EUR/HUF rate
-  const fxMap = {};
-  const fxByDate = {};
-
-  // Pair HUF and EUR conversion rows by Reference to compute exact rate
+function parseLightyearCSVWithConversions(tbszRows, allRows, accountId) {
+  // Konverziók az ÖSSZES CSV-ből (TBSZ + pénzszámla)
   const convByRef = {};
-  rows.forEach(r => {
+  allRows.forEach(r => {
     if(r.Type==='Conversion') {
       if(!convByRef[r.Reference]) convByRef[r.Reference] = {};
       convByRef[r.Reference][r.Ticker] = r;
     }
   });
 
-  // For each Reference that has both HUF and EUR conversion rows, compute exact rate
+  const convRates = [];
   Object.entries(convByRef).forEach(([ref, byTicker]) => {
     const eurRow = byTicker['EUR'];
     const hufRow = byTicker['HUF'];
@@ -3991,73 +4044,85 @@ function parseLightyearCSV(text, accountId) {
       const eurAmt = Math.abs(parseFloat(eurRow['Gross Amount'])||0);
       const hufAmt = Math.abs(parseFloat(hufRow['Gross Amount'])||0);
       if(eurAmt > 0 && hufAmt > 0) {
-        const rate = hufAmt / eurAmt;
-        fxMap[ref] = rate;
-        // Date key for fallback
         const [dp] = eurRow.Date.split(' ');
         const [dd,mm,yyyy] = dp.split('/');
-        fxByDate[`${yyyy}-${mm}-${dd}`] = rate;
+        convRates.push({ref, eurAmt, hufAmt, rate: hufAmt/eurAmt, date:`${yyyy}-${mm}-${dd}`});
       }
     } else if(eurRow && eurRow['FX Rate']) {
-      // Fallback: use FX Rate column directly
+      const eurAmt = Math.abs(parseFloat(eurRow['Gross Amount'])||0);
       const rate = parseFloat(eurRow['FX Rate']);
-      fxMap[ref] = rate;
       const [dp] = eurRow.Date.split(' ');
       const [dd,mm,yyyy] = dp.split('/');
-      fxByDate[`${yyyy}-${mm}-${dd}`] = rate;
+      convRates.push({ref, eurAmt, hufAmt:eurAmt*rate, rate, date:`${yyyy}-${mm}-${dd}`});
     }
   });
 
-  // Helper: find closest prior conversion rate by date
-  function getFxRate(ref, dateStr) {
-    if(fxMap[ref]) return fxMap[ref];
-    const dates = Object.keys(fxByDate).sort();
-    let best = null;
-    for(const d of dates) {
-      if(d <= dateStr) best = fxByDate[d];
+  function getFxRate(buyGrossEur, dateStr) {
+    const buyEur = Math.abs(parseFloat(buyGrossEur)||0);
+    if(buyEur > 0) {
+      const exact = convRates.filter(c => Math.abs(c.eurAmt-buyEur) < 0.02);
+      if(exact.length === 1) return exact[0].rate;
+      if(exact.length > 1) {
+        exact.sort((a,b) => Math.abs(a.date.localeCompare(dateStr)) - Math.abs(b.date.localeCompare(dateStr)));
+        return exact[0].rate;
+      }
     }
-    return best || (liveFx||395);
+    const sameDate = convRates.filter(c => c.date===dateStr);
+    if(sameDate.length === 1) return sameDate[0].rate;
+    if(sameDate.length > 1 && buyEur > 0) {
+      sameDate.sort((a,b)=>Math.abs(a.eurAmt-buyEur)-Math.abs(b.eurAmt-buyEur));
+      return sameDate[0].rate;
+    }
+    if(sameDate.length) return sameDate[0].rate;
+    const prior = convRates.filter(c=>c.date<=dateStr).sort((a,b)=>b.date.localeCompare(a.date));
+    return prior.length ? prior[0].rate : (liveFx||395);
   }
 
-  // Extract Buy AND Sell rows
-  const txRows = rows.filter(r => (r.Type==='Buy' || r.Type==='Sell') && r.Ticker && r.Quantity);
-
-  // HUF Deposit sorok → csak a pénzszámla CSV-ből kellenek (ott DT- ref)
-  // A TBSZ CSV Deposit sorai (IT- ref) belső átutalások, nem kell őket importálni
-  const depositRows = rows.filter(r => r.Type==='Deposit' && r.CCY==='HUF' && r['Gross Amount'] && r.Reference.startsWith('DT-'));
-
-  // Get existing tx references to detect duplicates
-  const existingRefs = new Set(data.etfTx.map(t => t.lyRef).filter(Boolean));
-
-  const acc = getTbszAccounts().find(a => a.id===accountId);
+  const txRows = tbszRows.filter(r=>(r.Type==='Buy'||r.Type==='Sell')&&r.Ticker&&r.Quantity);
+  const depositRows = tbszRows.filter(r=>r.Type==='Deposit'&&r.CCY==='HUF'&&r['Gross Amount']&&r.Reference.startsWith('DT-'));
+  const existingRefs = new Set(data.etfTx.map(t=>t.lyRef).filter(Boolean));
+  const acc = getTbszAccounts().find(a=>a.id===accountId);
   const tbszYear = acc ? acc.year : new Date().getFullYear();
 
-  importParsed = txRows.map(r => {
-    const [datePart] = r.Date.split(' ');
-    const [dd,mm,yyyy] = datePart.split('/');
+  txRows.forEach(r => {
+    const [dp] = r.Date.split(' ');
+    const [dd,mm,yyyy] = dp.split('/');
     const date = `${yyyy}-${mm}-${dd}`;
     const ticker = r.Ticker;
     const type = r.Type==='Sell' ? 'sell' : 'buy';
-    const shares = Math.abs(parseFloat(r.Quantity) || 0);
-    const priceEur = parseFloat(r['Price/share']) || 0;
-    const fee = parseFloat(r.Fee) || 0;
+    const shares = Math.abs(parseFloat(r.Quantity)||0);
+    const priceEur = parseFloat(r['Price/share'])||0;
+    const fee = parseFloat(r.Fee)||0;
     const ref = r.Reference;
-    const fxRate = getFxRate(ref, date);
+    const fxRate = getFxRate(r['Gross Amount'], date);
     const isDuplicate = existingRefs.has(ref);
-    return { date, ticker, type, shares, priceEur, fee, fxRate, ref, accountId, tbszYear, isDuplicate, selected: !isDuplicate };
+    importParsed.push({date,ticker,type,shares,priceEur,fee,fxRate,ref,accountId,tbszYear,isDuplicate,selected:!isDuplicate});
   });
 
-  // HUF deposit sorok hozzáadása
   depositRows.forEach(r => {
-    const [datePart] = r.Date.split(' ');
-    const [dd,mm,yyyy] = datePart.split('/');
+    const [dp] = r.Date.split(' ');
+    const [dd,mm,yyyy] = dp.split('/');
     const date = `${yyyy}-${mm}-${dd}`;
-    const amount = parseFloat(r['Gross Amount']) || 0;
-    const ref = r.Reference;
-    const isDuplicate = existingRefs.has(ref);
-    importParsed.push({ date, ticker: 'HUF', type: 'deposit', shares: 0, priceEur: 0, fee: 0, fxRate: 1, ref, accountId, tbszYear, isDuplicate, selected: !isDuplicate, depositAmount: amount });
+    const amount = parseFloat(r['Gross Amount'])||0;
+    const isDuplicate = new Set(data.cashTx.map(t=>t.lyRef).filter(Boolean)).has(r.Reference);
+    importParsed.push({date,ticker:'HUF',type:'deposit',shares:0,priceEur:0,fee:0,fxRate:1,
+      ref:r.Reference,accountId,tbszYear,isDuplicate,selected:!isDuplicate,depositAmount:amount});
   });
+}
 
+function parseLightyearCSV(text, accountId) {
+  // Egyszerű wrapper – csak egy fájl esetén
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+  const rows = lines.slice(1).map(line => {
+    const vals=[];let cur='',inQ=false;
+    for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
+    vals.push(cur);
+    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim());
+    return obj;
+  });
+  importParsed = [];
+  parseLightyearCSVWithConversions(rows, rows, accountId);
   renderImportPreview(accountId);
 }
 
