@@ -3591,23 +3591,7 @@ function parseMkXLSWithSheetJS(buffer) {
           selected: !isDuplicate, label: 'Kamatfizetés',
         });
       }
-      // Külső befizetés (utalás be)
-      else if(type==='Utalás érkeztetés') {
-        mkParsed.push({
-          appType: 'deposit', date, securities: '–',
-          faceValue: 0, amount, txId, isDuplicate,
-          selected: !isDuplicate, label: 'Befizetés (utalás)',
-        });
-      }
-      // Külső kifizetés (utalás ki)
-      else if(type==='Utalás indítás') {
-        mkParsed.push({
-          appType: 'withdraw', date, securities: '–',
-          faceValue: 0, amount, txId, isDuplicate,
-          selected: !isDuplicate, label: 'Kifizetés (utalás)',
-        });
-      }
-      // Bankkártyás fizetés
+      // Külső kifizetés - csak a bankkártyás fizetés valódi pénzkiáramlás
       else if(type==='Bankkártyás fizetés') {
         mkParsed.push({
           appType: 'withdraw', date, securities: '–',
@@ -3615,7 +3599,8 @@ function parseMkXLSWithSheetJS(buffer) {
           selected: !isDuplicate, label: 'Bankkártyás fizetés',
         });
       }
-      // Pénzszámla befizetés/kifizetés: SKIP – ezek a vétel/eladás párjai
+      // Utalás érkeztetés/indítás és Pénzszámla be/kifizetés: SKIP
+      // Ezek mind a vétel/eladás belső pénzszámla párjai
     });
 
     status.style.display = 'none';
@@ -3703,19 +3688,32 @@ function confirmMkImport() {
   const toImport = mkParsed.filter(r=>r.selected);
   if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
 
-  toImport.forEach(r => {
+  // Először vételek, aztán eladások (hogy FIFO tudjon működni)
+  const order = {'fixmap-buy':0,'dkj-buy':1,'fixmap-sell':2,'dkj-sell':3,'coupon':4,'deposit':5,'withdraw':6};
+  const sorted = [...toImport].sort((a,b) => {
+    const ao = order[a.appType]??9, bo = order[b.appType]??9;
+    if(ao!==bo) return ao-bo;
+    return a.date.localeCompare(b.date);
+  });
+
+  sorted.forEach(r => {
     if(r.appType==='fixmap-buy') {
-      // Keressük meg a megfelelő sorozatot
       let series = data.fixmapSeries.find(s=>s.name===r.seriesName);
       if(!series) {
-        // Létrehozzuk ha nem létezik
         const id = uid();
-        const couponRate = r.nominalInterest ? parseFloat(r.nominalInterest)*100 : 7;
-        const maturityMatch = r.securities.match(/(\d{4})\//);
+        // Kamatláb: "2.07%" → 2.07, de a FixMáP éves 7%, negyedéves → 1.75%
+        // A Nominal interest mező az adott negyedév kamata, éves = 7%
+        const couponRate = 7; // FixMáP 2031 éves kamat
+        // Lejárat és Q kiolvasása: "Fix Magyar Állampapír 2031/Q1" → 2031-01-23, Q2 → 2031-04-23
+        const qMatch = r.securities.match(/(\d{4})\/Q(\d)/);
+        const year = qMatch ? parseInt(qMatch[1]) : 2031;
+        const q = qMatch ? parseInt(qMatch[2]) : 1;
+        const maturityMonths = {1:'01', 2:'04', 3:'07', 4:'10'};
+        const maturity = `${year}-${maturityMonths[q]||'01'}-23`;
+        const nextCoupon = maturity; // első következő kamat = lejárat
         series = {
-          id, name: r.seriesName,
-          couponRate, maturity: maturityMatch?maturityMatch[1]+'-01-01':'2031-01-01',
-          nextCoupon: '', issueDate: r.date,
+          id, name: r.seriesName, couponRate,
+          maturity, nextCoupon, issueDate: r.date,
         };
         data.fixmapSeries.push(series);
       }
@@ -3775,7 +3773,7 @@ function confirmMkImport() {
 
   saveData();
   renderAll();
-  toast(`✓ ${toImport.length} kincstári tranzakció importálva!`);
+  toast(`✓ ${sorted.length} kincstári tranzakció importálva!`);
   resetMkImport();
   showTab('kincstar', document.querySelector('.nav-item[onclick*="kincstar"]'));
 }
