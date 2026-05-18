@@ -3620,7 +3620,9 @@ function parseMkXLSWithSheetJS(buffer) {
           selected: !isDuplicate, label: 'Pénzszámla kifizetés',
         });
       }
-      // Utalás indítás, Bankkártyás fizetés: SKIP – nem érintik a kincstári pénzszámlát
+      // Utalás indítás, Bankkártyás fizetés: SKIP
+      // Utalás indítás mindig párosul Pénzszámla kifizetéssel vagy Eladással
+      // Bankkártyás fizetés nem a kincstári pénzszámlát terheli
     });
 
     status.style.display = 'none';
@@ -3789,8 +3791,8 @@ function confirmMkImport() {
       }
     }
     else if(r.appType==='coupon') {
-      // Könyveljük cashTx-be
-      data.cashTx.push({id:uid(), date:r.date, type:'coupon', amount:r.amount, note:r.securities+' kamat', mkRef:r.txId});
+      // NEM könyveljük cashTx-be – a Pénzszámla befizetés sor már tartalmazza
+      // Csak a firstCouponAmount-ot állítjuk be ha első töredéknegyedév
       // Ha van sorozat hozzárendelve, mentsük el firstCouponAmount-ként
       // (az első kamat általában nem kerek negyedév)
       const seriesName = r.securities.replace('Fix Magyar Állampapír ','FixMáP ');
