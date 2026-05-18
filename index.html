@@ -1777,10 +1777,11 @@ function getLyAccount(id) {
 function renderLyAccountsSidebar() {
   const nav = document.getElementById('ly-nav-items');
   if(!nav) return;
-  nav.innerHTML = getLyAccounts().map(acc => `
+  // Csak TBSZ számlák jelennek meg a sidebarban
+  nav.innerHTML = getLyAccounts().filter(a=>a.type==='tbsz').map(acc => `
     <button class="nav-item ${activeLyAccountId===acc.id?'active':''}"
       onclick="showLyAccount('${acc.id}', this)">
-      <span class="ni" style="font-size:8px;opacity:.5;color:${acc.type==='tbsz'?'var(--green)':'var(--blue)'}">●</span>${acc.name}
+      <span class="ni" style="font-size:8px;opacity:.5;color:var(--green)">●</span>${acc.name}
     </button>
   `).join('');
 }
@@ -1788,7 +1789,8 @@ function renderLyAccountsSidebar() {
 function renderLyAccountsPages() {
   const container = document.getElementById('ly-pages-container');
   if(!container) return;
-  container.innerHTML = getLyAccounts().map(acc => {
+  // Csak TBSZ számláknak generálunk oldalt
+  container.innerHTML = getLyAccounts().filter(a=>a.type==='tbsz').map(acc => {
     const isTbsz = acc.type === 'tbsz';
     const typeLabel = isTbsz
       ? `TBSZ ${acc.tbszYear} · Adómentes: ${acc.tbszYear+3} után · Optimális: ${acc.tbszYear+5} után`
@@ -1899,11 +1901,8 @@ function renderLyCards(accountId) {
     const val = lp ? basis.reduce((s,b)=>s+b.shares,0)*lp*fx : 0;
     totalVal+=val; totalCost+=cost;
   });
-  // Befektetett = tényleges befizetett összeg (DT- deposit-ok ezen a számlán)
-  const deposited = (data.lyCashTx||[])
-    .filter(t=>t.accountId===accountId && t.type==='deposit' && t.currency==='HUF')
-    .reduce((s,t)=>s+t.amount, 0);
-  const invested = deposited > 0 ? deposited : totalCost;
+  // Befektetett = összes DT- deposit az összes LY számlán (normál + TBSZ együtt)
+  const invested = lyTotalInvested() > 0 ? lyTotalInvested() : totalCost;
   const pl = totalVal - invested;
   const plPct = invested>0 ? pl/invested*100 : 0;
   const plCol = pl>=0?'var(--green)':'var(--red)';
