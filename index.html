@@ -4080,7 +4080,7 @@ async function handleImportFiles(files) {
     // Ha nincs még számla ehhez az azonosítóhoz, automatikusan létrehozzuk
     let autoAcc = matchedAcc;
     if(!autoAcc && lyId) {
-      const hasTbszBuy = rows.some(r=>r.Type==='Buy'&&r.Ticker&&r.ISIN&&r.Quantity);
+      const hasTbszBuy = rows.some(r=>r.Type==='Buy'&&r.Ticker&&r.Quantity&&r.ISIN&&r.ISIN.length>5);
       const accType = hasTbszBuy ? 'tbsz' : 'cash';
       const tbszYear = new Date().getFullYear();
       const accName = accType==='tbsz' ? `TBSZ ${tbszYear}` : 'Lightyear normál';
@@ -4091,6 +4091,9 @@ async function handleImportFiles(files) {
       };
       if(!data.lyAccounts) data.lyAccounts=[];
       data.lyAccounts.push(autoAcc);
+      // Azonnal rendereljük hogy látszódjon
+      renderLyAccountsSidebar();
+      renderLyAccountsPages();
     }
     const resolveAcc = () => autoAcc || getLyAccounts().find(a=>a.lyAccountId===lyId);
     // Minden sorhoz meghatározzuk a típust és a célszámlát
