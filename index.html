@@ -1104,6 +1104,12 @@ function nextCouponDate(maturity){
 // RENDER ALL
 // ═══════════════════════════════════════════════
 function renderAll(){
+  // Meglévő sorozatoknál firstCouponDate pótlása ha hiányzik
+  data.fixmapSeries.forEach(sr => {
+    if(sr.firstCouponAmount && !sr.firstCouponDate && sr.nextCoupon) {
+      sr.firstCouponDate = sr.nextCoupon;
+    }
+  });
   renderDashboard();
   renderKincstar();
   renderTranzakciok();
@@ -1136,10 +1142,14 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce&&liveFx;
 
-  // Összes befektetett tőke = befizetések + ETF vételek - kiutalások
+  // Összes befektetett tőke = befizetések + ETF vételek - kiutalások + állampapír vételek
   const totalInvested=data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
     -data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
-    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.fee||0),0);
+    +data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.feeCurrency==='EUR'?(t.fee||0)*t.fxRate:(t.fee||0)),0)
+    +data.fixmap.reduce((s,f)=>s+(f.buyPrice||0),0)
+    +data.dkj.reduce((s,d)=>s+(d.buyPrice||0),0)
+    -data.cashTx.filter(t=>t.type==='sell').reduce((s,t)=>s+t.amount,0)
+    -data.cashTx.filter(t=>t.type==='expire').reduce((s,t)=>s+t.amount,0);
 
   // Nagy értékkijelző
   const bigEl=document.getElementById('dashTotalBig');
@@ -2751,7 +2761,8 @@ function submitNewFixmapSeries(){
   const maturity=document.getElementById('f-maturity').value;
   const firstCouponAmount=parseFloat(document.getElementById('f-firstcoupon')?.value)||null;
   if(!name||!couponRate||!maturity)return toast('Töltsd ki a kötelező mezőket!');
-  data.fixmapSeries.push({id:uid(),name,couponRate,issueDate,nextCoupon,maturity,firstCouponAmount});
+  data.fixmapSeries.push({id:uid(),name,couponRate,issueDate,nextCoupon,maturity,firstCouponAmount,
+    firstCouponDate: firstCouponAmount ? nextCoupon : null});
   closeModal(); renderAll(); saveData(); toast('Sorozat létrehozva: '+name);
 }
 
@@ -2764,6 +2775,7 @@ function saveEditFixmapSeries(id){
   sr.nextCoupon=document.getElementById('f-nextcoupon').value;
   sr.maturity=document.getElementById('f-maturity').value;
   sr.firstCouponAmount=parseFloat(document.getElementById('f-firstcoupon')?.value)||null;
+  sr.firstCouponDate=sr.firstCouponAmount?(document.getElementById('f-nextcoupon').value||sr.nextCoupon):null;
   closeModal(); renderAll(); saveData(); toast('Sorozat mentve');
 }
 
