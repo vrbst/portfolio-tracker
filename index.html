@@ -1222,10 +1222,15 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce&&liveFx;
 
-  // Befektetett tőke = állampapír vételárak + külső LY befizetések (DT- deposit)
-  const totalInvested = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+(f.buyPrice||0),0)
-    + data.dkj.filter(d=>d.active).reduce((s,d)=>s+(d.buyPrice||0),0)
-    + lyTotalInvested();
+  // Befektetett tőke = nettó befizetett összeg
+  // Állampapír: Utalás érkeztetés + Bankkártyás fizetés - Utalás indítás (cashTx deposit - withdraw)
+  const apInvested = data.cashTx
+    .reduce((s,t) => {
+      if(t.type==='deposit') return s + t.amount;
+      if(t.type==='withdraw') return s - t.amount;
+      return s;
+    }, 0);
+  const totalInvested = apInvested + lyTotalInvested();
 
   // Nagy értékkijelző
   const bigEl=document.getElementById('dashTotalBig');
@@ -3754,7 +3759,7 @@ function parseMkXLSWithSheetJS(buffer) {
           selected: !isDuplicate, label: 'Kamatfizetés',
         });
       }
-      // Külső utalás befizetés → pénzszámla nő
+      // Külső utalás befizetés → pénzszámla nő, befektetett tőkébe számít
       else if(type==='Utalás érkeztetés') {
         mkParsed.push({
           appType: 'deposit', date, securities: '–',
@@ -3762,25 +3767,23 @@ function parseMkXLSWithSheetJS(buffer) {
           selected: !isDuplicate, label: 'Utalás érkeztetés',
         });
       }
-      // Pénzszámla befizetés (eladás bevétele maradt) → pénzszámla nő
-      else if(type==='Pénzszámla befizetés') {
+      // Bankkártyás fizetés → befektetett tőkébe számít
+      else if(type==='Bankkártyás fizetés') {
         mkParsed.push({
           appType: 'deposit', date, securities: '–',
           faceValue: 0, amount, txId, isDuplicate,
-          selected: !isDuplicate, label: 'Pénzszámla befizetés',
+          selected: !isDuplicate, label: 'Bankkártyás fizetés',
         });
       }
-      // Pénzszámla kifizetés (vételre elköltve) → pénzszámla csökken
-      else if(type==='Pénzszámla kifizetés') {
+      // Utalás indítás → pénz visszament a bankszámlára, csökkenti a befektetett tőkét
+      else if(type==='Utalás indítás') {
         mkParsed.push({
           appType: 'withdraw', date, securities: '–',
           faceValue: 0, amount, txId, isDuplicate,
-          selected: !isDuplicate, label: 'Pénzszámla kifizetés',
+          selected: !isDuplicate, label: 'Utalás indítás',
         });
       }
-      // Utalás indítás, Bankkártyás fizetés: SKIP
-      // Utalás indítás mindig párosul Pénzszámla kifizetéssel vagy Eladással
-      // Bankkártyás fizetés nem a kincstári pénzszámlát terheli
+      // Pénzszámla befizetés / kifizetés: belső mozgás, skip (nem befolyásolja a befektetett tőkét)
     });
 
     status.style.display = 'none';
