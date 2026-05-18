@@ -1899,12 +1899,18 @@ function renderLyCards(accountId) {
     const val = lp ? basis.reduce((s,b)=>s+b.shares,0)*lp*fx : 0;
     totalVal+=val; totalCost+=cost;
   });
-  const pl=totalVal-totalCost, plPct=totalCost>0?pl/totalCost*100:0;
-  const plCol=pl>=0?'var(--green)':'var(--red)';
+  // Befektetett = tényleges befizetett összeg (DT- deposit-ok ezen a számlán)
+  const deposited = (data.lyCashTx||[])
+    .filter(t=>t.accountId===accountId && t.type==='deposit' && t.currency==='HUF')
+    .reduce((s,t)=>s+t.amount, 0);
+  const invested = deposited > 0 ? deposited : totalCost;
+  const pl = totalVal - invested;
+  const plPct = invested>0 ? pl/invested*100 : 0;
+  const plCol = pl>=0?'var(--green)':'var(--red)';
   el.innerHTML=`
     <div class="stat-card"><div class="stat-label">portfólió érték</div><div class="stat-value blurable">${totalVal>0?fmtM(totalVal):'–'}</div><div class="stat-sub blurable">${totalVal>0?fmtEur(totalVal/fx,0):'–'}</div></div>
-    <div class="stat-card"><div class="stat-label">befektetett</div><div class="stat-value blurable">${fmtM(totalCost)}</div></div>
-    <div class="stat-card"><div class="stat-label">P&L (unrealized)</div><div class="stat-value blurable" style="color:${plCol}">${totalCost>0?(pl>=0?'+':'')+fmtM(pl):'–'}</div><div class="stat-sub" style="color:${plCol}">${totalCost>0?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</div></div>
+    <div class="stat-card"><div class="stat-label">befektetett</div><div class="stat-value blurable">${fmtM(invested)}</div></div>
+    <div class="stat-card"><div class="stat-label">P&L (unrealized)</div><div class="stat-value blurable" style="color:${plCol}">${invested>0?(pl>=0?'+':'')+fmtM(pl):'–'}</div><div class="stat-sub" style="color:${plCol}">${invested>0?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</div></div>
     <div class="stat-card"><div class="stat-label">EUR / HUF</div><div class="stat-value">${fx.toFixed(2)} Ft</div><div class="stat-sub">${liveFx?'live':'becsült'}</div></div>
   `;
 }
@@ -1912,8 +1918,9 @@ function renderLyCards(accountId) {
 function renderLyCash(accountId) {
   const el = document.getElementById('ly-cash-'+accountId);
   if(!el) return;
-  const huf = lyAccountCashBalance(accountId,'HUF');
-  const eur = lyAccountCashBalance(accountId,'EUR');
+  const huf = Math.round(lyAccountCashBalance(accountId,'HUF'));
+  const eurRaw = lyAccountCashBalance(accountId,'EUR');
+  const eur = Math.abs(eurRaw) < 0.05 ? 0 : Math.round(eurRaw * 100) / 100;
   el.innerHTML=`
     <div class="stat-card"><div class="stat-label">pénzszámla (HUF)</div><div class="stat-value blurable">${fmt(huf)}</div></div>
     <div class="stat-card"><div class="stat-label">pénzszámla (EUR)</div><div class="stat-value blurable">${fmtEur(eur)}</div></div>
@@ -4258,8 +4265,6 @@ function updateImportBtn() {
 
 function confirmImport() {
   const toImport=importParsed.filter(r=>r.selected);
-  console.log('Import types:', toImport.reduce((acc,r)=>{acc[r.rowType]=(acc[r.rowType]||0)+1;return acc;},{}));
-  console.log('EUR lyCashTx entries that will be added:', toImport.filter(r=>r.currency==='EUR'));
   if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
 
   if(!data.lyTx) data.lyTx=[];
