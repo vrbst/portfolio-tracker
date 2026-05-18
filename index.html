@@ -2908,12 +2908,17 @@ function submitDKJSeriesSell(){
       remaining-=item.faceValue;
     } else {
       // partial sell: split the item
-      const newId=uid();
-      data.dkj.push({...item,id:newId,faceValue:item.faceValue-remaining,buyPrice:item.buyPrice*(item.faceValue-remaining)/item.faceValue});
-      item.active=false;
-      item.faceValue=remaining;
-      item.buyPrice=item.buyPrice*(remaining/item.faceValue);
-      remaining=0;
+      const origFv = item.faceValue;
+      const origBp = item.buyPrice;
+      const keepFv = origFv - remaining;
+      const keepBp = Math.round(origBp * keepFv / origFv);
+      const soldBp = Math.round(origBp * remaining / origFv);
+      item.faceValue = remaining;
+      item.buyPrice = soldBp;
+      item.active = false;
+      const newItem = Object.assign({}, item, {id:uid(), faceValue:keepFv, buyPrice:keepBp, active:true});
+      data.dkj.push(newItem);
+      remaining = 0;
     }
   }
   data.cashTx.push({id:uid(),date,type:'sell',amount:sellPrice,note:'DKJ eladás D'+maturity.replace(/-/g,'').slice(2)+(note?' – '+note:'')});
@@ -3701,39 +3706,31 @@ function confirmMkImport() {
       let series = data.fixmapSeries.find(s=>s.name===r.seriesName);
       if(!series) {
         const id = uid();
-        // Kamatláb: "2.07%" → 2.07, de a FixMáP éves 7%, negyedéves → 1.75%
-        // A Nominal interest mező az adott negyedév kamata, éves = 7%
-        const couponRate = 7; // FixMáP 2031 éves kamat
-        // Lejárat és Q kiolvasása: "Fix Magyar Állampapír 2031/Q1" → 2031-01-23, Q2 → 2031-04-23
+        const couponRate = 7;
         const qMatch = r.securities.match(/(\d{4})\/Q(\d)/);
         const year = qMatch ? parseInt(qMatch[1]) : 2031;
         const q = qMatch ? parseInt(qMatch[2]) : 1;
         const maturityMonths = {1:'01', 2:'04', 3:'07', 4:'10'};
         const maturity = `${year}-${maturityMonths[q]||'01'}-23`;
-        const nextCoupon = maturity; // első következő kamat = lejárat
-        series = {
-          id, name: r.seriesName, couponRate,
-          maturity, nextCoupon, issueDate: r.date,
-        };
+        // Következő kamat: vásárlás utáni első negyedéves dátum (jan/ápr/júl/okt 23.)
+        const couponMonths = [1,4,7,10];
+        const purchaseDate = new Date(r.date+'T00:00:00Z');
+        let nextCoupon = maturity;
+        outer: for(let y = purchaseDate.getUTCFullYear(); y <= year; y++) {
+          for(const m of couponMonths) {
+            const d = new Date(Date.UTC(y, m-1, 23));
+            if(d > purchaseDate) {
+              const ds = d.toISOString().split('T')[0];
+              if(ds <= maturity) { nextCoupon = ds; break outer; }
+            }
+          }
+        }
+        series = {id, name: r.seriesName, couponRate, maturity, nextCoupon, issueDate: r.date};
         data.fixmapSeries.push(series);
       }
-      data.fixmap.push({
-        id: uid(), seriesId: series.id, date: r.date,
-        faceValue: r.faceValue, buyPrice: r.amount,
-        active: true, mkRef: r.txId,
-      });
-    }
-    else if(r.appType==='fixmap-sell') {
-      const series = data.fixmapSeries.find(s=>r.securities.includes(s.name.replace('FixMáP ','')));
-      const items = data.fixmap.filter(f=>f.seriesId===series?.id&&f.active)
-        .sort((a,b)=>a.date.localeCompare(b.date));
-      let toSell = r.faceValue;
-      for(const item of items) {
-        if(toSell<=0) break;
-        if(item.faceValue<=toSell) { item.active=false; item.soldDate=r.date; toSell-=item.faceValue; }
-        else { item.faceValue-=toSell; toSell=0; }
-      }
-      data.cashTx.push({id:uid(), date:r.date, type:'sell', amount:r.amount, note:r.securities+' eladás', mkRef:r.txId});
+      data.fixmap.push({id:uid(), seriesId:series.id, date:r.date, faceValue:r.faceValue, buyPrice:r.amount, active:true, mkRef:r.txId});
+      // Vételár levonása a pénzszámláról
+      data.cashTx.push({id:uid(), date:r.date, type:'buy', amount:r.amount, note:r.seriesName+' vétel', mkRef:r.txId+'-cash'});
     }
     else if(r.appType==='dkj-buy') {
       let series = data.dkjSeries?.find(s=>s.maturity===r.maturity);
@@ -3743,11 +3740,27 @@ function confirmMkImport() {
         series = {id:uid(), name, maturity:r.maturity};
         data.dkjSeries.push(series);
       }
-      data.dkj.push({
-        id:uid(), seriesId:series.id, date:r.date,
-        faceValue:r.faceValue, buyPrice:r.amount,
-        maturity:r.maturity, active:true, mkRef:r.txId,
-      });
+      data.dkj.push({id:uid(), seriesId:series.id, date:r.date, faceValue:r.faceValue, buyPrice:r.amount, maturity:r.maturity, active:true, mkRef:r.txId});
+      // Vételár levonása a pénzszámláról
+      data.cashTx.push({id:uid(), date:r.date, type:'buy', amount:r.amount, note:'DKJ'+r.maturity+' vétel', mkRef:r.txId+'-cash'});
+    }
+    else if(r.appType==='fixmap-sell') {
+      const series = data.fixmapSeries.find(s=>r.securities.includes(s.name.replace('FixMáP ','')));
+      const items = data.fixmap.filter(f=>f.seriesId===series?.id&&f.active)
+        .sort((a,b)=>a.date.localeCompare(b.date));
+      let toSell = r.faceValue;
+      for(const item of items) {
+        if(toSell<=0) break;
+        if(item.faceValue<=toSell) {
+          item.active=false; item.soldDate=r.date; toSell-=item.faceValue;
+        } else {
+          // Részleges eladás: arányosan csökkentjük a buyPrice-t
+          const ratio = toSell/item.faceValue;
+          item.buyPrice = Math.round(item.buyPrice*(1-ratio));
+          item.faceValue -= toSell; toSell=0;
+        }
+      }
+      data.cashTx.push({id:uid(), date:r.date, type:'sell', amount:r.amount, note:r.securities+' eladás', mkRef:r.txId});
     }
     else if(r.appType==='dkj-sell') {
       const items = data.dkj.filter(d=>d.maturity===r.maturity&&d.active)
@@ -3755,8 +3768,14 @@ function confirmMkImport() {
       let toSell = r.faceValue;
       for(const item of items) {
         if(toSell<=0) break;
-        if(item.faceValue<=toSell) { item.active=false; item.soldDate=r.date; toSell-=item.faceValue; }
-        else { item.faceValue-=toSell; toSell=0; }
+        if(item.faceValue<=toSell) {
+          item.active=false; item.soldDate=r.date; toSell-=item.faceValue;
+        } else {
+          // Részleges eladás: arányosan csökkentjük a buyPrice-t
+          const ratio = toSell/item.faceValue;
+          item.buyPrice = Math.round(item.buyPrice*(1-ratio));
+          item.faceValue -= toSell; toSell=0;
+        }
       }
       data.cashTx.push({id:uid(), date:r.date, type:'sell', amount:r.amount, note:r.securities+' eladás', mkRef:r.txId});
     }
