@@ -4134,6 +4134,14 @@ function confirmImport() {
   const toImport = importParsed.filter(r => r.selected);
   if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
 
+  // Ha ETF vételek kerülnek be, töröljük a régi tbszCashTx deposit/sell_proceed tételeket
+  // (csak azokat amik nem kézi befizetések – lyRef nélküli marad)
+  const hasEtfRows = toImport.some(r => r.type==='buy' || r.type==='sell');
+  if(hasEtfRows && data.tbszCashTx) {
+    // Töröljük a korábbi import által létrehozott téves tételeket
+    data.tbszCashTx = data.tbszCashTx.filter(t => !t.lyRef && t.type !== 'sell_proceed');
+  }
+
   toImport.forEach(r => {
     data.etfTx.push({
       id: uid(),
