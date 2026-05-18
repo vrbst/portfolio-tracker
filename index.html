@@ -1223,11 +1223,11 @@ function renderDashboard(){
   const hasLive=liveVwce&&liveFx;
 
   // Befektetett tőke = nettó befizetett összeg
-  // Állampapír: Utalás érkeztetés + Bankkártyás fizetés - Utalás indítás (cashTx deposit - withdraw)
+  // Állampapír: Utalás érkeztetés + Bankkártyás fizetés - Utalás indítás (transfer_in - transfer_out)
   const apInvested = data.cashTx
     .reduce((s,t) => {
-      if(t.type==='deposit') return s + t.amount;
-      if(t.type==='withdraw') return s - t.amount;
+      if(t.type==='transfer_in') return s + t.amount;
+      if(t.type==='transfer_out') return s - t.amount;
       return s;
     }, 0);
   const totalInvested = apInvested + lyTotalInvested();
@@ -3762,7 +3762,7 @@ function parseMkXLSWithSheetJS(buffer) {
       // Külső utalás befizetés → pénzszámla nő, befektetett tőkébe számít
       else if(type==='Utalás érkeztetés') {
         mkParsed.push({
-          appType: 'deposit', date, securities: '–',
+          appType: 'transfer_in', date, securities: '–',
           faceValue: 0, amount, txId, isDuplicate,
           selected: !isDuplicate, label: 'Utalás érkeztetés',
         });
@@ -3770,7 +3770,7 @@ function parseMkXLSWithSheetJS(buffer) {
       // Bankkártyás fizetés → befektetett tőkébe számít
       else if(type==='Bankkártyás fizetés') {
         mkParsed.push({
-          appType: 'deposit', date, securities: '–',
+          appType: 'transfer_in', date, securities: '–',
           faceValue: 0, amount, txId, isDuplicate,
           selected: !isDuplicate, label: 'Bankkártyás fizetés',
         });
@@ -3778,7 +3778,7 @@ function parseMkXLSWithSheetJS(buffer) {
       // Utalás indítás → pénz visszament a bankszámlára, csökkenti a befektetett tőkét
       else if(type==='Utalás indítás') {
         mkParsed.push({
-          appType: 'withdraw', date, securities: '–',
+          appType: 'transfer_out', date, securities: '–',
           faceValue: 0, amount, txId, isDuplicate,
           selected: !isDuplicate, label: 'Utalás indítás',
         });
@@ -3969,11 +3969,11 @@ function confirmMkImport() {
         }
       }
     }
-    else if(r.appType==='deposit') {
-      data.cashTx.push({id:uid(), date:r.date, type:'deposit', amount:r.amount, note:'Befizetés (utalás)', mkRef:r.txId});
+    else if(r.appType==='transfer_in') {
+      data.cashTx.push({id:uid(), date:r.date, type:'transfer_in', amount:r.amount, note:r.label, mkRef:r.txId});
     }
-    else if(r.appType==='withdraw') {
-      data.cashTx.push({id:uid(), date:r.date, type:'withdraw', amount:r.amount, note:r.label, mkRef:r.txId});
+    else if(r.appType==='transfer_out') {
+      data.cashTx.push({id:uid(), date:r.date, type:'transfer_out', amount:r.amount, note:r.label, mkRef:r.txId});
     }
   });
 
