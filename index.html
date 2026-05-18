@@ -3761,7 +3761,22 @@ function confirmMkImport() {
       data.cashTx.push({id:uid(), date:r.date, type:'sell', amount:r.amount, note:r.securities+' eladás', mkRef:r.txId});
     }
     else if(r.appType==='coupon') {
+      // Könyveljük cashTx-be
       data.cashTx.push({id:uid(), date:r.date, type:'coupon', amount:r.amount, note:r.securities+' kamat', mkRef:r.txId});
+      // Ha van sorozat hozzárendelve, mentsük el firstCouponAmount-ként
+      // (az első kamat általában nem kerek negyedév)
+      const seriesName = r.securities.replace('Fix Magyar Állampapír ','FixMáP ');
+      const series = data.fixmapSeries.find(s=>s.name===seriesName);
+      if(series && r.faceValue > 0) {
+        // Ellenőrzük hogy ez az első kamat-e (a szokásos negyedéves < lenne)
+        const regularCoupon = r.faceValue * series.couponRate / 100 / 4;
+        if(Math.abs(r.amount - regularCoupon) > 100) {
+          // Nem kerek negyedév → firstCouponAmount
+          series.firstCouponAmount = r.amount;
+          series.firstCouponDate = r.date;
+          series.nextCoupon = r.date; // következő kamat ebből számítódik
+        }
+      }
     }
     else if(r.appType==='deposit') {
       data.cashTx.push({id:uid(), date:r.date, type:'deposit', amount:r.amount, note:'Befizetés (utalás)', mkRef:r.txId});
