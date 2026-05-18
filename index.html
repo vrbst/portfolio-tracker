@@ -4116,7 +4116,8 @@ async function handleImportFiles(files) {
         const fxRate=getFxForBuy(r['Gross Amount'],date);
         const isDuplicate=existingLyRefs.has(ref);
         importParsed.push({rowType:'etf-buy',date,accountId:acc.id,accountName:acc.name,
-          ticker:r.Ticker,shares,priceEur,fee,fxRate,ref,isDuplicate,selected:!isDuplicate});
+          ticker:r.Ticker,shares,priceEur,fee,fxRate,ref,isDuplicate,selected:!isDuplicate,
+          grossEur:Math.abs(parseFloat(r['Gross Amount'])||0)});
       }
       else if(r.Type==='Sell'&&r.Ticker&&r.Quantity) {
         // ETF eladás
@@ -4176,13 +4177,13 @@ async function handleImportFiles(files) {
           amount:Math.abs(grossAmt),currency:'HUF',ref:ref+'-conv-huf',isDuplicate,selected:!isDuplicate});
       }
       else if(r.Type==='Conversion'&&r.CCY==='EUR') {
-        // EUR Conversion = EUR elköltve ETF vételre (pozitív = EUR-t kapott, negatív = EUR-t adott)
+        // EUR Conversion: pozitív = HUF→EUR váltás (EUR érkezett) → transfer_in
         const acc = resolveAcc();
         const grossAmt = parseFloat(r['Gross Amount'])||0;
-        if(grossAmt < 0) { // EUR-t elköltötték (ETF vételre)
+        if(grossAmt > 0.1) {
           const isDuplicate=existingCashRefs.has(ref+'-conv-eur');
           importParsed.push({rowType:'conversion-eur',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
-            amount:Math.abs(grossAmt),currency:'EUR',ref:ref+'-conv-eur',isDuplicate,selected:!isDuplicate});
+            amount:grossAmt,currency:'EUR',ref:ref+'-conv-eur',isDuplicate,selected:!isDuplicate});
         }
       }
       // Withdrawal DT- stb. → skip
@@ -4276,6 +4277,12 @@ function confirmImport() {
       data.lyTx.push({id:uid(),accountId:r.accountId,date:r.date,ticker:r.ticker,
         type:'buy',shares:r.shares,priceEur:r.priceEur,fxRate:r.fxRate,
         fee:r.fee,feeCurrency:'EUR',ref:r.ref});
+      // EUR elköltve a vételre → pénzszámla EUR csökken
+      if(r.grossEur>0) {
+        data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
+          type:'transfer_out',amount:r.grossEur,currency:'EUR',ref:r.ref+'-eur-out',
+          note:r.ticker+' vétel (EUR)'});
+      }
     }
     else if(r.rowType==='etf-sell') {
       data.lyTx.push({id:uid(),accountId:r.accountId,date:r.date,ticker:r.ticker,
@@ -4311,8 +4318,9 @@ function confirmImport() {
         type:'transfer_out',amount:r.amount,currency:'HUF',ref:r.ref,note:'ETF vételre (HUF→EUR váltás)'});
     }
     else if(r.rowType==='conversion-eur') {
+      // HUF→EUR váltás → EUR érkezik a pénzszámlára
       data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'transfer_out',amount:r.amount,currency:'EUR',ref:r.ref,note:'ETF vételre (EUR elköltve)'});
+        type:'transfer_in',amount:r.amount,currency:'EUR',ref:r.ref,note:'HUF→EUR váltás'});
     }
   });
 
