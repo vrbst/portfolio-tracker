@@ -4117,7 +4117,7 @@ async function handleImportFiles(files) {
         const isDuplicate=existingLyRefs.has(ref);
         importParsed.push({rowType:'etf-buy',date,accountId:acc.id,accountName:acc.name,
           ticker:r.Ticker,shares,priceEur,fee,fxRate,ref,isDuplicate,selected:!isDuplicate,
-          grossEur:Math.abs(parseFloat(r['Gross Amount'])||0)});
+          grossEur:Math.abs(parseFloat(r['Gross Amount'])||0),isDuplicate:false,selected:true});
       }
       else if(r.Type==='Sell'&&r.Ticker&&r.Quantity) {
         // ETF eladás
@@ -4172,18 +4172,16 @@ async function handleImportFiles(files) {
         // HUF Conversion = HUF elköltve ETF vételre (negatív összeg a számlán)
         const acc = resolveAcc();
         const grossAmt = parseFloat(r['Gross Amount'])||0; // negatív szám
-        const isDuplicate=existingCashRefs.has(ref+'-conv-huf');
         importParsed.push({rowType:'conversion-huf',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
-          amount:Math.abs(grossAmt),currency:'HUF',ref:ref+'-conv-huf',isDuplicate,selected:!isDuplicate});
+          amount:Math.abs(grossAmt),currency:'HUF',ref:ref+'-conv-huf',isDuplicate:false,selected:true});
       }
       else if(r.Type==='Conversion'&&r.CCY==='EUR') {
         // EUR Conversion: pozitív = HUF→EUR váltás (EUR érkezett) → transfer_in
         const acc = resolveAcc();
         const grossAmt = parseFloat(r['Gross Amount'])||0;
         if(grossAmt > 0.1) {
-          const isDuplicate=existingCashRefs.has(ref+'-conv-eur');
           importParsed.push({rowType:'conversion-eur',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
-            amount:grossAmt,currency:'EUR',ref:ref+'-conv-eur',isDuplicate,selected:!isDuplicate});
+            amount:grossAmt,currency:'EUR',ref:ref+'-conv-eur',isDuplicate:false,selected:true});
         }
       }
       // Withdrawal DT- stb. → skip
@@ -4260,6 +4258,8 @@ function updateImportBtn() {
 
 function confirmImport() {
   const toImport=importParsed.filter(r=>r.selected);
+  console.log('Import types:', toImport.reduce((acc,r)=>{acc[r.rowType]=(acc[r.rowType]||0)+1;return acc;},{}));
+  console.log('EUR lyCashTx entries that will be added:', toImport.filter(r=>r.currency==='EUR'));
   if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
 
   if(!data.lyTx) data.lyTx=[];
