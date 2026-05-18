@@ -1142,10 +1142,12 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce&&liveFx;
 
-  // Összes befektetett tőke = aktív állampapírok + TBSZ befizetések
-  const tbszDeposited = (data.tbszCashTx||[]).filter(t=>t.type==='deposit'&&t.currency==='HUF').reduce((s,t)=>s+t.amount,0);
-  const etfInvested = tbszDeposited > 0
-    ? tbszDeposited  // ha van Lightyear import, a tényleges befizetett összeget használjuk
+  // Összes befektetett tőke = aktív állampapírok + ETF befizetések
+  // Ha van Lightyear pénzszámla import (cashTx-ben lyRef-es deposit), azt használjuk
+  const lyDeposits = data.cashTx.filter(t=>t.type==='deposit'&&t.lyRef).reduce((s,t)=>s+t.amount,0);
+  const lyWithdraws = data.cashTx.filter(t=>t.type==='withdraw'&&t.lyRef).reduce((s,t)=>s+t.amount,0);
+  const etfInvested = lyDeposits > 0
+    ? lyDeposits - lyWithdraws  // tényleges nettó befizetés a Lightyear pénzszámlára
     : data.etfTx.filter(t=>t.type==='buy').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate+(t.feeCurrency==='EUR'?(t.fee||0)*t.fxRate:(t.fee||0)),0)
       -data.etfTx.filter(t=>t.type==='sell').reduce((s,t)=>s+t.shares*t.priceEur*t.fxRate,0);
   const totalInvested=data.fixmap.filter(f=>f.active).reduce((s,f)=>s+(f.buyPrice||0),0)
@@ -3869,7 +3871,6 @@ function handleImportFile(file) {
   if(!file || !file.name.endsWith('.csv')) return toast('Csak CSV fájl támogatott!');
 
   // Próbáljuk kiolvasni a LY azonosítót a fájlnévből
-  // pl. "AccountStatement-LY-8WRK5A8-2026-01-01_..."
   const lyMatch = file.name.match(/LY-([A-Z0-9]+)/);
   const lyId = lyMatch ? 'LY-'+lyMatch[1] : null;
 
@@ -3884,11 +3885,71 @@ function handleImportFile(file) {
     }
   }
 
-  if(!accountId) return toast('Először válassz TBSZ számlát! (vagy add meg a Lightyear azonosítót a számlánál)');
-
   const reader = new FileReader();
-  reader.onload = e => parseLightyearCSV(e.target.result, accountId);
+  reader.onload = e => {
+    // Meghatározzuk a CSV típusát az első néhány sor alapján
+    const text = e.target.result;
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+    const rows = lines.slice(1).map(line => {
+      const vals = [];
+      let cur='', inQ=false;
+      for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
+      vals.push(cur);
+      const obj={};
+      headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim());
+      return obj;
+    });
+
+    // Van-e Buy/Sell? → TBSZ számla
+    const hasBuySell = rows.some(r=>r.Type==='Buy'||r.Type==='Sell');
+    // Csak Deposit/Withdrawal? → pénzszámla
+    const onlyDepWith = !hasBuySell && rows.some(r=>r.Type==='Deposit'||r.Type==='Withdrawal');
+
+    if(onlyDepWith) {
+      // Pénzszámla CSV – accountId nem kell
+      parseLightyearCashCSV(text, lyId);
+    } else {
+      if(!accountId) return toast('Először válassz TBSZ számlát! (vagy add meg a Lightyear azonosítót a számlánál)');
+      parseLightyearCSV(text, accountId);
+    }
+  };
   reader.readAsText(file, 'UTF-8');
+}
+
+function parseLightyearCashCSV(text, lyId) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+  const rows = lines.slice(1).map(line => {
+    const vals=[];let cur='',inQ=false;
+    for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
+    vals.push(cur);
+    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim());
+    return obj;
+  });
+
+  const existingRefs = new Set(data.cashTx.map(t=>t.lyRef).filter(Boolean));
+
+  // Csak a DT- kezdetű Deposit ref-ek valódi külső befizetések
+  // IT- ref-ek = belső átutalás a pénzszámla→TBSZ között (skip)
+  const cashRows = rows.filter(r =>
+    r.Type==='Deposit' && r.CCY==='HUF' && r.Reference.startsWith('DT-')
+  );
+
+  importParsed = cashRows.map(r => {
+    const [datePart] = r.Date.split(' ');
+    const [dd,mm,yyyy] = datePart.split('/');
+    const date = `${yyyy}-${mm}-${dd}`;
+    const amount = Math.abs(parseFloat(r['Gross Amount'])||0);
+    const ref = r.Reference;
+    const isDuplicate = existingRefs.has(ref);
+    return { date, ticker:'HUF', type:'deposit', shares:0, priceEur:0, fee:0, fxRate:1,
+             ref, accountId:null, tbszYear:null, isDuplicate,
+             selected: !isDuplicate, depositAmount: amount, isCashAccount: true };
+  });
+
+  toast('Lightyear pénzszámla CSV – '+importParsed.length+' valódi befizetés találva');
+  renderImportPreview(null);
 }
 
 function parseLightyearCSV(text, accountId) {
@@ -4097,14 +4158,20 @@ function confirmImport() {
         note: r.ticker+' eladás (import) – '+r.shares.toFixed(4)+' db × '+fmtEur(r.priceEur)
       });
     }
-    // HUF Deposit → tbszCashTx (befizetett tőke nyilvántartás)
+    // HUF Deposit → cashTx (pénzszámla) VAGY tbszCashTx (TBSZ)
     if(r.type === 'deposit') {
-      if(!data.tbszCashTx) data.tbszCashTx = [];
-      data.tbszCashTx.push({
-        id: uid(), accountId: r.accountId, date: r.date,
-        type: 'deposit', amount: r.depositAmount||0, currency: 'HUF',
-        note: 'Lightyear befizetés', lyRef: r.ref
-      });
+      if(r.isCashAccount) {
+        // Lightyear pénzszámla deposit → fő cashTx
+        data.cashTx.push({id:uid(), date:r.date, type:'deposit', amount:r.depositAmount||0, note:'Lightyear befizetés', lyRef:r.ref});
+      } else {
+        // TBSZ deposit → tbszCashTx
+        if(!data.tbszCashTx) data.tbszCashTx = [];
+        data.tbszCashTx.push({id:uid(), accountId:r.accountId, date:r.date, type:'deposit', amount:r.depositAmount||0, currency:'HUF', note:'Lightyear befizetés', lyRef:r.ref});
+      }
+    }
+    // Withdrawal → cashTx kivétel
+    if(r.type === 'withdraw' && r.isCashAccount) {
+      data.cashTx.push({id:uid(), date:r.date, type:'withdraw', amount:r.depositAmount||0, note:'Lightyear kifizetés', lyRef:r.ref});
     }
   });
 
