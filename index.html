@@ -3596,16 +3596,31 @@ function parseMkXLSWithSheetJS(buffer) {
           selected: !isDuplicate, label: 'Kamatfizetés',
         });
       }
-      // Külső kifizetés - csak a bankkártyás fizetés valódi pénzkiáramlás
-      else if(type==='Bankkártyás fizetés') {
+      // Külső utalás befizetés → pénzszámla nő
+      else if(type==='Utalás érkeztetés') {
+        mkParsed.push({
+          appType: 'deposit', date, securities: '–',
+          faceValue: 0, amount, txId, isDuplicate,
+          selected: !isDuplicate, label: 'Utalás érkeztetés',
+        });
+      }
+      // Pénzszámla befizetés (eladás bevétele maradt) → pénzszámla nő
+      else if(type==='Pénzszámla befizetés') {
+        mkParsed.push({
+          appType: 'deposit', date, securities: '–',
+          faceValue: 0, amount, txId, isDuplicate,
+          selected: !isDuplicate, label: 'Pénzszámla befizetés',
+        });
+      }
+      // Pénzszámla kifizetés (vételre elköltve) → pénzszámla csökken
+      else if(type==='Pénzszámla kifizetés') {
         mkParsed.push({
           appType: 'withdraw', date, securities: '–',
           faceValue: 0, amount, txId, isDuplicate,
-          selected: !isDuplicate, label: 'Bankkártyás fizetés',
+          selected: !isDuplicate, label: 'Pénzszámla kifizetés',
         });
       }
-      // Utalás érkeztetés/indítás és Pénzszámla be/kifizetés: SKIP
-      // Ezek mind a vétel/eladás belső pénzszámla párjai
+      // Utalás indítás, Bankkártyás fizetés: SKIP – nem érintik a kincstári pénzszámlát
     });
 
     status.style.display = 'none';
@@ -3729,8 +3744,6 @@ function confirmMkImport() {
         data.fixmapSeries.push(series);
       }
       data.fixmap.push({id:uid(), seriesId:series.id, date:r.date, faceValue:r.faceValue, buyPrice:r.amount, active:true, mkRef:r.txId});
-      // Vételár levonása a pénzszámláról
-      data.cashTx.push({id:uid(), date:r.date, type:'buy', amount:r.amount, note:r.seriesName+' vétel', mkRef:r.txId+'-cash'});
     }
     else if(r.appType==='dkj-buy') {
       let series = data.dkjSeries?.find(s=>s.maturity===r.maturity);
@@ -3741,8 +3754,6 @@ function confirmMkImport() {
         data.dkjSeries.push(series);
       }
       data.dkj.push({id:uid(), seriesId:series.id, date:r.date, faceValue:r.faceValue, buyPrice:r.amount, maturity:r.maturity, active:true, mkRef:r.txId});
-      // Vételár levonása a pénzszámláról
-      data.cashTx.push({id:uid(), date:r.date, type:'buy', amount:r.amount, note:'DKJ'+r.maturity+' vétel', mkRef:r.txId+'-cash'});
     }
     else if(r.appType==='fixmap-sell') {
       const series = data.fixmapSeries.find(s=>r.securities.includes(s.name.replace('FixMáP ','')));
@@ -3760,7 +3771,6 @@ function confirmMkImport() {
           item.faceValue -= toSell; toSell=0;
         }
       }
-      data.cashTx.push({id:uid(), date:r.date, type:'sell', amount:r.amount, note:r.securities+' eladás', mkRef:r.txId});
     }
     else if(r.appType==='dkj-sell') {
       const items = data.dkj.filter(d=>d.maturity===r.maturity&&d.active)
@@ -3777,7 +3787,6 @@ function confirmMkImport() {
           item.faceValue -= toSell; toSell=0;
         }
       }
-      data.cashTx.push({id:uid(), date:r.date, type:'sell', amount:r.amount, note:r.securities+' eladás', mkRef:r.txId});
     }
     else if(r.appType==='coupon') {
       // Könyveljük cashTx-be
