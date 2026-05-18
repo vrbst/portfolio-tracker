@@ -4022,8 +4022,9 @@ function parseLightyearCSV(text, accountId) {
   // Extract Buy AND Sell rows
   const txRows = rows.filter(r => (r.Type==='Buy' || r.Type==='Sell') && r.Ticker && r.Quantity);
 
-  // HUF Deposit sorok → tbszCashTx-be (befizetett tőke nyilvántartáshoz)
-  const depositRows = rows.filter(r => r.Type==='Deposit' && r.CCY==='HUF' && r['Gross Amount']);
+  // HUF Deposit sorok → csak a pénzszámla CSV-ből kellenek (ott DT- ref)
+  // A TBSZ CSV Deposit sorai (IT- ref) belső átutalások, nem kell őket importálni
+  const depositRows = rows.filter(r => r.Type==='Deposit' && r.CCY==='HUF' && r['Gross Amount'] && r.Reference.startsWith('DT-'));
 
   // Get existing tx references to detect duplicates
   const existingRefs = new Set(data.etfTx.map(t => t.lyRef).filter(Boolean));
@@ -4158,18 +4159,11 @@ function confirmImport() {
         note: r.ticker+' eladás (import) – '+r.shares.toFixed(4)+' db × '+fmtEur(r.priceEur)
       });
     }
-    // HUF Deposit → cashTx (pénzszámla) VAGY tbszCashTx (TBSZ)
-    if(r.type === 'deposit') {
-      if(r.isCashAccount) {
-        // Lightyear pénzszámla deposit → fő cashTx
-        data.cashTx.push({id:uid(), date:r.date, type:'deposit', amount:r.depositAmount||0, note:'Lightyear befizetés', lyRef:r.ref});
-      } else {
-        // TBSZ deposit → tbszCashTx
-        if(!data.tbszCashTx) data.tbszCashTx = [];
-        data.tbszCashTx.push({id:uid(), accountId:r.accountId, date:r.date, type:'deposit', amount:r.depositAmount||0, currency:'HUF', note:'Lightyear befizetés', lyRef:r.ref});
-      }
+    // HUF Deposit → cashTx (csak pénzszámla CSV-ből, isCashAccount=true)
+    if(r.type === 'deposit' && r.isCashAccount) {
+      data.cashTx.push({id:uid(), date:r.date, type:'deposit', amount:r.depositAmount||0, note:'Lightyear befizetés', lyRef:r.ref});
     }
-    // Withdrawal → cashTx kivétel
+    // Withdrawal → cashTx (csak pénzszámla CSV-ből)
     if(r.type === 'withdraw' && r.isCashAccount) {
       data.cashTx.push({id:uid(), date:r.date, type:'withdraw', amount:r.depositAmount||0, note:'Lightyear kifizetés', lyRef:r.ref});
     }
