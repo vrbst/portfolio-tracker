@@ -123,6 +123,9 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .b-transfer-in{background:rgba(0,200,100,.15);color:var(--green)}
 .b-transfer-out{background:var(--red-dim);color:var(--red)}
 
+/* Custom tooltip - HTML-es, színes */
+.custom-tooltip{position:fixed;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text);pointer-events:none;z-index:9999;white-space:nowrap;line-height:2;box-shadow:0 4px 20px rgba(0,0,0,.4);min-width:200px}
+
 /* FORM */
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
 .modal-backdrop.open{display:flex}
@@ -982,6 +985,34 @@ async function saveData(){
 }
 
 function logout(){localStorage.removeItem('gh_token');location.reload();}
+
+// Custom tooltip - data-ttid alapú (elkerüli a HTML attribútum quote problémát)
+(function(){
+  const tip = document.createElement('div');
+  tip.className = 'custom-tooltip';
+  tip.style.display = 'none';
+  document.body.appendChild(tip);
+
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-ttid]');
+    if(!el || !el.dataset.ttid) return;
+    const html = window._tooltips && window._tooltips[el.dataset.ttid];
+    if(!html) return;
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+  });
+  document.addEventListener('mousemove', e => {
+    if(tip.style.display === 'none') return;
+    const x = e.clientX + 14;
+    const y = e.clientY + 14;
+    tip.style.left = (x + tip.offsetWidth > window.innerWidth ? x - tip.offsetWidth - 20 : x) + 'px';
+    tip.style.top = (y + tip.offsetHeight > window.innerHeight ? y - tip.offsetHeight - 20 : y) + 'px';
+  });
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest('[data-ttid]');
+    if(el) tip.style.display = 'none';
+  });
+})();
 
 function showApp(){
   document.getElementById('setup-screen').style.display='none';
@@ -1935,6 +1966,14 @@ function renderLyCash(accountId) {
   `;
 }
 
+// Tooltip ID registry - globális
+window._tooltips = {};
+function makeTooltipId(content) {
+  const id = 'tt_' + Math.random().toString(36).slice(2);
+  window._tooltips[id] = content;
+  return id;
+}
+
 function renderLyInstrumentList(accountId) {
   const el = document.getElementById('ly-inst-'+accountId);
   if(!el) return;
@@ -1957,6 +1996,26 @@ function renderLyInstrumentList(accountId) {
     const plCol=pl>=0?'var(--green)':'var(--red)';
     const pctCol=(ins.pct||0)>=0?'var(--green)':'var(--red)';
     const av=ins.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit';
+    const basis=lyAccountCostBasis(accountId,ins.ticker);
+    const totCostEur=basis.reduce((s,b)=>s+b.shares*b.priceEur,0);
+    const avgFx=totCostEur>0?ins.cost/totCostEur:fx;
+    const avgPriceEur=ins.shares>0?totCostEur/ins.shares:0;
+    const ttHtml = ins.lp && ins.cost>0 ? (()=>{
+      const plHuf=ins.val-ins.cost;
+      const plHufPct=plHuf/ins.cost*100;
+      const priceReturnHuf=ins.shares*(ins.lp-avgPriceEur)*fx;
+      const priceReturnPct=(ins.lp-avgPriceEur)/avgPriceEur*100;
+      const fxEffect=ins.shares*avgPriceEur*(fx-avgFx);
+      const fxEffectPct=(fx-avgFx)/avgFx*100;
+      const c=v=>`color:${v>=0?'#4ade80':'#f87171'}`;
+      const s=v=>(v>=0?'+':'')+v.toFixed(2);
+      const sft=v=>(v>=0?'+':'')+Math.round(v/1000)+'e Ft';
+      return `<div style="color:var(--text3);font-size:10px;margin-bottom:2px;border-bottom:1px solid var(--border);padding-bottom:4px">P&L elemzés</div>`
+        +`<div>Teljes hozam: <span style="color:${c(plHuf)};font-weight:600">${s(plHuf/1000)}e Ft</span> <span style="color:${c(plHufPct)}">(${s(plHufPct)}%)</span></div>`
+        +`<div>Árfolyam: <span style="color:${c(priceReturnHuf)}">${s(priceReturnHuf/1000)}e Ft</span> <span style="color:${c(priceReturnPct)}">(${s(priceReturnPct)}%)</span></div>`
+        +`<div>Devizahatás: <span style="color:${c(fxEffect)}">${s(fxEffect/1000)}e Ft</span> <span style="color:${c(fxEffectPct)}">(${s(fxEffectPct)}%)</span></div>`;
+    })() : '';
+    const ttId = ttHtml ? makeTooltipId(ttHtml) : '';
     return `<tr onclick="selectLyInstrument('${accountId}','${ins.ticker}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <td style="padding:14px 16px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px">
@@ -1967,7 +2026,7 @@ function renderLyInstrumentList(accountId) {
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.shares.toFixed(4)} db</td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${fmtM(ins.cost)}</td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.val>0?fmtM(ins.val):'–'}</td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol}">${ins.cost>0?(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span>':'–'}</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol};cursor:help" data-ttid="${ttId}">${ins.cost>0?(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span>':'–'}</td>
       <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.lp?fmtEur(ins.lp):'–'}${ins.pct!==null?'<br><span style="font-size:10px;color:'+pctCol+'">'+(ins.pct>=0?'+':'')+ins.pct.toFixed(2)+'%</span>':''}</td>
       <td style="padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text3);font-size:16px">›</td>
     </tr>`;
@@ -2005,49 +2064,76 @@ function renderLyDetailTable(accountId, ticker) {
   const basis=lyAccountCostBasis(accountId,ticker);
   if(!basis.length){emptyEl.style.display='block';bodyEl.innerHTML='';return;}
   emptyEl.style.display='none';
+
+  // Tooltip generáló: teljes hozam, árfolyam hozam HUF-ban, devizahatás
+  const makeTooltip = (shares, priceEur, fxRate, lp, fx) => {
+    if(!lp) return '';
+    const plHuf = shares * lp * fx - shares * priceEur * fxRate;
+    const plHufPct = plHuf / (shares * priceEur * fxRate) * 100;
+    const priceReturnHuf = shares * (lp - priceEur) * fx;
+    const priceReturnPct = (lp - priceEur) / priceEur * 100;
+    const fxEffect = shares * priceEur * (fx - fxRate);
+    const fxEffectPct = (fx - fxRate) / fxRate * 100;
+    const c = v => `color:${v >= 0 ? '#4ade80' : '#f87171'}`;
+    const s = v => (v >= 0 ? '+' : '') + v.toFixed(2);
+    const sft = v => (v >= 0 ? '+' : '') + Math.round(v/1000) + 'e Ft';
+    return [
+      `<div style="color:var(--text3);font-size:10px;padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid var(--border)">P&L elemzés</div>`,
+      `<div>Teljes hozam: <span style="${c(plHuf)}">${sft(plHuf)}</span> <span style="${c(plHufPct)}">(${s(plHufPct)}%)</span></div>`,
+      `<div>Árfolyam: <span style="${c(priceReturnHuf)}">${sft(priceReturnHuf)}</span> <span style="${c(priceReturnPct)}">(${s(priceReturnPct)}%)</span></div>`,
+      `<div>Devizahatás: <span style="${c(fxEffect)}">${sft(fxEffect)}</span> <span style="${c(fxEffectPct)}">(${s(fxEffectPct)}%)</span></div>`,
+    ].join('');
+  };
+
+  const acc=getLyAccount(accountId);
+  const isTbsz=acc&&acc.type==='tbsz';
+
   if(theadEl) theadEl.innerHTML=`
     <th style="background:var(--bg2)">dátum</th>
     <th class="r" style="background:var(--bg2)">db (maradék)</th>
     <th class="r" style="background:var(--bg2)">vételi ár (EUR)</th>
     <th class="r" style="background:var(--bg2)">HUF/EUR</th>
-    <th class="r" style="background:var(--bg2)">befekt. Ft</th>
-    <th class="r" style="background:var(--bg2)">akt. Ft</th>
+    <th class="r" style="background:var(--bg2)">befektetett</th>
+    <th class="r" style="background:var(--bg2)">aktuális</th>
     <th class="r" style="background:var(--bg2)">P&L Ft</th>
-    <th class="r" style="background:var(--bg2)">P&L %</th>
-    <th style="background:var(--bg2)"></th>`;
+    <th class="r" style="background:var(--bg2)">P&L %</th>`;
+
   const totShares=basis.reduce((s,b)=>s+b.shares,0);
   const totCost=basis.reduce((s,b)=>s+b.costHuf,0);
+  const totCostEur=basis.reduce((s,b)=>s+b.shares*b.priceEur,0);
   const totVal=lp?totShares*lp*fx:null;
+  const totValEur=lp?totShares*lp:null;
   const totPl=totVal!==null?totVal-totCost:null;
   const totPlPct=totPl!==null&&totCost>0?totPl/totCost*100:null;
   const plCol=totPl!==null?(totPl>=0?'var(--green)':'var(--red)'):'';
-  const acc=getLyAccount(accountId);
-  const isTbsz=acc&&acc.type==='tbsz';
+  const avgFx = totCostEur>0 ? totCost/totCostEur : fx;
+    const totTtId = lp ? makeTooltipId(makeTooltip(totShares, totCostEur/totShares, avgFx, lp, fx)) : '';
   bodyEl.innerHTML=`
     <tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--green);font-weight:500;background:var(--bg3)">
       <td style="font-size:10px;color:var(--text2);white-space:nowrap">összesítés</td>
       <td class="r blurable">${totShares.toFixed(4)}</td>
-      <td class="r" colspan="2" style="color:var(--text3);font-size:11px">∅ ${fmtEur(basis.reduce((s,b)=>s+b.priceEur*b.shares,0)/totShares)}</td>
-      <td class="r blurable">${fmtM(totCost)}</td>
-      <td class="r blurable">${totVal!==null?fmtM(totVal):'–'}</td>
-      <td class="r blurable" style="color:${plCol}">${totPl!==null?(totPl>=0?'+':'')+fmtM(totPl):'–'}</td>
+      <td class="r" colspan="2" style="color:var(--text3);font-size:10px">∅ ${fmtEur(totCostEur/totShares)}</td>
+      <td class="r blurable"><div>${fmtM(totCost)}</div><div style="font-size:10px;color:var(--text3)">${fmtEur(totCostEur)}</div></td>
+      <td class="r blurable"><div>${totVal!==null?fmtM(totVal):'–'}</div><div style="font-size:10px;color:var(--text3)">${totValEur!==null?fmtEur(totValEur):'–'}</div></td>
+      <td class="r blurable" style="color:${plCol};cursor:help" data-ttid="${totTtId}">${totPl!==null?(totPl>=0?'+':'')+fmtM(totPl):'–'}</td>
       <td class="r" style="color:${plCol}">${totPlPct!==null?(totPlPct>=0?'+':'')+totPlPct.toFixed(2)+'%':'–'}</td>
-      <td></td>
     </tr>`+basis.map(b=>{
     const valFt=lp?b.shares*lp*fx:null;
+    const costEur=b.shares*b.priceEur;
+    const valEur=lp?b.shares*lp:null;
     const plFt=valFt!==null?valFt-b.costHuf:null;
     const plPct=plFt!==null&&b.costHuf>0?plFt/b.costHuf*100:null;
     const col=plFt!==null?(plFt>=0?'var(--green)':'var(--red)'):'';
+    const ttId = lp ? makeTooltipId(makeTooltip(b.shares, b.priceEur, b.fxRate, lp, fx)) : '';
     return `<tr>
       <td style="white-space:nowrap;font-size:10px">${b.date}</td>
       <td class="r blurable">${b.shares.toFixed(4)}</td>
       <td class="r blurable">${fmtEur(b.priceEur)}</td>
       <td class="r">${b.fxRate.toFixed(1)}</td>
-      <td class="r blurable">${fmtM(b.costHuf)}</td>
-      <td class="r blurable">${valFt!==null?fmtM(valFt):'–'}</td>
-      <td class="r blurable" style="color:${col}">${plFt!==null?(plFt>=0?'+':'')+fmtM(plFt):'–'}</td>
+      <td class="r blurable"><div>${fmtM(b.costHuf)}</div><div style="font-size:10px;color:var(--text3)">${fmtEur(costEur)}</div></td>
+      <td class="r blurable"><div>${valFt!==null?fmtM(valFt):'–'}</div><div style="font-size:10px;color:var(--text3)">${valEur!==null?fmtEur(valEur):'–'}</div></td>
+      <td class="r blurable" style="color:${col};cursor:help" data-ttid="${ttId}">${plFt!==null?(plFt>=0?'+':'')+fmtM(plFt):'–'}</td>
       <td class="r" style="color:${col}">${plPct!==null?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteLyTx('${b.id}')">×</button></td>
     </tr>`;
   }).join('');
   if(realizedEl){
