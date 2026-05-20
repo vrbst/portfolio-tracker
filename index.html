@@ -4873,23 +4873,77 @@ function aiChat() {
   callAI(msg);
 }
 
-const aiQuickPrompts = {
-  portfolio: 'Ertekeld roviden a portfoliomat! Mik az erossegek es gyengesegek?',
-  diversification: 'Elemezd a portfolio diverzifikaciojat! Mennyire vagyok kiteve kulonbozo kockaza toknak?',
-  fixmap_vs_etf: 'Hogyan latod a FixMAP vs ETF aranyomat? Erdemes-e valtoztatni?',
-  cashflow: 'Elemezd a varhato cashflow-mat a kovetkezo 1-2 evben!',
-  fixmap_2031: 'A FixMAP 2031 januarban jar le, 40M Ft nominalerteken. Mi legyen ezzel az osszeggel lejaratkor? Vedd figyelembe az EUR/HUF arfolyamot, az esetleges ERM-II csatlakozast, es a rendelkezesre allo befektetesi lehetosegeket. Konkret javaslatot kerek!',
-  fi_timeline: 'Mikor erhetek el penzugyi fuggetlenseget a jelenlegi portfolio es megtakaritasi utem mellett? Szamold ki konkret evszamot, es azt is, hogy mi valtozna ha 200 000 Ft-ot vagy 300 000 Ft-ot takaritanek meg havonta. Hatarozd meg mi lenne a szukseges FI-toke (pl. 4%-os kiveteli rata alapjan)!',
-  risk: 'Vegezz kockazatelemzest! Mi tortenne a portfoliommal ha: 1) a VWCE 30%-ot esne, 2) az EUR/HUF 450 fole menne, 3) mindketto egyidejuleg bekvetkezne? Szamszeru hatas, es mit tehetek ellene?',
-  tax: 'Elemezd az adooptimalizalasi lehetosegeimet! TBSZ szamlak lejáratai, mikor erdemes eladni, mennyit sporolhatok adoban, van-e jobb struktura?',
-  savings_impact: 'Mutasd meg konkret szamokkal, hogy mi valtozna a portfolio 5 es 10 eves tavlatan ha havi 150 000, 200 000 vagy 300 000 Ft-ot takaritanek meg! Tablazatos formaban is mutasd meg a kulonbseget.',
-  dkj_october: 'A DKJ szamlam oktoberre lejár kb. 2.21M Ft ertekben. Mire ajanlod fordítani ezt az osszeget? Vedd figyelembe a jelenlegi allampapir kamatokat, a VWCE arfolyamot, es az aktualis penzszamla egyenlegemet!'
-};
+function getAiQuickPrompt(type) {
+  // Dinamikus portfólió adatok
+  const fx = liveFx||395;
+  const vwceShares = etfShares('VWCE');
+  const wbitShares = etfShares('WBIT');
+  const vwceVal = (liveVwce||0)*vwceShares*fx;
+  const wbitVal = (liveWbit||0)*wbitShares*fx;
+  const etfTotal = vwceVal+wbitVal;
+
+  const apValue = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
+    + data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  const fixmapValue = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+  const dkjValue = data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  const total = apValue + etfTotal;
+
+  const apInvested = data.cashTx.filter(t=>t.type==='transfer_in').reduce((s,t)=>s+t.amount,0)
+    - data.cashTx.filter(t=>t.type==='transfer_out').reduce((s,t)=>s+t.amount,0);
+  const totalInvested = apInvested + lyTotalInvested();
+  const pl = total - totalInvested;
+  const plPct = totalInvested>0 ? pl/totalInvested*100 : 0;
+
+  const annualCoupon = data.fixmap.filter(f=>f.active).reduce((s,f)=>{
+    const sr=data.fixmapSeries.find(x=>x.id===f.seriesId);
+    return s+f.faceValue*(sr?sr.couponRate:7)/100;
+  },0);
+
+  // FixMáP sorozatok összefoglalója
+  const fixmapSeries = data.fixmapSeries.map(sr=>{
+    const face=data.fixmap.filter(f=>f.active&&f.seriesId===sr.id).reduce((s,f)=>s+f.faceValue,0);
+    if(!face) return null;
+    return `${sr.name}: ${(face/1e6).toFixed(1)}M Ft névérték, ${sr.couponRate}%, lejárat: ${sr.maturity}`;
+  }).filter(Boolean).join('; ');
+
+  // DKJ összefoglalója
+  const dkjSeries = [...new Set(data.dkj.filter(d=>d.active).map(d=>d.maturity))].map(mat=>{
+    const face=data.dkj.filter(d=>d.active&&d.maturity===mat).reduce((s,d)=>s+d.faceValue,0);
+    return `D${mat.replace(/-/g,'').slice(2)}: ${(face/1e6).toFixed(2)}M Ft, lejárat: ${mat}`;
+  }).join('; ');
+
+  const M = v => (v/1e6).toFixed(2)+'M Ft';
+  const scenSavings = parseInt(document.getElementById('scenSavings')?.value)||150000;
+
+  const prompts = {
+    portfolio: `Ertekeld roviden a portfoliomat! Mik az erossegek es gyengesegek?\n\nPortfolio: ${M(total)}, befektetett: ${M(totalInvested)}, P&L: ${pl>=0?'+':''}${M(pl)} (${plPct.toFixed(1)}%)\nFixMAP: ${M(fixmapValue)} (${fixmapSeries})\nDKJ: ${M(dkjValue)} (${dkjSeries})\nVWCE: ${vwceShares.toFixed(2)} db, ${M(vwceVal)}\nWBIT: ${wbitShares.toFixed(4)} db, ${M(wbitVal)}\nEves kamatbevetel: ${M(annualCoupon)}`,
+
+    diversification: `Elemezd a portfolio diverzifikaciojat! Mennyire vagyok kiteve kulonbozo kockaza toknak?\n\nAllampapir: ${M(apValue)} (${(apValue/total*100).toFixed(1)}%)\nETF (VWCE+WBIT): ${M(etfTotal)} (${(etfTotal/total*100).toFixed(1)}%)\nEUR/HUF: ${fx.toFixed(2)}`,
+
+    fixmap_vs_etf: `Hogyan latod a FixMAP vs ETF aranyomat? Erdemes-e valtoztatni?\n\nFixMAP: ${M(fixmapValue)} (${(fixmapValue/total*100).toFixed(1)}%), ${fixmapSeries}\nETF: ${M(etfTotal)} (${(etfTotal/total*100).toFixed(1)}%), VWCE ${vwceShares.toFixed(2)} db, WBIT ${wbitShares.toFixed(4)} db\nEves kamat: ${M(annualCoupon)}`,
+
+    cashflow: `Elemezd a varhato cashflow-mat a kovetkezo 1-2 evben!\n\nFixMAP eves kamat: ${M(annualCoupon)} (${M(annualCoupon/4)}/kvartal)\nDKJ lejarat: ${dkjSeries}\nFixMAP sorozatok: ${fixmapSeries}`,
+
+    fixmap_2031: `A FixMAP 2031-ben jar le. Mi legyen ezzel az osszeg gel lejaratkor? Vedd figyelembe az EUR/HUF arfolyamot, az esetleges ERM-II csatlakozast, es a rendelkezesre allo befektetesi lehetosegeket. Konkret javaslatot kerek!\n\nFixMAP reszletek: ${fixmapSeries}\nJelenlegi EUR/HUF: ${fx.toFixed(2)}\nJelenlegi VWCE arfolyam: EUR ${(liveVwce||0).toFixed(2)}`,
+
+    fi_timeline: `Mikor erhetek el penzugyi fuggetlenseget a jelenlegi portfolio es megtakaritasi utem mellett? Szamold ki konkret evszamot, es azt is, hogy mi valtozna ha ${Math.round(scenSavings*1.33/1000)*1000} Ft-ot vagy ${Math.round(scenSavings*2/1000)*1000} Ft-ot takaritanek meg havonta. Hatarozd meg mi lenne a szukseges FI-toke (pl. 4%-os kiveteli rata alapjan)!\n\nJelenlegi portfolio: ${M(total)}\nHavi megtakaritas: ${(scenSavings/1000).toFixed(0)}e Ft\nEves passziv bevetel (kamat): ${M(annualCoupon)}`,
+
+    risk: `Vegezz kockazatelemzest! Mi tortenne a portfoliommal ha: 1) a VWCE 30%-ot esne, 2) az EUR/HUF 450 fole menne, 3) mindketto egyidejuleg bekvetkezne? Szamszeru hatas, es mit tehetek ellene?\n\nJelenlegi portfolio: ${M(total)}\nVWCE: ${vwceShares.toFixed(2)} db x EUR ${(liveVwce||0).toFixed(2)} = ${M(vwceVal)}\nWBIT: ${wbitShares.toFixed(4)} db x EUR ${(liveWbit||0).toFixed(2)} = ${M(wbitVal)}\nAllampapir: ${M(apValue)} (arfolyamkockazat mentes)\nEUR/HUF: ${fx.toFixed(2)}`,
+
+    tax: `Elemezd az adooptimalizalasi lehetosegeimet! TBSZ szamlak lejáratai, mikor erdemes eladni, mennyit sporolhatok adoban, van-e jobb struktura?\n\nTBSZ szamlak: ${getLyAccounts().filter(a=>a.type==='tbsz').map(a=>`${a.name} (nyitva: ${a.tbszYear}, adómentes: ${a.tbszYear+3} utan, optimalis: ${a.tbszYear+5} utan)`).join('; ')}\nVWCE: ${M(vwceVal)}, WBIT: ${M(wbitVal)}`,
+
+    savings_impact: `Mutasd meg konkret szamokkal, hogy mi valtozna a portfolio 5 es 10 eves tavlatan ha havi ${(scenSavings/1000).toFixed(0)}e, ${Math.round(scenSavings*1.33/1000)*1000/1000}e vagy ${Math.round(scenSavings*2/1000)*1000/1000}e Ft-ot takaritanek meg! Tablazatos formaban is mutasd meg a kulonbseget.\n\nJelenlegi portfolio: ${M(total)}\nJelenlegi havi megtakaritas: ${(scenSavings/1000).toFixed(0)}e Ft\nEves kamatbevetel: ${M(annualCoupon)}`,
+
+    dkj_october: `A DKJ poziciom lejar. Mire ajanlod forditani ezt az osszeget? Vedd figyelembe a jelenlegi allampapir kamatokat, a VWCE arfolyamot, es az aktualis helyzetet!\n\nDKJ reszletek: ${dkjSeries}\nJelenlegi VWCE ar: EUR ${(liveVwce||0).toFixed(2)} (${M(vwceVal)} osszes)\nFixMAP kamatlab: 7%\nEUR/HUF: ${fx.toFixed(2)}`,
+  };
+
+  return prompts[type] || type;
+}
 
 function aiQuickAnalysis(type) {
   const navItem = document.querySelector('button.nav-item[onclick*="ai"]');
   showTab('ai', navItem);
-  callAI(aiQuickPrompts[type]);
+  callAI(getAiQuickPrompt(type));
 }
 
 async function aiScenario() {
