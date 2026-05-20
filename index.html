@@ -19,8 +19,8 @@
   --font-head:'Syne',sans-serif;--font-mono:'DM Mono',monospace;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:100vh;font-size:13px;line-height:1.6;padding:8px}
-#app{display:none;min-height:calc(100vh - 16px);border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+body{font-family:var(--font-mono);background:#000;color:var(--text);height:100vh;overflow:hidden;font-size:13px;line-height:1.6;padding:8px}
+#app{display:none;height:calc(100vh - 16px);border-radius:12px;overflow:hidden;border:1px solid var(--border)}
 
 /* SETUP */
 #setup-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -61,7 +61,7 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:1
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* SIDEBAR */
-.sidebar{width:220px;flex-shrink:0;background:#0c0c0c;border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:100%;overflow-y:auto;position:sticky;top:52px;align-self:flex-start;height:calc(100vh - 52px)}
+.sidebar{width:220px;flex-shrink:0;background:#0c0c0c;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;height:100%}
 .sidebar-nav{flex:1;padding:12px 8px}
 .nav-section{padding:10px 12px 4px;font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;border-radius:8px;background:none;border:none;width:100%;text-align:left;font-family:var(--font-mono);letter-spacing:.02em;margin-bottom:2px}
@@ -70,7 +70,7 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:1
 .nav-item .ni{font-size:13px;width:16px;text-align:center;opacity:.7}
 
 /* CONTENT */
-.content{padding:24px 28px;flex:1;min-width:0;background:var(--bg)}
+.content{padding:12px 16px;flex:1;min-width:0;background:var(--bg);overflow-y:auto;height:calc(100vh - 52px - 16px)}
 .page{display:none}
 .page.active{display:block}
 
@@ -89,7 +89,7 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);min-height:1
 .pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--text2)}
 
 /* PANEL */
-.panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
 .panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .panel-title{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
 .panel-actions{display:flex;gap:6px}
@@ -277,13 +277,13 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ai-scenario{width:320px;flex-shrink:0}
 
 /* DASHBOARD LAYOUT */
-.dash-layout{display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto auto;gap:12px}
-.dash-main{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:12px}
-.dash-side{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:12px}
+.dash-layout{display:grid;grid-template-columns:1fr 340px;grid-template-rows:1fr auto;gap:10px}
+.dash-main{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:10px;align-self:stretch}
+.dash-side{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:10px}
 .dash-upcoming{grid-column:1;grid-row:2}
-.dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+.dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
 .range-btns{display:flex;gap:3px;align-self:flex-start;margin-top:4px;flex-wrap:nowrap;flex-shrink:0}
-.pie-wrap{position:relative;width:260px;height:260px}
+.pie-wrap{position:relative;width:160px;height:160px}
 
 .db-switch-btn{padding:4px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .15s}
 .db-switch-btn:hover{border-color:var(--amber);color:var(--amber)}
@@ -422,7 +422,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
 
   <!-- SIDEBAR + MAIN WRAPPER -->
-  <div style="display:flex;min-height:calc(100vh - 52px)">
+  <div style="display:flex;height:calc(100vh - 52px - 16px);overflow:hidden">
 
   <!-- SIDEBAR -->
   <div class="sidebar">
@@ -452,12 +452,12 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         <div class="dash-main">
 
           <!-- Nagy érték + mini chart -->
-          <div class="panel">
+          <div class="panel" style="margin-bottom:0;flex:1;display:flex;flex-direction:column">
             <div class="dash-header-row">
               <div>
                 <div style="font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">portfóliók</div>
-                <div id="dashTotalBig" style="font-family:var(--font-head);font-size:52px;font-weight:700;letter-spacing:-2px;line-height:1">–</div>
-                <div class="blurable" id="dashTotalSub" style="font-size:13px;color:var(--text2);margin-top:8px">–</div>
+                <div id="dashTotalBig" style="font-family:var(--font-head);font-size:42px;font-weight:700;letter-spacing:-2px;line-height:1">–</div>
+                <div class="blurable" id="dashTotalSub" style="font-size:12px;color:var(--text2);margin-top:4px">–</div>
               </div>
               <!-- Időszak szűrő -->
               <div class="range-btns">
@@ -470,7 +470,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
                 <button class="range-btn" onclick="setDashRange('all',this)">Max</button>
               </div>
             </div>
-            <div class="chart-wrap" style="height:200px">
+            <div class="chart-wrap" style="flex:1;min-height:100px;max-height:180px">
               <canvas id="dashMiniChart" class="blurable" role="img" aria-label="Portfólió chart"></canvas>
             </div>
           </div>
@@ -481,19 +481,33 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         <!-- Jobb oszlop: kártyák + donut -->
         <div class="dash-side">
 
-          <!-- Befektetett tőke kártya -->
+          <!-- Befektetett tőke kártyák -->
           <div id="dashCards" style="display:flex;flex-direction:column;gap:8px"></div>
 
+          <!-- Napi piaci kommentár – donut FÖLÖTT -->
+          <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0">
+            <div class="panel-header" style="margin-bottom:6px">
+              <div class="panel-title">✦ napi piaci kommentár</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span id="marketCommentaryDate" style="font-size:10px;color:var(--text3)"></span>
+                <button class="btn btn-ghost btn-sm" onclick="fetchMarketCommentary(true)" id="marketRefreshBtn" style="padding:2px 6px">↻</button>
+              </div>
+            </div>
+            <div id="marketCommentary" style="font-size:11px;color:var(--text2);line-height:1.65;max-height:175px;overflow-y:auto">
+              <span style="color:var(--text3)">Betöltés...</span>
+            </div>
+          </div>
+
           <!-- Donut -->
-          <div class="panel" style="flex:1;display:flex;flex-direction:column">
+          <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0">
             <div class="panel-header"><div class="panel-title">megoszlás</div></div>
-            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:4px">
-              <div class="pie-wrap">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:4px">
+              <div class="pie-wrap" style="width:160px;height:160px">
                 <canvas id="pieChart" class="blurable" role="img" aria-label="Megoszlás"></canvas>
                 <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
-                  <div style="font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">összesen</div>
-                  <div class="blurable" id="pieTotalLabel" style="font-family:var(--font-head);font-size:17px;font-weight:700;letter-spacing:-.5px;white-space:nowrap">–</div>
-                  <div style="font-size:10px;color:var(--text2)">HUF</div>
+                  <div style="font-size:9px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px">összesen</div>
+                  <div class="blurable" id="pieTotalLabel" style="font-family:var(--font-head);font-size:13px;font-weight:700;letter-spacing:-.5px;white-space:nowrap">–</div>
+                  <div style="font-size:9px;color:var(--text2)">HUF</div>
                 </div>
               </div>
               <div id="pieLegend" style="width:100%"></div>
@@ -503,23 +517,9 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
 
         <!-- Közelgő események: dash-layout közvetlen gyereke → order működik mobilon -->
-        <div class="panel dash-upcoming">
+        <div class="panel dash-upcoming" style="margin-bottom:0">
           <div class="panel-header"><div class="panel-title">közelgő események</div></div>
-          <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
-        </div>
-
-        <!-- Piaci kommentár -->
-        <div class="panel" style="grid-column:1/-1">
-          <div class="panel-header">
-            <div class="panel-title">✦ napi piaci kommentár</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span id="marketCommentaryDate" style="font-size:10px;color:var(--text3)"></span>
-              <button class="btn btn-ghost btn-sm" onclick="fetchMarketCommentary(true)" id="marketRefreshBtn">↻ frissít</button>
-            </div>
-          </div>
-          <div id="marketCommentary" style="font-size:12px;color:var(--text2);line-height:1.8;min-height:36px">
-            <span style="color:var(--text3)">Betöltés...</span>
-          </div>
+          <div id="upcomingEvents" style="max-height:280px;overflow-y:auto"></div>
         </div>
 
       </div><!-- /.dash-layout -->
