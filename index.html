@@ -102,6 +102,7 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);height:100vh
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tbl-wrap table{min-width:480px}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:500px}
+.bond-table{table-layout:fixed}
 th{text-align:left;padding:6px 10px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:10px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
 th.r{text-align:right}
 td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -564,7 +565,19 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
       </div>
       <div class="panel" style="margin-top:0">
-        <div class="tbl-wrap"><table>
+        <div class="tbl-wrap"><table class="bond-table">
+          <colgroup>
+            <col style="width:22%">
+            <col style="width:10%">
+            <col style="width:10%">
+            <col style="width:6%">
+            <col style="width:11%">
+            <col style="width:8%">
+            <col style="width:6%">
+            <col style="width:9%">
+            <col style="width:6%">
+            <col style="width:12%">
+          </colgroup>
           <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">köv. kamat</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r">várható kamat</th><th>státusz</th><th></th></tr></thead>
           <tbody id="fixmapBody"></tbody>
         </table></div>
@@ -580,8 +593,20 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         </div>
       </div>
       <div class="panel" style="margin-top:0">
-        <div class="tbl-wrap"><table>
-          <thead><tr><th>sorozat</th><th class="r">névérték összesen</th><th class="r">átl. vétel ár</th><th class="r">várható hozam</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r">státusz</th><th></th></tr></thead>
+        <div class="tbl-wrap"><table class="bond-table">
+          <colgroup>
+            <col style="width:22%">
+            <col style="width:10%">
+            <col style="width:10%">
+            <col style="width:6%">
+            <col style="width:11%">
+            <col style="width:8%">
+            <col style="width:6%">
+            <col style="width:9%">
+            <col style="width:6%">
+            <col style="width:12%">
+          </colgroup>
+          <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">várható hozam</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r"></th><th>státusz</th><th></th></tr></thead>
           <tbody id="dkjBody"></tbody>
         </table></div>
         <div class="empty" id="dkjEmpty" style="display:none">Még nincs DKJ pozíció.</div>
@@ -596,7 +621,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         <div class="chart-wrap"><canvas id="cashflowChart" class="blurable" role="img" aria-label="Cashflow"></canvas></div>
       </div>
 
-      <div class="panel">
+      <div class="panel" style="display:none">
         <div class="panel-header"><div class="panel-title">pénzszámla mozgások</div></div>
         <div class="tbl-wrap" style="max-height:196px;overflow-y:auto"><table>
           <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>megjegyzés</th><th class="r">összeg</th><th class="r">egyenleg</th><th></th></tr></thead>
@@ -1722,9 +1747,11 @@ function renderAllampapir(){
       <td class="r" style="color:var(--text2);font-size:11px">${monthsLeft}</td>
       <td class="r pos blurable" style="font-size:11px">${futureInterest}</td>
       <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
-      <td style="white-space:nowrap" onclick="event.stopPropagation()">
-        ${sr?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-fixmap-series','${s.seriesId}')" style="margin-right:4px">✎</button>`:''}
-        ${s.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap-series','${s.seriesId}')" style="margin-right:4px">eladás</button>`:''}
+      <td style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
+        <div style="display:inline-flex;gap:4px;justify-content:flex-end">
+          ${sr?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-fixmap-series','${s.seriesId}')">✎</button>`:''}
+          ${s.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap-series','${s.seriesId}')">eladás</button>`:''}
+        </div>
       </td>
     </tr>${detailRows}`;
   }).join('');
@@ -1753,21 +1780,25 @@ function renderAllampapir(){
       <td colspan="2" style="color:var(--text3)">${d.date}</td>
       <td class="r blurable" style="color:var(--text)">${fmt(d.faceValue)}</td>
       <td class="r blurable" style="color:var(--text)">${fmt(d.buyPrice)}</td>
-      <td colspan="3" style="color:var(--green)">+${fmt(Math.round(d.faceValue-d.buyPrice))}</td>
+      <td colspan="6" style="color:var(--green)">+${fmt(Math.round(d.faceValue-d.buyPrice))}</td>
     </tr>`).join('');
     const daysLeft=Math.max(0,Math.round((new Date(s.maturity)-new Date())/(1000*60*60*24)));
     return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
       <td><div style="display:flex;align-items:center;gap:10px"><div class="ins-avatar ins-avatar-dkj">DK</div><div><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${s.name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.filter(d=>d.active).length} tétel</span></div></div></td>
       <td class="r blurable">${fmt(s.totalFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
+      <td class="r" style="color:var(--text3)">–</td>
       <td class="r pos blurable">+${fmt(Math.round(expectedReturn))}</td>
       <td class="r">${s.maturity}</td>
       <td class="r" style="font-size:11px;color:${daysLeft<=30?'var(--amber)':'var(--text2)'}">${daysLeft} nap</td>
+      <td class="r" style="color:var(--text3)">–</td>
       <td><span class="badge b-etf">aktív</span></td>
-      <td style="white-space:nowrap" onclick="event.stopPropagation()">
-        ${!isLegacy?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-dkj-series','${s.id}')" style="margin-right:4px">✎</button>`:`<button class="btn btn-ghost btn-sm" onclick="openModal('reassign-dkj','${s.id}')" style="margin-right:4px">✎</button>`}
-        <button class="btn btn-ghost btn-sm" onclick="openModal('sell-dkj-series','${s.maturity}')" style="margin-right:4px">eladás</button>
-        <button class="btn btn-ghost btn-sm" onclick="expireDKJSeries('${s.maturity}')" style="margin-right:4px">lejárt</button>
+      <td style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
+        <div style="display:inline-flex;gap:4px;justify-content:flex-end">
+          ${!isLegacy?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-dkj-series','${s.id}')">✎</button>`:`<button class="btn btn-ghost btn-sm" onclick="openModal('reassign-dkj','${s.id}')">✎</button>`}
+          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-dkj-series','${s.maturity}')">eladás</button>
+          <button class="btn btn-ghost btn-sm" onclick="expireDKJSeries('${s.maturity}')">lejárt</button>
+        </div>
       </td>
     </tr>${detailRows}`;
   }).join('');
@@ -2027,8 +2058,8 @@ function renderLyInstrumentList(accountId) {
         </div>
       </td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.shares.toFixed(4)} db</td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${fmtM(ins.cost)}</td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.val>0?fmtM(ins.val):'–'}</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div>${fmtM(ins.cost)}</div><div style="font-size:10px;color:var(--text3)">${fmtEur(totCostEur)}</div></td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div>${ins.val>0?fmtM(ins.val):'–'}</div><div style="font-size:10px;color:var(--text3)">${ins.lp?fmtEur(ins.shares*ins.lp):'–'}</div></td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol};cursor:help" data-ttid="${ttId}">${ins.cost>0?(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span>':'–'}</td>
       <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.lp?fmtEur(ins.lp):'–'}${ins.pct!==null?'<br><span style="font-size:10px;color:'+pctCol+'">'+(ins.pct>=0?'+':'')+ins.pct.toFixed(2)+'%</span>':''}</td>
       <td style="padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text3);font-size:16px">›</td>
@@ -2115,7 +2146,8 @@ function renderLyDetailTable(accountId, ticker) {
     <tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--green);font-weight:500;background:var(--bg3)">
       <td style="font-size:10px;color:var(--text2);white-space:nowrap">összesítés</td>
       <td class="r blurable">${totShares.toFixed(4)}</td>
-      <td class="r" colspan="2" style="color:var(--text3);font-size:10px">∅ ${fmtEur(totCostEur/totShares)}</td>
+      <td class="r blurable">∅ ${fmtEur(totCostEur/totShares)}</td>
+      <td class="r" style="color:var(--text2)">∅ ${avgFx.toFixed(1)}</td>
       <td class="r blurable"><div>${fmtM(totCost)}</div><div style="font-size:10px;color:var(--text3)">${fmtEur(totCostEur)}</div></td>
       <td class="r blurable"><div>${totVal!==null?fmtM(totVal):'–'}</div><div style="font-size:10px;color:var(--text3)">${totValEur!==null?fmtEur(totValEur):'–'}</div></td>
       <td class="r blurable" style="color:${plCol};cursor:help" data-ttid="${totTtId}">${totPl!==null?(totPl>=0?'+':'')+fmtM(totPl):'–'}</td>
@@ -2170,7 +2202,7 @@ function renderLyCashTx(accountId) {
     <td>${t.currency}</td>
     <td class="r blurable">${t.currency==='HUF'?fmt(t.amount):fmtEur(t.amount)}</td>
     <td style="color:var(--text3);font-size:11px">${t.note||'–'}</td>
-    <td><button class="btn btn-danger btn-sm" onclick="deleteLyCashTx('${t.id}')">×</button></td>
+    <td></td>
   </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">Nincs mozgás.</td></tr>';
 }
 
