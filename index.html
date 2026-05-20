@@ -1241,16 +1241,10 @@ function renderDashboard(){
     .filter(t=>t.type==='coupon')
     .reduce((s,t)=>s+t.amount, 0);
 
-  // 2. DKJ eladások P&L = inaktív DKJ-k (eladva/lejárt) eladási ár - vételár
-  // sell cashTx összege = eladási bevétel
-  const dkjSellRevenue = data.cashTx
+  // 2. Eladások P&L = eladási bevétel - vételár (cost mező a sell cashTx-ben)
+  const dkjPL = data.cashTx
     .filter(t=>t.type==='sell')
-    .reduce((s,t)=>s+t.amount, 0);
-  // Inaktív DKJ-k vételára
-  const dkjSellCost = data.dkj
-    .filter(d=>!d.active)
-    .reduce((s,d)=>s+(d.buyPrice||d.faceValue||0), 0);
-  const dkjPL = dkjSellRevenue > 0 ? dkjSellRevenue - dkjSellCost : 0;
+    .reduce((s,t)=>s+(t.amount-(t.cost||0)), 0);
 
   const realizedPL = totalCoupons + dkjPL;
 
@@ -1263,7 +1257,7 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">realizált profit</div>
       <div class="stat-value blurable" style="color:${realizedPL>=0?'var(--green)':'var(--red)'}">${realizedPL>=0?'+':''}${fmtM(realizedPL)}</div>
-      <div class="stat-sub blurable" style="font-size:10px;color:var(--text3)">kamat: +${fmtM(totalCoupons)} · dkj: ${dkjPL>=0?'+':''}${fmtM(dkjPL)}</div>
+      <div class="stat-sub blurable" style="font-size:10px;color:var(--text3)">kamat: +${fmtM(totalCoupons)} · eladás: ${dkjPL>=0?'+':''}${fmtM(dkjPL)}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
@@ -4009,33 +4003,43 @@ function confirmMkImport() {
       const items = data.fixmap.filter(f=>f.seriesId===series?.id&&f.active)
         .sort((a,b)=>a.date.localeCompare(b.date));
       let toSell = r.faceValue;
+      let soldCost = 0;
       for(const item of items) {
         if(toSell<=0) break;
         if(item.faceValue<=toSell) {
+          soldCost += item.buyPrice||0;
           item.active=false; item.soldDate=r.date; toSell-=item.faceValue;
         } else {
-          // Részleges eladás: arányosan csökkentjük a buyPrice-t
           const ratio = toSell/item.faceValue;
-          item.buyPrice = Math.round(item.buyPrice*(1-ratio));
+          soldCost += Math.round((item.buyPrice||0)*ratio);
+          item.buyPrice = Math.round((item.buyPrice||0)*(1-ratio));
           item.faceValue -= toSell; toSell=0;
         }
       }
+      // Eladási bevétel → cashTx sell
+      data.cashTx.push({id:uid(),date:r.date,type:'sell',amount:r.amount,
+        note:'FixMáP eladás: '+r.securities,mkRef:r.txId,cost:soldCost});
     }
     else if(r.appType==='dkj-sell') {
       const items = data.dkj.filter(d=>d.maturity===r.maturity&&d.active)
         .sort((a,b)=>a.date.localeCompare(b.date));
       let toSell = r.faceValue;
+      let soldCost = 0;
       for(const item of items) {
         if(toSell<=0) break;
         if(item.faceValue<=toSell) {
+          soldCost += item.buyPrice||0;
           item.active=false; item.soldDate=r.date; toSell-=item.faceValue;
         } else {
-          // Részleges eladás: arányosan csökkentjük a buyPrice-t
           const ratio = toSell/item.faceValue;
-          item.buyPrice = Math.round(item.buyPrice*(1-ratio));
+          soldCost += Math.round((item.buyPrice||0)*ratio);
+          item.buyPrice = Math.round((item.buyPrice||0)*(1-ratio));
           item.faceValue -= toSell; toSell=0;
         }
       }
+      // Eladási bevétel → cashTx sell
+      data.cashTx.push({id:uid(),date:r.date,type:'sell',amount:r.amount,
+        note:'DKJ eladás: '+r.securities,mkRef:r.txId,cost:soldCost});
     }
     else if(r.appType==='coupon') {
       // Kamatfizetés → cashTx-be mentjük
