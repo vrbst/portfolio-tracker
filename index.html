@@ -4707,7 +4707,7 @@ Dátum: ${todayStr}. Csak a kommentárt írd, semmi más bevezető szöveg.`;
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5',
         max_tokens: 300,
         system: 'Rövid, tömör pénzügyi kommentátor vagy. Mindig magyarul válaszolsz. Maximum 3 mondat.',
         messages: [{ role: 'user', content: prompt }]
