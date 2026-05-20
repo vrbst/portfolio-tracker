@@ -4701,7 +4701,9 @@ ${portfolioCtx}
 
 Dátum: ${todayStr}. Csak a kommentárt írd, semmi más bevezető szöveg.`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const apiUrl = 'https://api.anthropic.com/v1/messages';
+    const workerUrl = 'https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(apiUrl)+'&apikey='+encodeURIComponent(anthropicKey);
+    const response = await fetch(workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4832,31 +4834,76 @@ function getPortfolioContext() {
   const vwceVal = (liveVwce||0)*vwceShares*(liveFx||395);
   const wbitVal = (liveWbit||0)*wbitShares*(liveFx||395);
   const total = cb+apValue+vwceVal+wbitVal;
-  const totalInvested = data.cashTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0)
-    - data.cashTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0)
-    + lyTotalInvested();
 
+  // Befektetett tőke (nettó befizetések)
+  const apInvested = data.cashTx.filter(t=>t.type==='transfer_in').reduce((s,t)=>s+t.amount,0)
+    - data.cashTx.filter(t=>t.type==='transfer_out').reduce((s,t)=>s+t.amount,0);
+  const totalInvested = apInvested + lyTotalInvested();
+
+  // Portfólió nyitási dátuma
+  const firstDate = getFirstTransactionDate();
+
+  // Kamatfizetések history
+  const coupons = data.cashTx.filter(t=>t.type==='coupon').sort((a,b)=>a.date.localeCompare(b.date));
+  const totalCouponsReceived = coupons.reduce((s,t)=>s+t.amount,0);
+  const totalCouponsWithdrawn = data.cashTx.filter(t=>t.type==='withdraw'&&(t.note||'').includes('kamat')).reduce((s,t)=>s+t.amount,0);
+  const couponDesc = coupons.length
+    ? coupons.map(c=>`${c.date}: +${(c.amount/1000).toFixed(0)}e Ft`).join(', ')
+    : 'meg nem volt';
+
+  // FixMáP pozíciók vásárlási dátumai
   const fixmapDesc = data.fixmapSeries.map(sr => {
-    const face = data.fixmap.filter(f=>f.active&&f.seriesId===sr.id).reduce((s,f)=>s+f.faceValue,0);
-    return sr.name+': '+(face/1000000).toFixed(2)+'M Ft, '+sr.couponRate+'%, lejarat: '+sr.maturity;
-  }).join(' | ');
+    const items = data.fixmap.filter(f=>f.active&&f.seriesId===sr.id).sort((a,b)=>a.date.localeCompare(b.date));
+    const face = items.reduce((s,f)=>s+f.faceValue,0);
+    if(!face) return null;
+    const dates = items.map(f=>`${f.date}: ${(f.faceValue/1e6).toFixed(2)}M Ft`).join(', ');
+    return `${sr.name}: ${(face/1e6).toFixed(2)}M Ft névérték, ${sr.couponRate}%, lejárat: ${sr.maturity}, vételek: [${dates}]`;
+  }).filter(Boolean).join('\n');
 
-  const dkjDesc = data.dkj.filter(d=>d.active).map(d=>
-    'DKJ '+d.maturity+': '+(d.faceValue/1000).toFixed(0)+'e Ft lejar'
-  ).join(' | ');
+  // DKJ pozíciók
+  const dkjDesc = [...new Set(data.dkj.filter(d=>d.active).map(d=>d.maturity))].map(mat=>{
+    const items = data.dkj.filter(d=>d.active&&d.maturity===mat).sort((a,b)=>a.date.localeCompare(b.date));
+    const face = items.reduce((s,d)=>s+d.faceValue,0);
+    const dates = items.map(d=>`${d.date}: ${(d.faceValue/1e6).toFixed(2)}M Ft`).join(', ');
+    return `D${mat.replace(/-/g,'').slice(2)}: ${(face/1e6).toFixed(2)}M Ft, lejárat: ${mat}, vételek: [${dates}]`;
+  }).join('\n');
 
-  return 'Datum: '+new Date().toLocaleDateString('hu-HU')
-    +'\nFelhasznalo szuletesi eve: 1984'
-    +'\nPortfolio: '+(total/1000000).toFixed(2)+'M Ft'
-    +'\nBefektetett: '+(totalInvested/1000000).toFixed(2)+'M Ft'
-    +'\nP&L: '+((total-totalInvested)/1000000).toFixed(2)+'M Ft ('+((total-totalInvested)/totalInvested*100).toFixed(2)+'%)'
-    +'\nEUR/HUF: '+(liveFx||395).toFixed(2)
-    +'\nFixMAP: '+fixmapDesc
-    +'\nDKJ: '+(dkjDesc||'nincs aktiv')
-    +'\nPenzszamla: '+(cb/1000).toFixed(0)+'e Ft'
-    +'\nVWCE: '+vwceShares.toFixed(2)+' db x EUR'+(liveVwce||0).toFixed(2)+' = '+(vwceVal/1000000).toFixed(2)+'M Ft'
-    +'\nWBIT: '+wbitShares.toFixed(2)+' db x EUR'+(liveWbit||0).toFixed(2)+' = '+(wbitVal/1000000).toFixed(2)+'M Ft'
-    +'\nMegoszlas: Allampapar '+(apValue/total*100).toFixed(1)+'% / VWCE '+(vwceVal/total*100).toFixed(1)+'% / WBIT '+(wbitVal/total*100).toFixed(1)+'%';
+  // ETF vételek dátumai
+  const lyTxDesc = (data.lyTx||[]).filter(t=>t.type==='buy')
+    .sort((a,b)=>a.date.localeCompare(b.date))
+    .map(t=>`${t.date}: ${t.ticker} ${t.shares.toFixed(4)} db @ €${t.priceEur.toFixed(2)} (fx: ${t.fxRate.toFixed(1)})`)
+    .join(', ');
+
+  // Kiutalások history
+  const withdrawals = data.cashTx.filter(t=>t.type==='withdraw').sort((a,b)=>a.date.localeCompare(b.date));
+  const withdrawDesc = withdrawals.length
+    ? withdrawals.map(w=>`${w.date}: -${(w.amount/1000).toFixed(0)}e Ft (${w.note||'kiutalás'})`).join(', ')
+    : 'nem volt';
+
+  return `Datum: ${new Date().toLocaleDateString('hu-HU')}
+Felhasznalo szuletesi eve: 1984
+Portfolio nyitasa: ${firstDate}
+Portfolio jelenlegi ertek: ${(total/1e6).toFixed(2)}M Ft
+Befektetett toke (netto befizetesek): ${(totalInvested/1e6).toFixed(2)}M Ft
+Latens P&L: ${((total-totalInvested)/1e6).toFixed(2)}M Ft (${((total-totalInvested)/totalInvested*100).toFixed(2)}%)
+EUR/HUF: ${(liveFx||395).toFixed(2)}
+
+FixMAP poziciok:
+${fixmapDesc||'nincs'}
+
+DKJ poziciok:
+${dkjDesc||'nincs aktiv'}
+
+ETF veselek:
+${lyTxDesc||'nincs'}
+
+Kamatfizetsek (kapott): ${couponDesc} → összesen: ${(totalCouponsReceived/1e3).toFixed(0)}e Ft
+Kiutalasok a portfólióból: ${withdrawDesc}
+Penzszamla egyenleg: ${(cb/1000).toFixed(0)}e Ft
+
+VWCE: ${vwceShares.toFixed(4)} db x EUR${(liveVwce||0).toFixed(2)} = ${(vwceVal/1e6).toFixed(2)}M Ft
+WBIT: ${wbitShares.toFixed(4)} db x EUR${(liveWbit||0).toFixed(2)} = ${(wbitVal/1e6).toFixed(2)}M Ft
+Megoszlas: Allampapir ${(apValue/total*100).toFixed(1)}% / VWCE ${(vwceVal/total*100).toFixed(1)}% / WBIT ${(wbitVal/total*100).toFixed(1)}%`;
 }
 
 function aiAddMessage(role, text, isLoading) {
