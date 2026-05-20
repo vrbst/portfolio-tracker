@@ -82,7 +82,7 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);height:100vh
 .cards-2{grid-template-columns:repeat(2,1fr)}
 .cards-5{grid-template-columns:repeat(5,1fr)}
 .cards-6{grid-template-columns:repeat(6,1fr)}
-.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;transition:border-color .2s}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:6px 10px;transition:border-color .2s}
 .stat-card:hover{border-color:var(--border2)}
 .stat-label{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
 .stat-value{font-family:var(--font-head);font-size:18px;font-weight:600;line-height:1.1;letter-spacing:-.5px}
@@ -485,7 +485,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         <div class="dash-side">
 
           <!-- Befektetett tőke kártyák -->
-          <div id="dashCards" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div id="dashCards" style="display:flex;flex-direction:column;gap:4px"></div>
 
           <!-- Napi piaci kommentár – donut FÖLÖTT -->
           <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0">
@@ -496,24 +496,24 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
                 <button class="btn btn-ghost btn-sm" onclick="fetchMarketCommentary(true)" id="marketRefreshBtn" style="padding:2px 6px">↻</button>
               </div>
             </div>
-            <div id="marketCommentary" style="font-size:11px;color:var(--text2);line-height:1.65;min-height:175px;max-height:175px;overflow-y:auto">
+            <div id="marketCommentary" style="font-size:11px;color:var(--text2);line-height:1.65;min-height:155px;max-height:155px;overflow-y:auto">
               <span style="color:var(--text3)">Betöltés...</span>
             </div>
           </div>
 
           <!-- Donut -->
-          <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0">
+          <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0;padding:10px 14px">
             <div class="panel-header"><div class="panel-title">megoszlás</div></div>
             <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:4px">
-              <div class="pie-wrap" style="width:160px;height:160px">
+              <div class="pie-wrap" style="width:110px;height:110px">
                 <canvas id="pieChart" class="blurable" role="img" aria-label="Megoszlás"></canvas>
                 <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
                   <div style="font-size:9px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px">összesen</div>
-                  <div class="blurable" id="pieTotalLabel" style="font-family:var(--font-head);font-size:13px;font-weight:700;letter-spacing:-.5px;white-space:nowrap">–</div>
+                  <div class="blurable" id="pieTotalLabel" style="font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:-.5px;white-space:nowrap">–</div>
                   <div style="font-size:9px;color:var(--text2)">HUF</div>
                 </div>
               </div>
-              <div id="pieLegend" style="width:100%"></div>
+              <div id="pieLegend" style="width:100%;font-size:10px"></div>
             </div>
           </div>
 
@@ -1206,11 +1206,11 @@ function renderDashboard(){
   const hasLive=liveVwce&&liveFx;
 
   // Befektetett tőke = nettó befizetett összeg
-  // Állampapír: Utalás érkeztetés + Bankkártyás fizetés - Utalás indítás (transfer_in - transfer_out)
+  // Állampapír: Utalás érkeztetés + Bankkártyás fizetés - Utalás indítás - Kamat kiutalás
   const apInvested = data.cashTx
     .reduce((s,t) => {
       if(t.type==='transfer_in') return s + t.amount;
-      if(t.type==='transfer_out') return s - t.amount;
+      if(t.type==='transfer_out' || t.type==='coupon_out') return s - t.amount;
       return s;
     }, 0);
   const totalInvested = apInvested + lyTotalInvested();
@@ -1252,7 +1252,7 @@ function renderDashboard(){
   document.getElementById('dashCards').innerHTML=`
     <div class="stat-card">
       <div class="stat-label">befektetett tőke</div>
-      <div class="stat-value blurable">${fmtM(totalInvested)}</div>
+      <div class="stat-value blurable" style="font-size:15px">${fmtM(totalInvested)}</div>
       ${totalInvested>0?(()=>{const diff=total-totalInvested;const pct=diff/totalInvested*100;const col=diff>=0?'var(--green)':'var(--red)';return '<div style="font-size:11px;margin-top:2px;color:'+col+'"><span class="blurable">'+(diff>=0?'+':'')+fmtM(diff)+'</span> ('+(diff>=0?'+':'')+pct.toFixed(2)+'%)</div>';})():''}
     </div>
     <div class="stat-card">
@@ -1262,7 +1262,7 @@ function renderDashboard(){
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
-      <div class="stat-value">${(liveFx||395).toFixed(2)} Ft ${getFxChangeHtml()}</div>
+      <div class="stat-value" style="font-size:15px">${(liveFx||395).toFixed(2)} Ft ${getFxChangeHtml()}</div>
       <div class="stat-sub">${liveVwce?'live':'becsült'}</div>
     </div>
   `;
@@ -4868,7 +4868,7 @@ function getPortfolioContext() {
 
   // Befektetett tőke (nettó befizetések)
   const apInvested = data.cashTx.filter(t=>t.type==='transfer_in').reduce((s,t)=>s+t.amount,0)
-    - data.cashTx.filter(t=>t.type==='transfer_out').reduce((s,t)=>s+t.amount,0);
+    - data.cashTx.filter(t=>t.type==='transfer_out'||t.type==='coupon_out').reduce((s,t)=>s+t.amount,0);
   const totalInvested = apInvested + lyTotalInvested();
 
   // Portfólió nyitási dátuma
@@ -5017,7 +5017,7 @@ function getAiQuickPrompt(type) {
   const total = apValue + etfTotal;
 
   const apInvested = data.cashTx.filter(t=>t.type==='transfer_in').reduce((s,t)=>s+t.amount,0)
-    - data.cashTx.filter(t=>t.type==='transfer_out').reduce((s,t)=>s+t.amount,0);
+    - data.cashTx.filter(t=>t.type==='transfer_out'||t.type==='coupon_out').reduce((s,t)=>s+t.amount,0);
   const totalInvested = apInvested + lyTotalInvested();
   const pl = total - totalInvested;
   const plPct = totalInvested>0 ? pl/totalInvested*100 : 0;
