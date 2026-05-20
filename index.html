@@ -1235,11 +1235,35 @@ function renderDashboard(){
   
   if(subEl)subEl.innerHTML=`<span class="blurable">≈ ${fmtEur(totalEur)}</span>${pillHtml}`;
 
+  // Realizált profit számítás
+  // 1. Kapott kamatok (coupon típusú cashTx)
+  const totalCoupons = data.cashTx
+    .filter(t=>t.type==='coupon')
+    .reduce((s,t)=>s+t.amount, 0);
+
+  // 2. DKJ eladások P&L = inaktív DKJ-k (eladva/lejárt) eladási ár - vételár
+  // sell cashTx összege = eladási bevétel
+  const dkjSellRevenue = data.cashTx
+    .filter(t=>t.type==='sell')
+    .reduce((s,t)=>s+t.amount, 0);
+  // Inaktív DKJ-k vételára
+  const dkjSellCost = data.dkj
+    .filter(d=>!d.active)
+    .reduce((s,d)=>s+(d.buyPrice||d.faceValue||0), 0);
+  const dkjPL = dkjSellRevenue > 0 ? dkjSellRevenue - dkjSellCost : 0;
+
+  const realizedPL = totalCoupons + dkjPL;
+
   document.getElementById('dashCards').innerHTML=`
     <div class="stat-card">
       <div class="stat-label">befektetett tőke</div>
       <div class="stat-value blurable">${fmtM(totalInvested)}</div>
       ${totalInvested>0?(()=>{const diff=total-totalInvested;const pct=diff/totalInvested*100;const col=diff>=0?'var(--green)':'var(--red)';return '<div style="font-size:11px;margin-top:2px;color:'+col+'"><span class="blurable">'+(diff>=0?'+':'')+fmtM(diff)+'</span> ('+(diff>=0?'+':'')+pct.toFixed(2)+'%)</div>';})():''}
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">realizált profit</div>
+      <div class="stat-value blurable" style="color:${realizedPL>=0?'var(--green)':'var(--red)'}">${realizedPL>=0?'+':''}${fmtM(realizedPL)}</div>
+      <div class="stat-sub blurable" style="font-size:10px;color:var(--text3)">kamat: +${fmtM(totalCoupons)} · dkj: ${dkjPL>=0?'+':''}${fmtM(dkjPL)}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
@@ -4014,17 +4038,17 @@ function confirmMkImport() {
       }
     }
     else if(r.appType==='coupon') {
-      // NEM könyveljük cashTx-be – a Pénzszámla befizetés sor már tartalmazza
-      // Csak a firstCouponAmount-ot állítjuk be ha első töredéknegyedév
-      // Ha van sorozat hozzárendelve, mentsük el firstCouponAmount-ként
-      // (az első kamat általában nem kerek negyedév)
+      // Kamatfizetés → cashTx-be mentjük
+      const existingCoupon = data.cashTx.find(t=>t.type==='coupon'&&t.mkRef===r.txId);
+      if(!existingCoupon) {
+        data.cashTx.push({id:uid(),date:r.date,type:'coupon',amount:r.amount,note:'Kamatfizetés: '+r.securities,mkRef:r.txId});
+      }
+      // Első töredéknegyedév kezelése
       const seriesName = r.securities.replace('Fix Magyar Állampapír ','FixMáP ');
       const series = data.fixmapSeries.find(s=>s.name===seriesName);
       if(series && r.faceValue > 0) {
-        // Ellenőrzük hogy ez az első kamat-e (a szokásos negyedéves < lenne)
         const regularCoupon = r.faceValue * series.couponRate / 100 / 4;
         if(Math.abs(r.amount - regularCoupon) > 100) {
-          // Nem kerek negyedév → firstCouponAmount
           series.firstCouponAmount = r.amount;
           series.firstCouponDate = r.date;
           series.nextCoupon = r.date; // következő kamat ebből számítódik
@@ -4657,10 +4681,11 @@ async function fetchMarketCommentary(force=false) {
   if(!el) return;
 
   const todayStr = new Date().toISOString().split('T')[0];
+  const blurNumbers = t => t.replace(/(\d[\d\s]*(?:[,.]\d+)*(?:\s*(?:Ft|M Ft|milliárd|%|EUR|HUF))?)/g, '<span class="blurable">$1</span>');
 
   // Ha van mai cache a Gist-ben és nem force refresh, használjuk
   if(!force && data.marketCommentary && data.marketCommentary.date === todayStr) {
-    el.innerHTML = data.marketCommentary.html;
+    el.innerHTML = blurNumbers(data.marketCommentary.html);
     if(dateEl) dateEl.textContent = 'ma · ' + todayStr;
     return;
   }
@@ -4706,8 +4731,9 @@ Dátum: ${todayStr}. Csak a kommentárt írd, semmi más bevezető szöveg.`;
     if(data_resp.error) throw new Error(data_resp.error.message);
     const text = data_resp.content?.[0]?.text || '';
 
-    // Formázás
-    const html = `<span style="color:var(--text)">${text}</span>`;
+    // Számok blurable span-ba csomagolva
+    const blurNumbers = t => t.replace(/(\d[\d\s]*(?:[,.]\d+)*(?:\s*(?:Ft|M Ft|milliárd|%|EUR|HUF))?)/g, '<span class="blurable">$1</span>');
+    const html = `<span style="color:var(--text)">${blurNumbers(text)}</span>`;
     el.innerHTML = html;
     if(dateEl) dateEl.textContent = 'ma · ' + todayStr;
 
