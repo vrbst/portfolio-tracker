@@ -3643,12 +3643,19 @@ function calcPortfolioOnDate(date){
     if(['withdraw','buy','coupon_out'].includes(t.type))cash-=t.amount;
   });
   let ap=0;
-  const fmSellDates=data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP')).map(t=>t.date).sort();
+  const fmSellMap={};
+  data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP')).forEach(t=>{
+    // Sorozatnév kinyerése a note-ból
+    const key = t.note;
+    if(!fmSellMap[key]||t.date<fmSellMap[key]) fmSellMap[key]=t.date;
+  });
+  const firstFmSell = Object.values(fmSellMap).sort()[0] || '9999-99-99';
   data.fixmap.forEach(f=>{
     if(f.date>date)return;
     if(f.active){ap+=f.faceValue;return;}
     if(f.soldDate){if(f.soldDate>date)ap+=f.faceValue;return;}
-    if((fmSellDates[0]||'9999-99-99')>date)ap+=f.faceValue;
+    // soldDate nincs beállítva (régi adat): az első FixMáP eladás előtt adjuk hozzá
+    if(firstFmSell>date)ap+=f.faceValue;
   });
   const dkjSellMap={};
   data.cashTx.filter(t=>['sell','expire'].includes(t.type)&&t.note&&t.note.includes('DKJ')).forEach(t=>{
@@ -3657,11 +3664,14 @@ function calcPortfolioOnDate(date){
   });
   data.dkj.forEach(d=>{
     if(d.date>date)return;
-    const fv = d.originalFaceValue || d.faceValue;
     if(d.active){ap+=d.faceValue;return;}
-    if(d.soldDate){if(d.soldDate>date)ap+=fv;return;}
+    // Teljesen eladott tétel: soldDate előtt az originalFaceValue-t használjuk
+    if(d.soldDate){
+      if(d.soldDate>date) ap+=(d.originalFaceValue||d.faceValue);
+      return;
+    }
     const inferredSell=dkjSellMap[d.maturity];
-    if(!inferredSell||inferredSell>date)ap+=fv;
+    if(!inferredSell||inferredSell>date) ap+=(d.originalFaceValue||d.faceValue);
   });
   const etfHoldings={};
   (data.lyTx||[]).filter(t=>t.date<=date).forEach(t=>{
