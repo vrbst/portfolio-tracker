@@ -508,6 +508,20 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div id="upcomingEvents" style="max-height:300px;overflow-y:auto"></div>
         </div>
 
+        <!-- Piaci kommentár -->
+        <div class="panel" style="grid-column:1/-1">
+          <div class="panel-header">
+            <div class="panel-title">✦ napi piaci kommentár</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="marketCommentaryDate" style="font-size:10px;color:var(--text3)"></span>
+              <button class="btn btn-ghost btn-sm" onclick="fetchMarketCommentary(true)" id="marketRefreshBtn">↻ frissít</button>
+            </div>
+          </div>
+          <div id="marketCommentary" style="font-size:12px;color:var(--text2);line-height:1.8;min-height:36px">
+            <span style="color:var(--text3)">Betöltés...</span>
+          </div>
+        </div>
+
       </div><!-- /.dash-layout -->
 
 
@@ -647,47 +661,8 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         <!-- Gyors elemzések – jobb oldal -->
         <div class="ai-scenario">
           <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">gyors elemzés</div>
-          <div class="quick-btns-grid">
-            <button class="quick-btn" onclick="aiQuickAnalysis('portfolio')">
-              <span class="quick-btn-icon">◈</span>
-              <span class="quick-btn-text"><strong>portfólió értékelés</strong><span>átfogó elemzés a jelenlegi helyzetről</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('diversification')">
-              <span class="quick-btn-icon">⊕</span>
-              <span class="quick-btn-text"><strong>diverzifikáció</strong><span>kockázat és allokáció elemzése</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('fixmap_vs_etf')">
-              <span class="quick-btn-icon">⇄</span>
-              <span class="quick-btn-text"><strong>FixMáP vs ETF</strong><span>melyik hozza jobban jelenleg</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('cashflow')">
-              <span class="quick-btn-icon">↗</span>
-              <span class="quick-btn-text"><strong>cashflow elemzés</strong><span>várható bevételek és kifizetések</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('fixmap_2031')">
-              <span class="quick-btn-icon">⏱</span>
-              <span class="quick-btn-text"><strong>FixMáP lejárat 2031</strong><span>mi legyen a 40M Ft-tal lejáratkor</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('fi_timeline')">
-              <span class="quick-btn-icon">🏁</span>
-              <span class="quick-btn-text"><strong>FI idővonal</strong><span>mikor éred el a pénzügyi függetlenséget</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('risk')">
-              <span class="quick-btn-icon">⚡</span>
-              <span class="quick-btn-text"><strong>kockázatelemzés</strong><span>mi történik piaci sokk esetén</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('tax')">
-              <span class="quick-btn-icon">§</span>
-              <span class="quick-btn-text"><strong>adóoptimalizálás</strong><span>TBSZ lejáratok, adómegtakarítás</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('savings_impact')">
-              <span class="quick-btn-icon">💰</span>
-              <span class="quick-btn-text"><strong>megtakarítás hatása</strong><span>mi változik magasabb havi összeggel</span></span>
-            </button>
-            <button class="quick-btn" onclick="aiQuickAnalysis('dkj_october')">
-              <span class="quick-btn-icon">📅</span>
-              <span class="quick-btn-text"><strong>DKJ október</strong><span>optimális újraallokáció lejáratkor</span></span>
-            </button>
+          <div class="quick-btns-grid" id="quick-btns-container">
+            <!-- Dinamikusan generált gombok - renderQuickBtns() tölti fel -->
           </div>
         </div>
 
@@ -925,6 +900,7 @@ const DEFAULT_DATA = {
   lyAccounts: [],     // {id, name, lyAccountId, type:'cash'|'tbsz', tbszYear}
   lyTx: [],           // {id, accountId, date, type:'buy'|'sell', ticker, shares, priceEur, fxRate, fee, feeCurrency, ref}
   lyCashTx: [],       // {id, accountId, date, type:'deposit'|'withdraw'|'transfer_in'|'transfer_out', amount, currency, ref, note}
+  marketCommentary: null, // {date, html} – napi piaci kommentár cache
 };
 
 let data = null;
@@ -978,6 +954,7 @@ async function loadOrCreateGist(){
     data=JSON.parse(j.files[GIST_FILE].content);
     // migrate old data if needed
     if(data.lyAccounts===undefined) data.lyAccounts=[];
+    if(data.marketCommentary===undefined) data.marketCommentary=null;
     if(data.lyTx===undefined) data.lyTx=[];
     if(data.lyCashTx===undefined) data.lyCashTx=[];
     if(!data.cashTx)data.cashTx=[];
@@ -1018,7 +995,7 @@ function showApp(){
     if(nav)nav.style.display='flex';
   }
   renderAll();
-  fetchLive();
+  fetchLive().then(() => fetchMarketCommentary());
   startAutoRefresh();
   loadHistoricData(true);
 }
@@ -1054,7 +1031,7 @@ function showTab(name,el){
   if(page) page.classList.add('active');
   if(el)el.classList.add('active');
   if(name==='kincstar') setTimeout(renderCashflowChart, 50);
-  if(name==='ai') setTimeout(updateApiKeyStatus, 50);
+  if(name==='ai') setTimeout(()=>{ updateApiKeyStatus(); renderQuickBtns(); }, 50);
   if(name==='dashboard') setTimeout(renderDashMiniChart, 50);
   if(name==='import') setTimeout(initImportPage, 50);
   if(name==='ly') { /* handled by showLyAccount */ }
@@ -4683,6 +4660,79 @@ async function confirmDeleteDB(){
 
 
 // ═══════════════════════════════════════════════
+// NAPI PIACI KOMMENTÁR
+// ═══════════════════════════════════════════════
+async function fetchMarketCommentary(force=false) {
+  const el = document.getElementById('marketCommentary');
+  const dateEl = document.getElementById('marketCommentaryDate');
+  const btn = document.getElementById('marketRefreshBtn');
+  if(!el) return;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Ha van mai cache a Gist-ben és nem force refresh, használjuk
+  if(!force && data.marketCommentary && data.marketCommentary.date === todayStr) {
+    el.innerHTML = data.marketCommentary.html;
+    if(dateEl) dateEl.textContent = 'ma · ' + todayStr;
+    return;
+  }
+
+  if(!anthropicKey) {
+    el.innerHTML = '<span style="color:var(--text3)">API kulcs szükséges a kommentárhoz.</span>';
+    return;
+  }
+
+  if(btn) { btn.style.opacity='.5'; btn.style.pointerEvents='none'; }
+  el.innerHTML = '<span class="spin"></span><span style="color:var(--text3)">Piaci adatok lekérése...</span>';
+
+  try {
+    // Portfólió kontextus
+    const fx = liveFx||395;
+    const vwceShares = etfShares('VWCE');
+    const fixmapVal = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+    const dkjVal = data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+    const vwceVal = (liveVwce||0)*vwceShares*fx;
+
+    const portfolioCtx = `Portfólió: FixMáP ${(fixmapVal/1e6).toFixed(1)}M Ft, DKJ ${(dkjVal/1e6).toFixed(2)}M Ft, VWCE ${vwceShares.toFixed(0)} db (${(vwceVal/1e6).toFixed(2)}M Ft). EUR/HUF: ${fx.toFixed(2)}. VWCE ár: €${(liveVwce||0).toFixed(2)} (${liveVwcePct!==null?(liveVwcePct>=0?'+':'')+liveVwcePct.toFixed(2)+'%':'–'} ma).`;
+
+    const prompt = `Te egy személyes pénzügyi asszisztens vagy. A mai piacról adj rövid, 2-3 mondatos kommentárt magyarul, kifejezetten az alábbi portfólió szempontjából. Legyen konkrét és releváns – mi mozgott, mi a hatása erre a portfólióra, van-e figyelemre méltó esemény. Ne légy általános, ne adj hosszú elemzést.
+
+${portfolioCtx}
+
+Dátum: ${todayStr}. Csak a kommentárt írd, semmi más bevezető szöveg.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: 'Rövid, tömör pénzügyi kommentátor vagy. Mindig magyarul válaszolsz. Maximum 3 mondat.',
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data_resp = await response.json();
+    if(data_resp.error) throw new Error(data_resp.error.message);
+    const text = data_resp.content?.[0]?.text || '';
+
+    // Formázás
+    const html = `<span style="color:var(--text)">${text}</span>`;
+    el.innerHTML = html;
+    if(dateEl) dateEl.textContent = 'ma · ' + todayStr;
+
+    // Cache mentése Gist-be (minden eszközön szinkronizálva)
+    data.marketCommentary = { date: todayStr, html };
+    saveData();
+
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--text3)">Nem sikerült betölteni: ${e.message}</span>`;
+  }
+
+  if(btn) { btn.style.opacity=''; btn.style.pointerEvents=''; }
+}
+
+// ═══════════════════════════════════════════════
 // LIVE REFRESH
 // ═══════════════════════════════════════════════
 let refreshInterval=null;
@@ -4938,6 +4988,52 @@ function getAiQuickPrompt(type) {
   };
 
   return prompts[type] || type;
+}
+
+function renderQuickBtns() {
+  const el = document.getElementById('quick-btns-container');
+  if(!el) return;
+
+  // Dinamikus adatok
+  const fixmapTotal = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+  const dkjActive = data.dkj.filter(d=>d.active);
+  const dkjTotal = dkjActive.reduce((s,d)=>s+d.faceValue,0);
+  const scenSavings = parseInt(document.getElementById('scenSavings')?.value)||150000;
+  const annualCoupon = data.fixmap.filter(f=>f.active).reduce((s,f)=>{
+    const sr=data.fixmapSeries.find(x=>x.id===f.seriesId);
+    return s+f.faceValue*(sr?sr.couponRate:7)/100;
+  },0);
+  const tbszAccs = getLyAccounts().filter(a=>a.type==='tbsz');
+  const tbszAdómentes = tbszAccs.map(a=>a.tbszYear+3).join(', ');
+
+  // FixMáP lejáratok
+  const fixmapMaturities = [...new Set(data.fixmapSeries.map(s=>s.maturity?.slice(0,4)).filter(Boolean))];
+  const fixmapLabel = fixmapMaturities.length ? `FixMáP lejárat ${fixmapMaturities.join('/')}` : 'FixMáP lejárat';
+  const fixmapSub = fixmapTotal > 0 ? `mi legyen a ${fmtM(fixmapTotal)}-tal lejáratkor` : 'mi legyen a tőkével lejáratkor';
+
+  // DKJ lejáratok
+  const dkjMaturities = [...new Set(dkjActive.map(d=>d.maturity))].sort();
+  const dkjLabel = dkjMaturities.length ? `DKJ lejárat (${dkjMaturities.map(m=>m.slice(2,7)).join(', ')})` : 'DKJ lejárat';
+  const dkjSub = dkjTotal > 0 ? `optimális újraallokáció – ${fmtM(dkjTotal)}` : 'optimális újraallokáció lejáratkor';
+
+  const btns = [
+    { type:'portfolio', icon:'◈', title:'portfólió értékelés', sub:'átfogó elemzés a jelenlegi helyzetről' },
+    { type:'diversification', icon:'⊕', title:'diverzifikáció', sub:`állampapír vs ETF arány elemzése` },
+    { type:'fixmap_vs_etf', icon:'⇄', title:'FixMáP vs ETF', sub:'melyik hozza jobban jelenleg' },
+    { type:'cashflow', icon:'↗', title:'cashflow elemzés', sub:`évi ${fmtM(annualCoupon)} kamat + lejáratok` },
+    { type:'fixmap_2031', icon:'⏱', title: fixmapLabel, sub: fixmapSub },
+    { type:'fi_timeline', icon:'🏁', title:'FI idővonal', sub:`jelenlegi ütem: ${(scenSavings/1000).toFixed(0)}e Ft/hó` },
+    { type:'risk', icon:'⚡', title:'kockázatelemzés', sub:'mi történik piaci sokk esetén' },
+    { type:'tax', icon:'§', title:'adóoptimalizálás', sub: tbszAdómentes ? `TBSZ adómentes: ${tbszAdómentes} után` : 'TBSZ lejáratok, adómegtakarítás' },
+    { type:'savings_impact', icon:'💰', title:'megtakarítás hatása', sub:`mi változik ${(scenSavings/1000).toFixed(0)}e → ${(scenSavings*1.5/1000).toFixed(0)}e Ft/hó esetén` },
+    ...(dkjTotal > 0 ? [{ type:'dkj_october', icon:'📅', title: dkjLabel, sub: dkjSub }] : []),
+  ];
+
+  el.innerHTML = btns.map(b=>`
+    <button class="quick-btn" onclick="aiQuickAnalysis('${b.type}')">
+      <span class="quick-btn-icon">${b.icon}</span>
+      <span class="quick-btn-text"><strong>${b.title}</strong><span>${b.sub}</span></span>
+    </button>`).join('');
 }
 
 function aiQuickAnalysis(type) {
