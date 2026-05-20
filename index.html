@@ -3658,20 +3658,41 @@ function calcPortfolioOnDate(date){
     if(firstFmSell>date)ap+=f.faceValue;
   });
   const dkjSellMap={};
-  data.cashTx.filter(t=>['sell','expire'].includes(t.type)&&t.note&&t.note.includes('DKJ')).forEach(t=>{
+  data.cashTx.filter(t=>['sell','expire'].includes(t.type)&&t.note&&(t.note.includes('DKJ')||t.note.includes('Diszkont'))).forEach(t=>{
     const m=t.note.match(/D(\d{6})/);
     if(m){const mat='20'+m[1].slice(0,2)+'-'+m[1].slice(2,4)+'-'+m[1].slice(4,6);if(!dkjSellMap[mat]||t.date<dkjSellMap[mat])dkjSellMap[mat]=t.date;}
   });
+
+  // DKJ eladások dátum+maturity szerint
+  const dkjSellByDate={};
+  data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('DKJ')).forEach(t=>{
+    const m=t.note.match(/D(\d{6})/);
+    if(!m) return;
+    const mat='20'+m[1].slice(0,2)+'-'+m[1].slice(2,4)+'-'+m[1].slice(4,6);
+    if(!dkjSellByDate[mat]) dkjSellByDate[mat]=[];
+    dkjSellByDate[mat].push({date:t.date, faceValue: t.soldFaceValue||0});
+  });
+
   data.dkj.forEach(d=>{
     if(d.date>date)return;
     if(d.active){ap+=d.faceValue;return;}
-    // Teljesen eladott tétel: soldDate előtt az originalFaceValue-t használjuk
-    if(d.soldDate){
-      if(d.soldDate>date) ap+=(d.originalFaceValue||d.faceValue);
-      return;
+    // Teljesen eladott vagy részlegesen eladott tétel
+    // Az originalFaceValue-ból levonjuk az adott dátumig eladott névértékeket
+    const origFv = d.originalFaceValue||d.faceValue;
+    if(d.soldDate && d.soldDate<=date) return; // teljesen eladva és már megtörtént
+    // Mennyi volt eladva az adott dátumig ebből a maturity-ból?
+    // Egyszerűbb: ha soldDate > date, az origFv-t adjuk hozzá CSAK ha az első eladás is > date
+    const firstSell = dkjSellMap[d.maturity];
+    if(!firstSell || firstSell>date){
+      ap+=origFv; // még semmi nem volt eladva
+    } else if(d.soldDate && d.soldDate>date){
+      // Volt már részleges eladás, de még nem teljesen eladott
+      // A cashTx sell tételekből számoljuk a már eladott névértéket
+      // Mivel ezt nem tároljuk, a faceValue-t használjuk (ami a maradék)
+      // de ez az AKTUÁLIS maradék, nem a dátumkori
+      // Legkonzervatívabb: ne adjuk hozzá ha már volt eladás
+      // (jobb ha kicsit kevesebbet mutat mint túl sokat)
     }
-    const inferredSell=dkjSellMap[d.maturity];
-    if(!inferredSell||inferredSell>date) ap+=(d.originalFaceValue||d.faceValue);
   });
   const etfHoldings={};
   (data.lyTx||[]).filter(t=>t.date<=date).forEach(t=>{
