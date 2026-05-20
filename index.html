@@ -73,6 +73,7 @@ body{font-family:var(--font-mono);background:#000;color:var(--text);height:100vh
 .content{padding:12px 16px;flex:1;min-width:0;background:var(--bg);overflow-y:auto;height:calc(100vh - 52px - 16px)}
 .page{display:none}
 .page.active{display:block}
+#page-import.active{display:flex}
 
 /* CARDS */
 .card-row{display:grid;gap:10px;margin-bottom:16px}
@@ -119,6 +120,8 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .b-expire{background:var(--blue-dim);color:var(--blue)}
 .b-deposit{background:rgba(255,255,255,.08);color:var(--text2)}
 .b-withdraw{background:var(--red-dim);color:var(--red)}
+.b-transfer-in{background:rgba(0,200,100,.15);color:var(--green)}
+.b-transfer-out{background:var(--red-dim);color:var(--red)}
 
 /* FORM */
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
@@ -648,7 +651,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
             </div>
             <div id="apiKeyStatus" style="font-size:11px;margin-top:6px;color:var(--text3)"></div>
           </div>
-          <div id="aiMessages" style="min-height:500px;max-height:65vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0;margin-bottom:12px">
+          <div id="aiMessages" style="min-height:calc(100vh - 52px - 16px - 24px - 240px);max-height:calc(100vh - 52px - 16px - 24px - 240px);overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0;margin-bottom:12px">
             <div style="color:var(--text3);font-size:12px;text-align:center;padding:40px 0">Tegyél fel kérdést a portfóliódról, vagy válassz egy gyors elemzést!</div>
           </div>
           <div style="display:flex;gap:8px">
@@ -670,16 +673,16 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
     </div>
 
     <!-- IMPORTÁLÁS -->
-    <div id="page-import" class="page">
+    <div id="page-import" class="page" style="height:calc(100vh - 52px - 16px - 60px);flex-direction:column">
       <!-- Tab váltó -->
-      <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-shrink:0">
         <button class="range-btn active" id="import-tab-ly" onclick="switchImportTab('ly',this)">Lightyear CSV</button>
         <button class="range-btn" id="import-tab-mk" onclick="switchImportTab('mk',this)">Állami Kincstár XLS</button>
       </div>
 
       <!-- Lightyear panel -->
-      <div id="import-panel-ly">
-      <div class="panel" style="max-width:700px">
+      <div id="import-panel-ly" style="flex:1;display:flex;flex-direction:column">
+      <div class="panel" style="flex:1;display:flex;flex-direction:column;margin-bottom:0">
         <div class="panel-header">
           <div class="panel-title">Lightyear CSV importálás</div>
         </div>
@@ -687,16 +690,8 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           Töltsd fel a Lightyear számlakivonat CSV fájlját. Az app automatikusan felismeri a vételeket és befizetéseket, előnézetet mutat, majd te döntöd el melyik TBSZ számlára kerüljenek.
         </div>
 
-        <!-- Számla választó -->
-        <div class="form-group" style="margin-bottom:16px">
-          <div class="form-label">Célszámla (TBSZ)</div>
-          <select class="form-select" id="importAccountSelect">
-            <option value="">– válassz számlát –</option>
-          </select>
-        </div>
-
         <!-- Fájl feltöltés -->
-        <div id="importDropzone" style="border:2px dashed var(--border2);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px"
+        <div id="importDropzone" style="border:2px dashed var(--border2);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center"
           onclick="document.getElementById('importFileInput').click()"
           ondragover="event.preventDefault();this.style.borderColor='var(--green)'"
           ondragleave="this.style.borderColor='var(--border2)'"
@@ -742,15 +737,15 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       </div><!-- /#import-panel-ly -->
 
       <!-- Állami Kincstár panel -->
-      <div id="import-panel-mk" style="display:none">
-        <div class="panel" style="max-width:700px">
+      <div id="import-panel-mk" style="display:none;flex:1;flex-direction:column">
+        <div class="panel" style="flex:1;display:flex;flex-direction:column;margin-bottom:0">
           <div class="panel-header">
             <div class="panel-title">Állami Kincstár XLS importálás</div>
           </div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:20px;line-height:1.7">
             Töltsd fel a MobilKincstár / Kincstár tranzakciós XLS exportját. Az app beolvassa a vételeket, eladásokat, kamatfizetéseket és a külső utalásokat.
           </div>
-          <div id="mkDropzone" style="border:2px dashed var(--border2);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px"
+          <div id="mkDropzone" style="border:2px dashed var(--border2);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center"
             onclick="document.getElementById('mkFileInput').click()"
             ondragover="event.preventDefault();this.style.borderColor='var(--green)'"
             ondragleave="this.style.borderColor='var(--border2)'"
@@ -799,7 +794,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div class="panel-title">összes tranzakció</div>
           <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ CSV export</button>
         </div>
-        <div class="tbl-wrap" style="max-height:650px;overflow-y:auto"><table>
+        <div class="tbl-wrap" style="max-height:calc(100vh - 52px - 16px - 24px - 90px);overflow-y:auto"><table>
           <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>eszköz</th><th class="r">vételár (Ft)</th><th class="r">névérték / db</th><th class="r">árfolyam (EUR)</th><th class="r">megjegyzés</th><th></th></tr></thead>
           <tbody id="txBody"></tbody>
         </table></div>
@@ -1535,10 +1530,10 @@ function renderCash(){
   const txs=[...data.cashTx].sort((a,b)=>a.date.localeCompare(b.date));
   let running=0;
   const rows=txs.map(t=>{
-    const sign=['deposit','coupon','expire','sell'].includes(t.type)?1:-1;
+    const sign=['deposit','coupon','expire','sell','transfer_in'].includes(t.type)?1:-1;
     running+=sign*t.amount;
-    const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell'}[t.type]||'b-deposit';
-    const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás'}[t.type]||t.type;
+    const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell',transfer_in:'b-transfer-in',transfer_out:'b-transfer-out'}[t.type]||'b-deposit';
+    const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás',transfer_in:'utalás be',transfer_out:'utalás ki'}[t.type]||t.type;
     return `<tr>
       <td>${t.date}</td>
       <td><span class="badge ${typeBadge}">${typeLabel}</span></td>
@@ -2402,8 +2397,8 @@ function deleteEtfTx(id){ deleteLyTx(id); }
 // ═══════════════════════════════════════════════
 function renderTranzakciok(){
   const all=[];
-  const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell'};
-  const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás'};
+  const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell',transfer_in:'b-transfer-in',transfer_out:'b-transfer-out'};
+  const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás',transfer_in:'utalás be',transfer_out:'utalás ki'};
 
   // Pénzszámla: befizetés, kiutalás, kamat, lejárat + FixMáP/DKJ eladás bevételek
   // A vétel típusú cash mozgásokat kihagyjuk (azok az eszköz soránál látszanak)
@@ -4064,14 +4059,7 @@ function resetMkImport() {
 
 let importParsed = []; // parsed rows ready for preview
 
-function initImportPage() {
-  const sel = document.getElementById('importAccountSelect');
-  if(!sel) return;
-  sel.innerHTML = '<option value="">– válassz számlát –</option>';
-  getLyAccounts().forEach(acc => {
-    sel.innerHTML += `<option value="${acc.id}">${acc.name}</option>`;
-  });
-}
+function initImportPage() { /* számla auto-felismerés */ }
 
 function handleImportDrop(e) {
   handleImportFiles(e.dataTransfer.files);
@@ -4264,7 +4252,7 @@ async function handleImportFiles(files) {
     }
   }
 
-  renderImportPreview(document.getElementById('importAccountSelect')?.value);
+  renderImportPreview(null);
 }
 
 function handleImportFile(file) {
