@@ -846,7 +846,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
       állampapír
     </button>
-    <button class="mob-nav-btn" onclick="mobileNav('tbsz',this)">
+    <button class="mob-nav-btn" onclick="mobileNavLy(this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       tbsz
     </button>
@@ -1021,6 +1021,16 @@ function showApp(){
   fetchLive();
   startAutoRefresh();
   loadHistoricData(true);
+}
+
+function mobileNavLy(btn) {
+  // Az első TBSZ számla megnyitása
+  const tbszAcc = getLyAccounts().find(a=>a.type==='tbsz');
+  if(!tbszAcc) return;
+  document.querySelectorAll('.mob-nav-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  showLyAccount(tbszAcc.id, null);
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function mobileNav(name, btn){
@@ -3453,6 +3463,63 @@ async function fetchHistoricalPrices(symbol, startDate){
   }
 }
 
+async function fetchHistoricalWBIT(startDate){
+  // WBIT árfolyama = BTC-USD × USD/EUR × fix_szorzó
+  // A fix szorzót a jelenlegi live WBIT/BTC arányból számítjuk
+  try {
+    // Jelenlegi BTC/USD ár Yahoo-ról (2 napos adat az aktuális árhoz)
+    const btcNowUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=2d';
+    const btcNowR = await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(btcNowUrl));
+    if(!btcNowR.ok) return null;
+    const btcNowD = await btcNowR.json();
+    const btcNowCloses = btcNowD?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+    const btcUsdNow = btcNowCloses[btcNowCloses.length-1];
+    if(!btcUsdNow || !liveWbit || !liveFx) return null;
+
+    // USD/EUR jelenlegi arány
+    const usdEurNow = 1 / (liveFx / (btcUsdNow / liveWbit)); // nem jó
+    // Egyszerűbb: WBIT/BTC_USD szorzó = liveWbit / btcUsdNow × liveFx
+    // liveWbit EUR, btcUsdNow USD, liveFx HUF/EUR
+    // btcEurNow = btcUsdNow / (liveFx / frankfurterUsdEur) → bonyolult
+    // Legegyszerűbb: szorzó = liveWbit / btcUsdNow (EUR/USD arányban)
+    // De kellene USD/EUR is... kérjük le Frankfurter-től
+    const fxUrl = 'https://api.frankfurter.app/latest?from=USD&to=EUR';
+    const fxR = await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(fxUrl));
+    if(!fxR.ok) return null;
+    const fxD = await fxR.json();
+    const usdEurNow2 = fxD.rates?.EUR;
+    if(!usdEurNow2) return null;
+
+    // fix szorzó = WBIT_EUR / (BTC_USD × USD_EUR)
+    const btcEurNow = btcUsdNow * usdEurNow2;
+    const fixRatio = liveWbit / btcEurNow;
+
+    // Historikus BTC-USD árak
+    const [btcPrices, usdEurRates] = await Promise.all([
+      fetchHistoricalPrices('BTC-USD', startDate),
+      (async () => {
+        const end = new Date().toISOString().split('T')[0];
+        const url = `https://api.frankfurter.app/${startDate}..${end}?from=USD&to=EUR`;
+        const r = await fetch('https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(url));
+        if(!r.ok) return null;
+        const d = await r.json();
+        const rates = {};
+        Object.entries(d.rates||{}).forEach(([date,r]) => { rates[date] = r.EUR; });
+        return rates;
+      })()
+    ]);
+    if(!btcPrices || !usdEurRates) return null;
+
+    // WBIT historikus ár = BTC_USD × USD_EUR × fixRatio
+    const wbitPrices = {};
+    Object.entries(btcPrices).forEach(([date, btcUsd]) => {
+      const usdEur = interpolate(usdEurRates, date);
+      if(usdEur) wbitPrices[date] = btcUsd * usdEur * fixRatio;
+    });
+    return Object.keys(wbitPrices).length > 0 ? wbitPrices : null;
+  } catch(e) { return null; }
+}
+
 async function fetchHistoricalFX(startDate){
   const end=new Date().toISOString().split('T')[0];
   const url=`https://api.frankfurter.app/${startDate}..${end}?from=EUR&to=HUF`;
@@ -3466,11 +3533,13 @@ async function fetchHistoricalFX(startDate){
 
 async function loadHistoricData(silent=false){
   const firstDate=getFirstTransactionDate();
-  const [vwcePrices, wbitPrices, fxPrices]=await Promise.all([
+  const [vwcePrices, fxPrices]=await Promise.all([
     fetchHistoricalPrices('VWCE.DE', firstDate),
-    fetchHistoricalPrices('WBIT.DE', firstDate),
     fetchHistoricalFX(firstDate),
   ]);
+  // WBIT historikus ár a live WBIT árból számítva (fix szorzó × BTC/EUR)
+  // Csak ha már van live WBIT ár
+  const wbitPrices = liveWbit ? await fetchHistoricalWBIT(firstDate) : null;
   if(!vwcePrices&&!fxPrices)return;
   histData={
     vwcePrices:vwcePrices||{},
@@ -3559,7 +3628,7 @@ async function fetchLive(){
   window._prevFx=prevFx;
 
   await fetchETFPrice('VWCE.DE','','',( p,pct)=>{liveVwce=p;liveVwcePct=pct;});
-  await fetchETFPrice('WBIT.DE','','',( p,pct)=>{liveWbit=p;liveWbitPct=pct;});
+  await fetchETFPrice('WBIT-DE','','',( p,pct)=>{liveWbit=p;liveWbitPct=pct;});
   renderDashboard();
 }
 
