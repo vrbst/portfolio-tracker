@@ -1038,11 +1038,8 @@ function showTab(name,el){
 function cashBalance(){
   return data.cashTx.reduce((s,t)=>{
     if(['deposit','coupon','expire'].includes(t.type))return s+t.amount;
-    if(['withdraw','buy'].includes(t.type))return s-t.amount;
-    // transfer_in/transfer_out: utalások (befektetett tőke számításhoz, de pénzszámla egyenlegbe is)
-    if(t.type==='transfer_in')return s+t.amount;
-    if(t.type==='transfer_out')return s-t.amount;
-    // sell: NEM számít bele - az Utalás indítás (transfer_out) már levonja
+    if(['withdraw','buy','coupon_out'].includes(t.type))return s-t.amount;
+    // transfer_in, transfer_out, sell: NEM számít a pénzszámla egyenlegébe
     return s;
   },0);
 }
@@ -1553,10 +1550,10 @@ function renderCash(){
   let running=0;
   const rows=txs.map(t=>{
     const sign=['deposit','coupon','expire','transfer_in'].includes(t.type)?1:
-                ['withdraw','buy','transfer_out'].includes(t.type)?-1:0;
+                ['withdraw','buy','transfer_out','coupon_out'].includes(t.type)?-1:0;
     running+=sign*t.amount;
-    const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell',transfer_in:'b-transfer-in',transfer_out:'b-transfer-out'}[t.type]||'b-deposit';
-    const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás',transfer_in:'utalás be',transfer_out:'utalás ki'}[t.type]||t.type;
+    const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell',transfer_in:'b-transfer-in',transfer_out:'b-transfer-out',coupon_out:'b-withdraw'}[t.type]||'b-deposit';
+    const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás',transfer_in:'utalás be',transfer_out:'utalás ki',coupon_out:'kamat kiutalás'}[t.type]||t.type;
     return `<tr>
       <td>${t.date}</td>
       <td><span class="badge ${typeBadge}">${typeLabel}</span></td>
@@ -3860,15 +3857,22 @@ function parseMkXLSWithSheetJS(buffer) {
           selected: !isDuplicate, label: 'Bankkártyás fizetés',
         });
       }
-      // Utalás indítás → pénz visszament a bankszámlára, csökkenti a befektetett tőkét
+      // Utalás indítás → csak ha kamatfizetéshez kapcsolódik (Esedékesség ugyanazon a napon)
       else if(type==='Utalás indítás') {
+        const hasCouponSameDay = rows.some(r2=>{
+          const t2 = str(r2['Transaction type']||r2['Tranzakció típusa']||r2[2]||'');
+          const d2 = parseMkDate(str(r2['Value date']||r2['Értéknap']||r2[9]||''));
+          const a2 = parseFloat(r2['Amount']||r2['Összeg']||r2[7]||0);
+          return t2==='Esedékesség fizetés' && d2===date && Math.abs(a2-amount)<1;
+        });
         mkParsed.push({
-          appType: 'transfer_out', date, securities: '–',
-          faceValue: 0, amount, txId, isDuplicate,
-          selected: !isDuplicate, label: 'Utalás indítás',
+          appType: hasCouponSameDay ? 'coupon_out' : 'transfer_out',
+          date, securities: '–', faceValue: 0, amount, txId, isDuplicate,
+          selected: !isDuplicate,
+          label: hasCouponSameDay ? 'Kamat kiutalás' : 'Utalás indítás',
         });
       }
-      // Pénzszámla befizetés / kifizetés: belső mozgás, skip (nem befolyásolja a befektetett tőkét)
+      // Pénzszámla befizetés / kifizetés: belső mozgás, skip
     });
 
     status.style.display = 'none';
@@ -4069,6 +4073,10 @@ function confirmMkImport() {
     }
     else if(r.appType==='transfer_out') {
       data.cashTx.push({id:uid(), date:r.date, type:'transfer_out', amount:r.amount, note:r.label, mkRef:r.txId});
+    }
+    else if(r.appType==='coupon_out') {
+      // Kamat kiutalás → levonja a pénzszámla egyenlegéből
+      data.cashTx.push({id:uid(), date:r.date, type:'coupon_out', amount:r.amount, note:'Kamat kiutalás', mkRef:r.txId});
     }
   });
 
