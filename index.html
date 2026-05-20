@@ -3860,8 +3860,8 @@ function parseMkXLSWithSheetJS(buffer) {
       // Utalás indítás → csak ha kamatfizetéshez kapcsolódik (Esedékesség ugyanazon a napon)
       else if(type==='Utalás indítás') {
         const hasCouponSameDay = rows.some(r2=>{
-          const t2 = str(r2['Transaction type']||r2['Tranzakció típusa']||r2[2]||'');
-          const d2 = parseMkDate(str(r2['Value date']||r2['Értéknap']||r2[9]||''));
+          const t2 = String(r2['Transaction type']||r2['Tranzakció típusa']||r2[2]||'');
+          const d2 = parseMkDate(String(r2['Value date']||r2['Értéknap']||r2[9]||''));
           const a2 = parseFloat(r2['Amount']||r2['Összeg']||r2[7]||0);
           return t2==='Esedékesség fizetés' && d2===date && Math.abs(a2-amount)<1;
         });
