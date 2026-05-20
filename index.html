@@ -996,6 +996,7 @@ function logout(){localStorage.removeItem('gh_token');location.reload();}
   document.addEventListener('mouseover', e => {
     const el = e.target.closest('[data-ttid]');
     if(!el || !el.dataset.ttid) return;
+    if(blurOn) return; // homályosítás esetén ne mutasson tooltipet
     const html = window._tooltips && window._tooltips[el.dataset.ttid];
     if(!html) return;
     tip.innerHTML = html;
@@ -1927,6 +1928,7 @@ function renderLyAccount(accountId) {
   renderLyCash(accountId);
   renderLyInstrumentList(accountId);
   renderLyCashTx(accountId);
+  if(blurOn) setTimeout(applyBlur, 50);
 }
 
 function renderLyCards(accountId) {
@@ -1952,6 +1954,7 @@ function renderLyCards(accountId) {
     <div class="stat-card"><div class="stat-label">P&L (unrealized)</div><div class="stat-value blurable" style="color:${plCol}">${invested>0?(pl>=0?'+':'')+fmtM(pl):'–'}</div><div class="stat-sub" style="color:${plCol}">${invested>0?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</div></div>
     <div class="stat-card"><div class="stat-label">EUR / HUF</div><div class="stat-value">${fx.toFixed(2)} Ft</div><div class="stat-sub">${liveFx?'live':'becsült'}</div></div>
   `;
+  if(blurOn) applyBlur();
 }
 
 function renderLyCash(accountId) {
@@ -3634,8 +3637,10 @@ function calcPortfolioOnDate(date){
   let cash=0;
   data.cashTx.forEach(t=>{
     if(t.date>date)return;
-    if(['deposit','coupon','expire','sell'].includes(t.type))cash+=t.amount;
-    if(['withdraw','buy'].includes(t.type))cash-=t.amount;
+    // sell NEM kerül a cash-be (csak realizált P&L számításhoz)
+    // transfer_in/transfer_out NEM kerül a cash-be (befektetett tőke számításhoz)
+    if(['deposit','coupon','expire'].includes(t.type))cash+=t.amount;
+    if(['withdraw','buy','coupon_out'].includes(t.type))cash-=t.amount;
   });
   let ap=0;
   const fmSellDates=data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP')).map(t=>t.date).sort();
@@ -3652,10 +3657,11 @@ function calcPortfolioOnDate(date){
   });
   data.dkj.forEach(d=>{
     if(d.date>date)return;
+    const fv = d.originalFaceValue || d.faceValue;
     if(d.active){ap+=d.faceValue;return;}
-    if(d.soldDate){if(d.soldDate>date)ap+=d.faceValue;return;}
+    if(d.soldDate){if(d.soldDate>date)ap+=fv;return;}
     const inferredSell=dkjSellMap[d.maturity];
-    if(!inferredSell||inferredSell>date)ap+=d.faceValue;
+    if(!inferredSell||inferredSell>date)ap+=fv;
   });
   const etfHoldings={};
   (data.lyTx||[]).filter(t=>t.date<=date).forEach(t=>{
@@ -4093,7 +4099,7 @@ function confirmMkImport() {
         series = {id:uid(), name, maturity:r.maturity};
         data.dkjSeries.push(series);
       }
-      data.dkj.push({id:uid(), seriesId:series.id, date:r.date, faceValue:r.faceValue, buyPrice:r.amount, maturity:r.maturity, active:true, mkRef:r.txId});
+      data.dkj.push({id:uid(), seriesId:series.id, date:r.date, faceValue:r.faceValue, originalFaceValue:r.faceValue, buyPrice:r.amount, maturity:r.maturity, active:true, mkRef:r.txId});
     }
     else if(r.appType==='fixmap-sell') {
       const series = data.fixmapSeries.find(s=>r.securities.includes(s.name.replace('FixMáP ','')));
