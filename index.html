@@ -380,7 +380,9 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
   /* Extra padding a tartalom aljának hogy ne takarja a nav */
   .content{padding-bottom:70px!important}
-}
+
+  .ly-detail-wrap{font-size:10px}
+  .ly-detail-wrap th,.ly-detail-wrap td{padding:5px 6px!important;white-space:nowrap}}
 
 @media(max-width:420px){
   .cards-4,.cards-3,.cards-2,.cards-6{grid-template-columns:1fr}
@@ -2023,7 +2025,7 @@ function renderLyDetailTable(accountId, ticker) {
   const isTbsz=acc&&acc.type==='tbsz';
   bodyEl.innerHTML=`
     <tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--green);font-weight:500;background:var(--bg3)">
-      <td style="font-size:11px;color:var(--text2)">összesítés</td>
+      <td style="font-size:10px;color:var(--text2);white-space:nowrap">összesítés</td>
       <td class="r blurable">${totShares.toFixed(4)}</td>
       <td class="r" colspan="2" style="color:var(--text3);font-size:11px">∅ ${fmtEur(basis.reduce((s,b)=>s+b.priceEur*b.shares,0)/totShares)}</td>
       <td class="r blurable">${fmtM(totCost)}</td>
@@ -2037,7 +2039,7 @@ function renderLyDetailTable(accountId, ticker) {
     const plPct=plFt!==null&&b.costHuf>0?plFt/b.costHuf*100:null;
     const col=plFt!==null?(plFt>=0?'var(--green)':'var(--red)'):'';
     return `<tr>
-      <td>${b.date}</td>
+      <td style="white-space:nowrap;font-size:10px">${b.date}</td>
       <td class="r blurable">${b.shares.toFixed(4)}</td>
       <td class="r blurable">${fmtEur(b.priceEur)}</td>
       <td class="r">${b.fxRate.toFixed(1)}</td>
@@ -2386,7 +2388,7 @@ function renderETFTable(ticker,bodyId,emptyId,livePrice,theadIdOverride){
     const plPct=plFt!==null?plFt/b.costHuf*100:null;
     const plEurPct=plEur!==null?plEur/costEur*100:null;
     return `<tr>
-      <td>${b.date}</td>
+      <td style="white-space:nowrap;font-size:10px">${b.date}</td>
       <td class="r blurable">${b.shares.toFixed(2)}</td>
       <td class="r blurable"><div>${fmtEur(b.priceEur)}</div><div style="color:var(--text3);font-size:10px">${fmt(Math.round(b.priceEur*b.fxRate))}</div></td>
       <td class="r"><div>${b.fxRate.toFixed(1)}</div><div style="font-size:10px;color:${(liveFx||395)>=b.fxRate?'var(--green)':'var(--red)'};">${(((liveFx||395)-b.fxRate)/b.fxRate*100).toFixed(1)}%</div></td>
