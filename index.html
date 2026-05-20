@@ -1037,8 +1037,12 @@ function showTab(name,el){
 // ═══════════════════════════════════════════════
 function cashBalance(){
   return data.cashTx.reduce((s,t)=>{
-    if(['deposit','coupon','expire','sell'].includes(t.type))return s+t.amount;
+    if(['deposit','coupon','expire'].includes(t.type))return s+t.amount;
     if(['withdraw','buy'].includes(t.type))return s-t.amount;
+    // transfer_in/transfer_out: utalások (befektetett tőke számításhoz, de pénzszámla egyenlegbe is)
+    if(t.type==='transfer_in')return s+t.amount;
+    if(t.type==='transfer_out')return s-t.amount;
+    // sell: NEM számít bele - az Utalás indítás (transfer_out) már levonja
     return s;
   },0);
 }
@@ -1548,7 +1552,8 @@ function renderCash(){
   const txs=[...data.cashTx].sort((a,b)=>a.date.localeCompare(b.date));
   let running=0;
   const rows=txs.map(t=>{
-    const sign=['deposit','coupon','expire','sell','transfer_in'].includes(t.type)?1:-1;
+    const sign=['deposit','coupon','expire','transfer_in'].includes(t.type)?1:
+                ['withdraw','buy','transfer_out'].includes(t.type)?-1:0;
     running+=sign*t.amount;
     const typeBadge={deposit:'b-deposit',withdraw:'b-withdraw',coupon:'b-coupon',expire:'b-expire',buy:'b-buy',sell:'b-sell',transfer_in:'b-transfer-in',transfer_out:'b-transfer-out'}[t.type]||'b-deposit';
     const typeLabel={deposit:'befizetés',withdraw:'kiutalás',coupon:'kamat',expire:'lejárat',buy:'vétel',sell:'eladás',transfer_in:'utalás be',transfer_out:'utalás ki'}[t.type]||t.type;
