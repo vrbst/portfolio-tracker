@@ -3969,25 +3969,36 @@ function renderDashMiniChart(){
 
   if(points.length < 2) return;
 
+  // Az utolsó pont (ma) felülírása az élő totallal, hogy egyezzen a nagy értékkijelzővel
+  // (a calcPortfolioOnDate historikus záróárakkal számol, a nagy szám az élő árakkal)
+  if(liveVwce && liveFx){
+    const liveCash = cashBalance();
+    const liveAp = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
+                 + data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+    const liveEtf = ((liveVwce||0)*etfShares('VWCE') + (liveWbit||0)*etfShares('WBIT')) * liveFx;
+    const liveTotal = Math.round(liveCash + liveAp + liveEtf);
+    if(liveTotal > 0) points[points.length-1].val = liveTotal;
+  }
+
   const labels = points.map(p=>p.date);
   const vals = points.map(p=>p.val);
   const first = vals[0], last = vals[vals.length-1];
-  const isUp = last >= first;
-  const lineCol = isUp?'rgba(74,222,154,1)':'rgba(248,113,113,1)';
+  const lineCol = 'rgba(74,222,154,1)';
 
   const canvasCtx = ctx.getContext('2d');
   const gradient = canvasCtx.createLinearGradient(0,0,0,200);
-  if(isUp){
-    gradient.addColorStop(0,'rgba(74,222,154,0.18)');
-    gradient.addColorStop(0.5,'rgba(74,222,154,0.05)');
-    gradient.addColorStop(1,'rgba(74,222,154,0)');
-  } else {
-    gradient.addColorStop(0,'rgba(248,113,113,0.18)');
-    gradient.addColorStop(0.5,'rgba(248,113,113,0.05)');
-    gradient.addColorStop(1,'rgba(248,113,113,0)');
-  }
+  gradient.addColorStop(0,'rgba(74,222,154,0.18)');
+  gradient.addColorStop(0.5,'rgba(74,222,154,0.05)');
+  gradient.addColorStop(1,'rgba(74,222,154,0)');
 
   if(charts['dashMini']) charts['dashMini'].destroy();
+
+  // Aktív szegmens színe (hover-pozícióig); inaktív szegmens (utána) szürke
+  const grayCol = 'rgba(160,160,160,0.35)';
+  const grayFillTop = 'rgba(160,160,160,0.06)';
+  // Hover állapot tárolása a chart-on
+  let hoverIndex = null;
+
   charts['dashMini'] = new Chart(ctx,{
     type:'line',
     data:{labels,datasets:[{
@@ -4000,6 +4011,10 @@ function renderDashMiniChart(){
       pointRadius:0,
       pointHoverRadius:4,
       pointHoverBackgroundColor:lineCol,
+      // Szegmens-alapú színezés: a hover index utáni részt szürkére színezzük
+      segment:{
+        borderColor: seg => (hoverIndex !== null && seg.p0DataIndex >= hoverIndex) ? grayCol : lineCol,
+      },
     }]},
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -4009,6 +4024,17 @@ function renderDashMiniChart(){
           label:ctx=>blurOn?'  ···':'  '+fmtM(ctx.raw)
         },
         displayColors:false, padding:10,
+        // Hover esemény → újraszínezés
+        external:function(ctx){
+          const tooltip = ctx.tooltip;
+          const newIndex = (tooltip && tooltip.opacity > 0 && tooltip.dataPoints && tooltip.dataPoints.length)
+            ? tooltip.dataPoints[0].dataIndex
+            : null;
+          if(newIndex !== hoverIndex){
+            hoverIndex = newIndex;
+            ctx.chart.update('none'); // animáció nélküli újrarajzol
+          }
+        }
       }},
       scales:{
         x:{display:true,ticks:{color:'rgba(255,255,255,0.18)',font:{size:10},maxTicksLimit:6,maxRotation:0},grid:{display:false},border:{display:false}},
