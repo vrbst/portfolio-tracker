@@ -533,6 +533,15 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
       </div><!-- /.dash-layout -->
 
+      <!-- FI cél kártya -->
+      <div class="panel" id="fiGoalPanel" style="margin-top:14px">
+        <div class="panel-header">
+          <div class="panel-title">FI cél</div>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('edit-fi-goal')" id="fiGoalEditBtn">✎ szerkesztés</button>
+        </div>
+        <div id="fiGoalContent"></div>
+      </div>
+
 
     </div>
 
@@ -926,6 +935,7 @@ const DEFAULT_DATA = {
   lyTx: [],           // {id, accountId, date, type:'buy'|'sell', ticker, shares, priceEur, fxRate, fee, feeCurrency, ref}
   lyCashTx: [],       // {id, accountId, date, type:'deposit'|'withdraw'|'transfer_in'|'transfer_out', amount, currency, ref, note}
   marketCommentary: null, // {date, html} – napi piaci kommentár cache
+  fiGoal: null,       // {amount, targetDate, monthlySaving, expectedReturnPct, aiCoach:{date,text}}
 };
 
 let data = null;
@@ -982,6 +992,7 @@ async function loadOrCreateGist(){
     if(data.marketCommentary===undefined) data.marketCommentary=null;
     if(data.lyTx===undefined) data.lyTx=[];
     if(data.lyCashTx===undefined) data.lyCashTx=[];
+    if(data.fiGoal===undefined) data.fiGoal=null;
     if(!data.cashTx)data.cashTx=[];
     if(!data.fixmapSeries)data.fixmapSeries=[];
     if(!data.dkjSeries)data.dkjSeries=[];
@@ -1212,6 +1223,251 @@ function fixmapAnnualCoupon(){
   return data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue*f.couponRate/100,0);
 }
 
+// FI cél projekció — KOMPONENSENKÉNT számolja a hozamot:
+// - FixMáP: tényleges kamatláb (couponRate), évente készpénzbe kerül (nem kamatozik újra magától, de a portfólióban marad)
+// - DKJ: lejáratig a vételár → névérték diszkrét hozamot ad (az időarányos részt évesítve)
+// - ETF (VWCE/WBIT): a felhasználó által megadott várt éves hozam %
+// - Készpénz: 0%
+// A havi befizetést alapesetben ETF-be tesszük (mert a FixMáP új sorozatot igényelne, és a FI cél hosszú távú).
+function projectFiGoal(components, goal){
+  if(!goal || !goal.amount || !goal.targetDate) return null;
+  const monthsToTarget = Math.max(0, Math.round((new Date(goal.targetDate) - new Date())/(1000*60*60*24*30.44)));
+  const monthlySaving = goal.monthlySaving || 0;
+  const etfReturnPct = goal.etfReturnPct || 0;
+  const etfMonthlyRate = Math.pow(1 + etfReturnPct/100, 1/12) - 1;
+
+  // Komponens-szintű állapot
+  let cash = components.cash;
+  let fixmap = components.fixmap;       // {value, annualCouponFt}
+  let dkj = components.dkj;             // {value, gainAtMaturity, monthsToMaturity}
+  let etf = components.etf;             // {value}
+  let fixmapAnnualCoupon = fixmap.annualCoupon;
+  let fixmapValue = fixmap.value;
+  let dkjValue = dkj.value;
+  let dkjGainPerMonth = dkj.monthsToMaturity > 0 ? dkj.gainAtMaturity / dkj.monthsToMaturity : 0;
+  let dkjMonthsLeft = dkj.monthsToMaturity;
+  let etfValue = etf.value;
+
+  const wealth = () => cash + fixmapValue + dkjValue + etfValue;
+  const startWealth = wealth();
+
+  const simulateOneMonth = () => {
+    // 1) FixMáP kamat (negyedévente realizálódik, de havi szinten ~1/12 átkerül készpénzbe)
+    const monthlyFixmapCoupon = fixmapAnnualCoupon / 12;
+    cash += monthlyFixmapCoupon;
+    // 2) DKJ: lassan értékelődik a névérték felé (lineárisan, közelítés)
+    if(dkjMonthsLeft > 0){
+      dkjValue += dkjGainPerMonth;
+      dkjMonthsLeft--;
+      if(dkjMonthsLeft === 0){
+        // lejáratkor készpénzzé válik a teljes névérték
+        cash += dkjValue;
+        dkjValue = 0;
+      }
+    }
+    // 3) ETF: havi kamatozás
+    etfValue = etfValue * (1 + etfMonthlyRate);
+    // 4) Új havi befizetés → ETF-be (default — a FI cél hosszú távú, ez a tipikus DCA stratégia)
+    etfValue += monthlySaving;
+  };
+
+  const maxMonths = Math.min(monthsToTarget, 720);
+  for(let m=1; m<=maxMonths; m++) simulateOneMonth();
+  const projectedAtTarget = wealth();
+
+  // Mikor érné el a célt? — folytatjuk a szimulációt, ha még nem értük el
+  // (külön futtatjuk hogy ne legyen mellékhatás)
+  let monthsToReach = null;
+  {
+    let _cash = components.cash;
+    let _fixmapValue = components.fixmap.value;
+    let _fixmapAnnualCoupon = components.fixmap.annualCoupon;
+    let _dkjValue = components.dkj.value;
+    let _dkjGainPerMonth = components.dkj.monthsToMaturity > 0 ? components.dkj.gainAtMaturity / components.dkj.monthsToMaturity : 0;
+    let _dkjMonthsLeft = components.dkj.monthsToMaturity;
+    let _etfValue = components.etf.value;
+    const _wealth = () => _cash + _fixmapValue + _dkjValue + _etfValue;
+
+    for(let m=1; m<=720; m++){
+      _cash += _fixmapAnnualCoupon / 12;
+      if(_dkjMonthsLeft > 0){
+        _dkjValue += _dkjGainPerMonth;
+        _dkjMonthsLeft--;
+        if(_dkjMonthsLeft === 0){ _cash += _dkjValue; _dkjValue = 0; }
+      }
+      _etfValue = _etfValue * (1 + etfMonthlyRate);
+      _etfValue += monthlySaving;
+      if(_wealth() >= goal.amount){ monthsToReach = m; break; }
+    }
+  }
+
+  // Szükséges havi befizetés a cél eléréséhez (binary search a havi befizetésre, mert a komponens-modellben nincs zárt képlet)
+  let requiredMonthly = null;
+  if(monthsToTarget > 0){
+    const tryPmt = (pmt) => {
+      let _cash = components.cash;
+      let _fixmapValue = components.fixmap.value;
+      let _fixmapAnnualCoupon = components.fixmap.annualCoupon;
+      let _dkjValue = components.dkj.value;
+      let _dkjGainPerMonth = components.dkj.monthsToMaturity > 0 ? components.dkj.gainAtMaturity / components.dkj.monthsToMaturity : 0;
+      let _dkjMonthsLeft = components.dkj.monthsToMaturity;
+      let _etfValue = components.etf.value;
+      for(let m=1; m<=monthsToTarget; m++){
+        _cash += _fixmapAnnualCoupon / 12;
+        if(_dkjMonthsLeft > 0){
+          _dkjValue += _dkjGainPerMonth;
+          _dkjMonthsLeft--;
+          if(_dkjMonthsLeft === 0){ _cash += _dkjValue; _dkjValue = 0; }
+        }
+        _etfValue = _etfValue * (1 + etfMonthlyRate);
+        _etfValue += pmt;
+      }
+      return _cash + _fixmapValue + _dkjValue + _etfValue;
+    };
+    // Binary search 0 és 10M Ft/hó között
+    let lo = 0, hi = 10000000;
+    if(tryPmt(0) >= goal.amount) { requiredMonthly = 0; }
+    else if(tryPmt(hi) < goal.amount) { requiredMonthly = hi; }
+    else {
+      for(let i=0; i<40; i++){
+        const mid = (lo + hi) / 2;
+        if(tryPmt(mid) >= goal.amount) hi = mid; else lo = mid;
+      }
+      requiredMonthly = Math.round(hi);
+    }
+  }
+
+  return {
+    monthsToTarget,
+    monthlySaving,
+    etfReturnPct,
+    projectedAtTarget,
+    monthsToReach,
+    requiredMonthly,
+    startWealth,
+  };
+}
+
+function renderFiGoal(components){
+  const el = document.getElementById('fiGoalContent');
+  if(!el) return;
+  const goal = data.fiGoal;
+  const currentWealth = components.cash + components.fixmap.value + components.dkj.value + components.etf.value;
+
+  if(!goal || !goal.amount){
+    el.innerHTML = `
+      <div style="text-align:center;padding:20px 10px;color:var(--text3)">
+        <div style="font-size:13px;margin-bottom:10px">Még nincs FI célod beállítva.</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('edit-fi-goal')">+ cél beállítása</button>
+      </div>`;
+    return;
+  }
+
+  const proj = projectFiGoal(components, goal);
+  const progressPct = Math.min(100, currentWealth / goal.amount * 100);
+  const remaining = Math.max(0, goal.amount - currentWealth);
+
+  // Mikor érné el a célt — dátumra konvertálva
+  let reachDateStr = '–', deltaMonthsStr = '';
+  if(proj && proj.monthsToReach !== null){
+    const reach = new Date();
+    reach.setMonth(reach.getMonth() + proj.monthsToReach);
+    reachDateStr = reach.toISOString().slice(0,7); // YYYY-MM
+    const deltaM = proj.monthsToTarget - proj.monthsToReach;
+    if(deltaM > 0) deltaMonthsStr = `<span style="color:var(--green);font-size:11px;margin-left:6px">${deltaM} hó-val a cél előtt ✓</span>`;
+    else if(deltaM < 0) deltaMonthsStr = `<span style="color:var(--amber);font-size:11px;margin-left:6px">${-deltaM} hó csúszás</span>`;
+    else deltaMonthsStr = `<span style="color:var(--text3);font-size:11px;margin-left:6px">pont a céldátumra ✓</span>`;
+  }
+
+  // Szükséges havi vs jelenlegi havi befizetés
+  let pmtLineHtml = '';
+  if(proj && proj.requiredMonthly !== null){
+    const req = Math.round(proj.requiredMonthly);
+    const cur = Math.round(goal.monthlySaving || 0);
+    const delta = cur - req;
+    let col = 'var(--text2)';
+    let txt = '';
+    if(delta >= 0){
+      col = 'var(--green)';
+      txt = `jelenlegi befizetésed (<span class="blurable">${fmt(cur)} Ft</span>) ${delta > 0 ? '+'+fmt(delta)+' Ft puffert ad havonta' : 'pontosan elég'}`;
+    } else {
+      col = 'var(--amber)';
+      txt = `jelenlegi befizetésed (<span class="blurable">${fmt(cur)} Ft</span>) <span style="color:var(--amber)">−${fmt(-delta)} Ft</span>-tal kevesebb mint kéne`;
+    }
+    pmtLineHtml = `
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">
+        szükséges havi befizetés: <span style="color:${col};font-weight:600" class="blurable">${fmt(req)} Ft</span>
+        · ${txt}
+      </div>`;
+  }
+
+  // AI coach utolsó válasza
+  let coachHtml = '';
+  if(goal.aiCoach && goal.aiCoach.text){
+    const ageDays = Math.round((new Date() - new Date(goal.aiCoach.date))/(1000*60*60*24));
+    coachHtml = `
+      <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:8px;border-left:3px solid var(--accent)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:.1em;text-transform:uppercase">✦ AI coach értékelés · ${ageDays} napja</div>
+        <div style="font-size:12px;line-height:1.5;color:var(--text)">${goal.aiCoach.text}</div>
+      </div>`;
+  }
+
+  const barColor = progressPct >= 100 ? 'var(--green)' : progressPct >= 50 ? 'var(--accent)' : 'var(--blue, #5b9eff)';
+
+  // Komponens-bontás tooltipben: mit ad mindegyik
+  const fmAnnualPct = components.fixmap.value > 0 ? (components.fixmap.annualCoupon / components.fixmap.value * 100) : 0;
+  const compBreakdown = `FixMáP: ${(components.fixmap.value/1e6).toFixed(1)}M (${fmAnnualPct.toFixed(1)}% kamat) · DKJ: ${(components.dkj.value/1e6).toFixed(2)}M · ETF: ${(components.etf.value/1e6).toFixed(2)}M (${goal.etfReturnPct}% várt) · készpénz: ${(components.cash/1e6).toFixed(2)}M`;
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div>
+        <span class="stat-label">cél</span>
+        <span style="font-family:var(--font-head);font-size:15px;font-weight:600;margin-left:8px" class="blurable">${fmtM(goal.amount)}</span>
+        <span style="color:var(--text3);font-size:11px;margin-left:6px">· ${goal.targetDate}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3)" title="${compBreakdown}">
+        ETF várt hozam: ${(goal.etfReturnPct||0).toFixed(1)}% / év
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+      <div>
+        <span class="blurable" style="font-family:var(--font-head);font-size:16px;font-weight:600">${fmtM(currentWealth)}</span>
+        <span style="color:var(--text3);font-size:12px"> / <span class="blurable">${fmtM(goal.amount)}</span></span>
+      </div>
+      <div style="font-size:13px;font-weight:600;color:${barColor}">${progressPct.toFixed(1)}%</div>
+    </div>
+
+    <div style="width:100%;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;margin-bottom:12px">
+      <div style="width:${progressPct}%;height:100%;background:${barColor};transition:width .3s"></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:8px">
+      <div>
+        <div class="stat-label">hátralévő</div>
+        <div class="stat-value blurable" style="font-size:14px">${fmtM(remaining)}</div>
+        <div class="stat-sub">${proj ? proj.monthsToTarget + ' hó a céldátumig' : ''}</div>
+      </div>
+      <div>
+        <div class="stat-label">várható elérés</div>
+        <div class="stat-value" style="font-size:14px">${reachDateStr}${deltaMonthsStr}</div>
+        <div class="stat-sub">a jelenlegi ütemmel</div>
+      </div>
+    </div>
+
+    ${pmtLineHtml}
+
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="generateFiCoach()" id="fiCoachBtn">✦ AI coach értékelés</button>
+      ${goal.aiCoach ? `<button class="btn btn-ghost btn-sm" onclick="data.fiGoal.aiCoach=null;saveData();renderDashboard()">törlés</button>` : ''}
+    </div>
+
+    ${coachHtml}
+  `;
+}
+
+function fixmapAnnualCoupon_END_MARKER(){}
+
 function nextCouponDate(maturity){
   if(!maturity)return null;
   const mat=new Date(maturity);
@@ -1331,6 +1587,30 @@ function renderDashboard(){
   renderUpcoming();
   renderCashflowChart();
   renderDashMiniChart();
+
+  // FI cél komponens-bontás
+  const fixmapValue = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+  const dkjPositions = data.dkj.filter(d=>d.active);
+  const dkjValue = dkjPositions.reduce((s,d)=>s+d.faceValue,0);                            // jelenleg ~névértékig értékelve
+  const dkjBuyTotal = dkjPositions.reduce((s,d)=>s+(d.buyPrice||d.faceValue),0);
+  const dkjGainAtMaturity = dkjValue - dkjBuyTotal;                                        // lejáratkor realizálódó hozam
+  // DKJ átlag lejáratig hátralévő hónapok (súlyozva névértékkel)
+  let dkjMonthsToMaturity = 0;
+  if(dkjValue > 0){
+    const totalMonths = dkjPositions.reduce((s,d) => {
+      const m = Math.max(0, Math.round((new Date(d.maturity) - new Date())/(1000*60*60*24*30.44)));
+      return s + m * d.faceValue;
+    }, 0);
+    dkjMonthsToMaturity = Math.round(totalMonths / dkjValue);
+  }
+  const components = {
+    cash: cb,
+    fixmap: { value: fixmapValue, annualCoupon: annualYield },
+    dkj: { value: dkjValue, gainAtMaturity: dkjGainAtMaturity, monthsToMaturity: dkjMonthsToMaturity },
+    etf: { value: tbszVal }
+  };
+  renderFiGoal(components);
+
   if(blurOn)applyBlur();
   if(activeLyAccountId) renderLyInstrumentList(activeLyAccountId);
   if(activeLyAccountId && activeLyTicker) renderLyDetailTable(activeLyAccountId, activeLyTicker);
@@ -2737,6 +3017,39 @@ function openModal(type, param, param2){
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="pl. munkabér"></div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDeposit()">mentés</button></div>`;
   }
+  else if(type==='edit-fi-goal'){
+    const g = data.fiGoal || { amount: 100000000, targetDate: '2032-12-31', monthlySaving: 150000, etfReturnPct: 7.0 };
+    title.textContent = data.fiGoal ? 'FI cél szerkesztése' : 'FI cél beállítása';
+    body.innerHTML = `
+      <div style="font-size:11px;color:var(--text3);margin-bottom:14px;padding:10px;background:var(--bg3);border-radius:7px;line-height:1.5">
+        💡 Az app a tényleges portfóliódból komponensenként számol:<br>
+        • <b>FixMáP</b>: a sorozatok saját kamatlábával (jelenleg fixen 7%)<br>
+        • <b>DKJ</b>: a vételár → névérték hozammal, lejáratig<br>
+        • <b>ETF (VWCE/WBIT)</b>: az alábbi várt éves hozammal<br>
+        • <b>Készpénz</b>: 0% (a havi befizetés automatikusan ETF-be megy)
+      </div>
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">cél összeg (Ft)</div>
+          <input class="form-input" id="f-fi-amount" type="number" step="100000" value="${g.amount}" placeholder="100000000">
+        </div>
+        <div class="form-group"><div class="form-label">céldátum</div>
+          <input class="form-input" id="f-fi-date" type="date" value="${g.targetDate}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">havi befizetés (Ft) → ETF</div>
+          <input class="form-input" id="f-fi-monthly" type="number" step="10000" value="${g.monthlySaving}" placeholder="150000">
+        </div>
+        <div class="form-group"><div class="form-label">ETF várt éves hozam (%)</div>
+          <input class="form-input" id="f-fi-return" type="number" step="0.1" value="${g.etfReturnPct ?? g.expectedReturnPct ?? 7}" placeholder="7.0">
+        </div>
+      </div>
+      <div class="form-actions">
+        ${data.fiGoal ? '<button class="btn btn-ghost" onclick="if(confirm(\'Biztosan törlöd a FI célt?\')){data.fiGoal=null;saveData();closeModal();renderDashboard();}" style="margin-right:auto;color:var(--red)">törlés</button>' : ''}
+        <button class="btn btn-ghost" onclick="closeModal()">mégse</button>
+        <button class="btn btn-primary" onclick="submitFiGoal()">mentés</button>
+      </div>`;
+  }
   else if(type==='withdraw'){
     title.textContent='Kiutalás';
     body.innerHTML=`
@@ -2745,8 +3058,7 @@ function openModal(type, param, param2){
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitWithdraw()">mentés</button></div>`;
   }
-  else if(type==='coupon'){
-    title.textContent='Kamatfizetés';
+  else if(type==='coupon'){    title.textContent='Kamatfizetés';
     body.innerHTML=`
       <div class="form-row"><div class="form-group"><div class="form-label">dátum</div>
         <input class="form-input" id="f-date" type="date" value="${today()}">
@@ -3024,6 +3336,114 @@ function submitWithdraw(){
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
   data.cashTx.push({id:uid(),date,type:'withdraw',amount,note});
   closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); saveData(); toast('Kiutalás rögzítve');
+}
+
+function submitFiGoal(){
+  const amount = parseFloat(document.getElementById('f-fi-amount').value);
+  const targetDate = document.getElementById('f-fi-date').value;
+  const monthlySaving = parseFloat(document.getElementById('f-fi-monthly').value) || 0;
+  const etfReturnPct = parseFloat(document.getElementById('f-fi-return').value) || 0;
+  if(!amount || !targetDate) return toast('Cél összeg és dátum kötelező!');
+  if(new Date(targetDate) <= new Date()) return toast('A céldátum legyen a jövőben!');
+  // Megőrizzük a meglévő AI coach értékelést szerkesztéskor
+  const existingCoach = data.fiGoal?.aiCoach || null;
+  data.fiGoal = { amount, targetDate, monthlySaving, etfReturnPct, aiCoach: existingCoach };
+  closeModal(); saveData(); renderDashboard(); toast('FI cél mentve');
+}
+
+async function generateFiCoach(){
+  if(!data.fiGoal || !data.fiGoal.amount) return toast('Először állíts be egy célt!');
+  if(!anthropicKey) return toast('AI kulcs szükséges (AI oldal)');
+
+  const btn = document.getElementById('fiCoachBtn');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin"></span> generálás...'; }
+
+  try {
+    // Komponens-szintű kontextus felépítése
+    const cb = cashBalance();
+    const fixmapValue = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+    const dkjPositions = data.dkj.filter(d=>d.active);
+    const dkjValue = dkjPositions.reduce((s,d)=>s+d.faceValue,0);
+    const dkjBuyTotal = dkjPositions.reduce((s,d)=>s+(d.buyPrice||d.faceValue),0);
+    const dkjGainAtMaturity = dkjValue - dkjBuyTotal;
+    let dkjMonthsToMaturity = 0;
+    if(dkjValue > 0){
+      const totalMonths = dkjPositions.reduce((s,d) => {
+        const m = Math.max(0, Math.round((new Date(d.maturity) - new Date())/(1000*60*60*24*30.44)));
+        return s + m * d.faceValue;
+      }, 0);
+      dkjMonthsToMaturity = Math.round(totalMonths / dkjValue);
+    }
+    const vwceShares = etfShares('VWCE');
+    const wbitShares = etfShares('WBIT');
+    const fx = liveFx || 395;
+    const tbszVal = ((liveVwce||0)*vwceShares + (liveWbit||0)*wbitShares) * fx;
+    const annualCoupon = fixmapAnnualCoupon();
+    const goal = data.fiGoal;
+    const components = {
+      cash: cb,
+      fixmap: { value: fixmapValue, annualCoupon },
+      dkj: { value: dkjValue, gainAtMaturity: dkjGainAtMaturity, monthsToMaturity: dkjMonthsToMaturity },
+      etf: { value: tbszVal }
+    };
+    const total = cb + fixmapValue + dkjValue + tbszVal;
+    const proj = projectFiGoal(components, goal);
+
+    const ctx = `JELENLEGI PORTFÓLIÓ (komponensenként, a saját hozamaikkal):
+- FixMáP: ${(fixmapValue/1e6).toFixed(1)}M Ft, éves kamat ${(annualCoupon/1e6).toFixed(2)}M Ft (átlagosan ${(annualCoupon/fixmapValue*100).toFixed(1)}%, fix kamatláb)
+- DKJ: ${(dkjValue/1e6).toFixed(2)}M Ft, lejáratkor +${(dkjGainAtMaturity/1000).toFixed(0)} e Ft hozam (~${dkjMonthsToMaturity} hó múlva)
+- ETF (VWCE+WBIT): ${(tbszVal/1e6).toFixed(2)}M Ft, feltételezett várt hozam ${goal.etfReturnPct}% / év
+- Készpénz: ${(cb/1e6).toFixed(2)}M Ft (nem kamatozik)
+- TELJES: ${(total/1e6).toFixed(2)}M Ft
+
+HAVI BEFIZETÉS: ${(goal.monthlySaving/1000).toFixed(0)} e Ft (a modellben automatikusan ETF-be megy)
+
+FI CÉL:
+- Cél: ${(goal.amount/1e6).toFixed(0)}M Ft, ${goal.targetDate} (${proj.monthsToTarget} hónap múlva)
+- Hátralévő: ${((goal.amount-total)/1e6).toFixed(1)}M Ft
+
+PROJEKCIÓ a fenti komponens-modellel:
+- A céldátumra várható vagyon: ${(proj.projectedAtTarget/1e6).toFixed(1)}M Ft
+- A cél eléréséhez szükséges idő a jelenlegi ütemmel: ${proj.monthsToReach || '>'+720} hónap (${proj.monthsToTarget - proj.monthsToReach > 0 ? '+'+(proj.monthsToTarget - proj.monthsToReach)+' hó előny' : (proj.monthsToReach - proj.monthsToTarget)+' hó csúszás'})
+- A céldátumig szükséges havi befizetés ETF-be: ${Math.round(proj.requiredMonthly/1000)} e Ft (jelenleg: ${(goal.monthlySaving/1000).toFixed(0)} e Ft)`;
+
+    const prompt = `Te egy személyes pénzügyi coach vagy. Adj egy ÉRTÉKELÉST a felhasználó FI (financial independence) céljának haladásáról. Magyarul, 3-4 mondat. Konkrét, számszerű, hasznos. NE általánoskodj.
+
+${ctx}
+
+Szabályok:
+- Első mondat: hol tart, jó vagy rossz úton van-e (a számok alapján).
+- Második mondat: mi a legfontosabb dolog amire most figyelnie kell (pl. kockázat-koncentráció, hozam-érzékenység, megtakarítási ütem, FixMáP lejárati pont 2031-ben).
+- Harmadik mondat: konkrét, akcionábilis javaslat számszerűen (pl. "ha a megtakarítást X-vel növeled, Y hónappal hamarabb érsz oda").
+- Opcionális negyedik: figyelmeztetés / pozitív megerősítés.
+- Csak az értékelést írd, semmi bevezető. NE kezdd azzal hogy "íme az értékelés". Ne legyen lista, csak folyó szöveg.`;
+
+    const apiUrl = 'https://api.anthropic.com/v1/messages';
+    const workerUrl = 'https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(apiUrl)+'&apikey='+encodeURIComponent(anthropicKey);
+    const response = await fetch(workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 500,
+        system: 'Pénzügyi coach vagy. Magyarul válaszolsz, tömören, konkrét számokkal. Maximum 4 mondat.',
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const resp = await response.json();
+    if(resp.error) throw new Error(resp.error.message);
+    const text = resp.content?.[0]?.text || '';
+
+    data.fiGoal.aiCoach = { date: new Date().toISOString(), text };
+    saveData();
+    renderDashboard();
+    toast('AI coach értékelés kész');
+
+  } catch(e) {
+    toast('Hiba: ' + e.message);
+    if(btn){ btn.disabled = false; btn.innerHTML = '✦ AI coach értékelés'; }
+  }
 }
 function submitNewFixmapSeries(){
   const name=document.getElementById('f-name').value.trim();
