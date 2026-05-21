@@ -281,7 +281,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 /* AI LAYOUT */
 .ai-layout{display:flex;gap:12px;align-items:flex-start}
 .ai-chat{flex:1;min-width:0;display:flex;flex-direction:column}
-.ai-scenario{width:320px;flex-shrink:0}
+.ai-scenario{width:420px;flex-shrink:0}
 
 /* DASHBOARD LAYOUT */
 .dash-layout{display:grid;grid-template-columns:1fr 340px;grid-template-rows:1fr auto;gap:10px}
@@ -533,16 +533,6 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
       </div><!-- /.dash-layout -->
 
-      <!-- FI cél kártya -->
-      <div class="panel" id="fiGoalPanel" style="margin-top:14px">
-        <div class="panel-header">
-          <div class="panel-title">FI cél</div>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('edit-fi-goal')" id="fiGoalEditBtn">✎ szerkesztés</button>
-        </div>
-        <div id="fiGoalContent"></div>
-      </div>
-
-
     </div>
 
     <!-- PÉNZSZÁMLA -->
@@ -700,12 +690,26 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           </div>
         </div>
 
-        <!-- Gyors elemzések – jobb oldal -->
-        <div class="ai-scenario">
-          <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">gyors elemzés</div>
-          <div class="quick-btns-grid" id="quick-btns-container">
-            <!-- Dinamikusan generált gombok - renderQuickBtns() tölti fel -->
+        <!-- Jobb oszlop: portfólió értékelés gomb + FI cél kártya, magasságát JS szinkronizálja a chat-hez -->
+        <div class="ai-scenario" style="display:flex;flex-direction:column;min-height:0;gap:12px;overflow:hidden">
+
+          <!-- Portfólió értékelés gyors gomb (felül) -->
+          <div style="flex-shrink:0">
+            <div style="font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">gyors elemzés</div>
+            <div class="quick-btns-grid" id="quick-btns-container">
+              <!-- renderQuickBtns() tölti -->
+            </div>
           </div>
+
+          <!-- FI cél kártya (alá, görgethető ha túl hosszú a coach szöveg) -->
+          <div class="panel" id="fiGoalPanel" style="flex:1;min-height:0;overflow-y:auto;margin-bottom:0">
+            <div class="panel-header" style="position:sticky;top:0;background:var(--bg2);z-index:1">
+              <div class="panel-title">FI cél</div>
+              <button class="btn btn-ghost btn-sm" onclick="openModal('edit-fi-goal')" id="fiGoalEditBtn">✎ szerkesztés</button>
+            </div>
+            <div id="fiGoalContent"></div>
+          </div>
+
         </div>
 
       </div>
@@ -1096,7 +1100,7 @@ function showTab(name,el){
   if(page) page.classList.add('active');
   if(el)el.classList.add('active');
   if(name==='kincstar') setTimeout(renderCashflowChart, 50);
-  if(name==='ai') setTimeout(()=>{ updateApiKeyStatus(); renderQuickBtns(); }, 50);
+  if(name==='ai') setTimeout(()=>{ updateApiKeyStatus(); renderQuickBtns(); renderFiGoalFromCurrentData(); }, 50);
   if(name==='dashboard') setTimeout(renderDashMiniChart, 50);
   if(name==='import') setTimeout(initImportPage, 50);
   if(name==='ly') { /* handled by showLyAccount */ }
@@ -1227,6 +1231,52 @@ function fixmapAnnualCoupon(){
     return s + f.faceValue * rate / 100;
   }, 0);
 }
+
+// Wrapper: aktuális adatokból építi fel a komponens objektumot és renderelt az FI cél kártyát
+function renderFiGoalFromCurrentData(){
+  const cb = cashBalance();
+  const fixmapValue = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+  const dkjPositions = data.dkj.filter(d=>d.active);
+  const dkjValue = dkjPositions.reduce((s,d)=>s+d.faceValue,0);
+  const dkjBuyTotal = dkjPositions.reduce((s,d)=>s+(d.buyPrice||d.faceValue),0);
+  const dkjGainAtMaturity = dkjValue - dkjBuyTotal;
+  let dkjMonthsToMaturity = 0;
+  if(dkjValue > 0){
+    const totalMonths = dkjPositions.reduce((s,d) => {
+      const m = Math.max(0, Math.round((new Date(d.maturity) - new Date())/(1000*60*60*24*30.44)));
+      return s + m * d.faceValue;
+    }, 0);
+    dkjMonthsToMaturity = Math.round(totalMonths / dkjValue);
+  }
+  const vwceShares = etfShares('VWCE');
+  const wbitShares = etfShares('WBIT');
+  const fx = liveFx || 395;
+  const tbszVal = ((liveVwce||0)*vwceShares + (liveWbit||0)*wbitShares) * fx;
+  const components = {
+    cash: cb,
+    fixmap: { value: fixmapValue, annualCoupon: fixmapAnnualCoupon() },
+    dkj: { value: dkjValue, gainAtMaturity: dkjGainAtMaturity, monthsToMaturity: dkjMonthsToMaturity },
+    etf: { value: tbszVal }
+  };
+  renderFiGoal(components);
+  // Magasság-szinkronizáció: a jobb oszlop pontosan akkora legyen mint a chat panel
+  syncAiRightColumnHeight();
+}
+
+// A jobb oldali ai-scenario magasságát hozzáigazítja a chat panel magasságához
+function syncAiRightColumnHeight(){
+  const chat = document.querySelector('.ai-chat');
+  const right = document.querySelector('.ai-scenario');
+  if(!chat || !right) return;
+  // A chat magasságát mérjük le; a jobb oszlop ennyi legyen
+  const h = chat.getBoundingClientRect().height;
+  if(h > 0) right.style.height = h + 'px';
+}
+
+// Ablak átméretezésnél is frissítsük
+window.addEventListener('resize', () => {
+  if(document.getElementById('page-ai')?.classList.contains('active')) syncAiRightColumnHeight();
+});
 
 // FI cél projekció — KOMPONENSENKÉNT számolja a hozamot:
 // - FixMáP: tényleges kamatláb (couponRate), évente készpénzbe kerül (nem kamatozik újra magától, de a portfólióban marad)
@@ -1602,28 +1652,8 @@ function renderDashboard(){
   renderCashflowChart();
   renderDashMiniChart();
 
-  // FI cél komponens-bontás
-  const fixmapValue = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
-  const dkjPositions = data.dkj.filter(d=>d.active);
-  const dkjValue = dkjPositions.reduce((s,d)=>s+d.faceValue,0);                            // jelenleg ~névértékig értékelve
-  const dkjBuyTotal = dkjPositions.reduce((s,d)=>s+(d.buyPrice||d.faceValue),0);
-  const dkjGainAtMaturity = dkjValue - dkjBuyTotal;                                        // lejáratkor realizálódó hozam
-  // DKJ átlag lejáratig hátralévő hónapok (súlyozva névértékkel)
-  let dkjMonthsToMaturity = 0;
-  if(dkjValue > 0){
-    const totalMonths = dkjPositions.reduce((s,d) => {
-      const m = Math.max(0, Math.round((new Date(d.maturity) - new Date())/(1000*60*60*24*30.44)));
-      return s + m * d.faceValue;
-    }, 0);
-    dkjMonthsToMaturity = Math.round(totalMonths / dkjValue);
-  }
-  const components = {
-    cash: cb,
-    fixmap: { value: fixmapValue, annualCoupon: annualYield },
-    dkj: { value: dkjValue, gainAtMaturity: dkjGainAtMaturity, monthsToMaturity: dkjMonthsToMaturity },
-    etf: { value: tbszVal }
-  };
-  renderFiGoal(components);
+  // FI cél most az AI oldalon van — ha éppen az AI oldalt nézed, frissítsük
+  renderFiGoalFromCurrentData();
 
   if(blurOn)applyBlur();
   if(activeLyAccountId) renderLyInstrumentList(activeLyAccountId);
@@ -2339,11 +2369,14 @@ function renderLyInstrumentList(accountId) {
       const s=v=>(v>=0?'+':'')+v.toFixed(2);
       const sft=v=>(v>=0?'+':'')+Math.round(v/1000)+'e Ft';
       return `<div style="color:var(--text3);font-size:10px;margin-bottom:2px;border-bottom:1px solid var(--border);padding-bottom:4px">P&L elemzés</div>`
-        +`<div>Teljes hozam: <span style="color:${c(plHuf)};font-weight:600">${s(plHuf/1000)}e Ft</span> <span style="color:${c(plHufPct)}">(${s(plHufPct)}%)</span></div>`
-        +`<div>Árfolyam: <span style="color:${c(priceReturnHuf)}">${s(priceReturnHuf/1000)}e Ft</span> <span style="color:${c(priceReturnPct)}">(${s(priceReturnPct)}%)</span></div>`
-        +`<div>Devizahatás: <span style="color:${c(fxEffect)}">${s(fxEffect/1000)}e Ft</span> <span style="color:${c(fxEffectPct)}">(${s(fxEffectPct)}%)</span></div>`;
+        +`<div>Teljes hozam: <span style="${c(plHuf)};font-weight:600">${s(plHuf/1000)}e Ft</span> <span style="${c(plHufPct)}">(${s(plHufPct)}%)</span></div>`
+        +`<div>Árfolyam: <span style="${c(priceReturnHuf)}">${s(priceReturnHuf/1000)}e Ft</span> <span style="${c(priceReturnPct)}">(${s(priceReturnPct)}%)</span></div>`
+        +`<div>Devizahatás: <span style="${c(fxEffect)}">${s(fxEffect/1000)}e Ft</span> <span style="${c(fxEffectPct)}">(${s(fxEffectPct)}%)</span></div>`;
     })() : '';
     const ttId = ttHtml ? makeTooltipId(ttHtml) : '';
+    // Tooltip a live ár cellához: az egységár Ft-ban
+    const livePriceTtHtml = ins.lp ? `<div style="font-weight:600;font-size:13px;color:var(--text)">${fmt(ins.lp*fx)}</div>` : '';
+    const livePriceTtId = livePriceTtHtml ? makeTooltipId(livePriceTtHtml) : '';
     return `<tr onclick="selectLyInstrument('${accountId}','${ins.ticker}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <td style="padding:14px 16px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px">
@@ -2355,7 +2388,7 @@ function renderLyInstrumentList(accountId) {
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div>${fmtM(ins.cost)}</div><div style="font-size:10px;color:var(--text3)">${fmtEur(totCostEur)}</div></td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div>${ins.val>0?fmtM(ins.val):'–'}</div><div style="font-size:10px;color:var(--text3)">${ins.lp?fmtEur(ins.shares*ins.lp):'–'}</div></td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol};cursor:help" data-ttid="${ttId}">${ins.cost>0?(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span>':'–'}</td>
-      <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.lp?fmtEur(ins.lp):'–'}${ins.pct!==null?'<br><span style="font-size:10px;color:'+pctCol+'">'+(ins.pct>=0?'+':'')+ins.pct.toFixed(2)+'%</span>':''}</td>
+      <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border);${ins.lp?'cursor:help':''}" data-ttid="${livePriceTtId}">${ins.lp?fmtEur(ins.lp):'–'}${ins.pct!==null?'<br><span style="font-size:10px;color:'+pctCol+'">'+(ins.pct>=0?'+':'')+ins.pct.toFixed(2)+'%</span>':''}</td>
       <td style="padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text3);font-size:16px">›</td>
     </tr>`;
   }).join('');
@@ -5795,42 +5828,9 @@ function getAiQuickPrompt(type) {
 function renderQuickBtns() {
   const el = document.getElementById('quick-btns-container');
   if(!el) return;
-
-  // Dinamikus adatok
-  const fixmapTotal = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
-  const dkjActive = data.dkj.filter(d=>d.active);
-  const dkjTotal = dkjActive.reduce((s,d)=>s+d.faceValue,0);
-  const scenSavings = parseInt(document.getElementById('scenSavings')?.value)||150000;
-  const annualCoupon = data.fixmap.filter(f=>f.active).reduce((s,f)=>{
-    const sr=data.fixmapSeries.find(x=>x.id===f.seriesId);
-    return s+f.faceValue*(sr?sr.couponRate:7)/100;
-  },0);
-  const tbszAccs = getLyAccounts().filter(a=>a.type==='tbsz');
-  const tbszAdómentes = tbszAccs.map(a=>a.tbszYear+3).join(', ');
-
-  // FixMáP lejáratok
-  const fixmapMaturities = [...new Set(data.fixmapSeries.map(s=>s.maturity?.slice(0,4)).filter(Boolean))];
-  const fixmapLabel = fixmapMaturities.length ? `FixMáP lejárat ${fixmapMaturities.join('/')}` : 'FixMáP lejárat';
-  const fixmapSub = fixmapTotal > 0 ? `mi legyen a ${fmtM(fixmapTotal)}-tal lejáratkor` : 'mi legyen a tőkével lejáratkor';
-
-  // DKJ lejáratok
-  const dkjMaturities = [...new Set(dkjActive.map(d=>d.maturity))].sort();
-  const dkjLabel = dkjMaturities.length ? `DKJ lejárat (${dkjMaturities.map(m=>m.slice(2,7)).join(', ')})` : 'DKJ lejárat';
-  const dkjSub = dkjTotal > 0 ? `optimális újraallokáció – ${fmtM(dkjTotal)}` : 'optimális újraallokáció lejáratkor';
-
   const btns = [
     { type:'portfolio', icon:'◈', title:'portfólió értékelés', sub:'átfogó elemzés a jelenlegi helyzetről' },
-    { type:'diversification', icon:'⊕', title:'diverzifikáció', sub:`állampapír vs ETF arány elemzése` },
-    { type:'fixmap_vs_etf', icon:'⇄', title:'FixMáP vs ETF', sub:'melyik hozza jobban jelenleg' },
-    { type:'cashflow', icon:'↗', title:'cashflow elemzés', sub:`évi ${fmtM(annualCoupon)} kamat + lejáratok` },
-    { type:'fixmap_2031', icon:'⏱', title: fixmapLabel, sub: fixmapSub },
-    { type:'fi_timeline', icon:'🏁', title:'FI idővonal', sub:`jelenlegi ütem: ${(scenSavings/1000).toFixed(0)}e Ft/hó` },
-    { type:'risk', icon:'⚡', title:'kockázatelemzés', sub:'mi történik piaci sokk esetén' },
-    { type:'tax', icon:'§', title:'adóoptimalizálás', sub: tbszAdómentes ? `TBSZ adómentes: ${tbszAdómentes} után` : 'TBSZ lejáratok, adómegtakarítás' },
-    { type:'savings_impact', icon:'💰', title:'megtakarítás hatása', sub:`mi változik ${(scenSavings/1000).toFixed(0)}e → ${(scenSavings*1.5/1000).toFixed(0)}e Ft/hó esetén` },
-    ...(dkjTotal > 0 ? [{ type:'dkj_october', icon:'📅', title: dkjLabel, sub: dkjSub }] : []),
   ];
-
   el.innerHTML = btns.map(b=>`
     <button class="quick-btn" onclick="aiQuickAnalysis('${b.type}')">
       <span class="quick-btn-icon">${b.icon}</span>
