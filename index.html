@@ -4857,11 +4857,39 @@ async function fetchMarketCommentary(force=false) {
   const todayStr = new Date().toISOString().split('T')[0];
   const blurNumbers = t => t.replace(/(\d[\d\s]*(?:[,.]\d+)*(?:\s*(?:Ft|M Ft|milliárd|%|EUR|HUF))?)/g, '<span class="blurable">$1</span>');
 
-  // Ha van mai cache a Gist-ben és nem force refresh, használjuk
-  if(!force && data.marketCommentary && data.marketCommentary.date === todayStr) {
-    el.innerHTML = blurNumbers(data.marketCommentary.html);
-    if(dateEl) dateEl.textContent = 'ma · ' + todayStr;
-    return;
+  // Aktuális piaci snapshot (a cache összehasonlításhoz is)
+  const fx = liveFx||395;
+  const prevFx = window._prevFx||fx;
+  const fxPct = prevFx && prevFx!==fx ? ((fx-prevFx)/prevFx*100) : 0;
+  const vwcePct = liveVwcePct||0;
+  const vwceShares = etfShares('VWCE');
+  const fixmapVal = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
+  const dkjVal = data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
+  const vwceVal = (liveVwce||0)*vwceShares*fx;
+
+  // Konkrét Ft-hatás a Te portfóliódra
+  const vwceDeltaFt = Math.round(vwceVal * vwcePct/100);              // VWCE napi mozgás Ft-ban
+  const fxDeltaOnVwceFt = Math.round(vwceVal * fxPct/100);            // FX hatás a VWCE érték Ft-jára
+  const totalDailyDeltaFt = vwceDeltaFt + fxDeltaOnVwceFt;            // teljes portfólió napi delta (FixMáP/DKJ napon belül nem mozog)
+
+  // Slot meghatározása: 'morning' (12:00 előtt magyar idő) vagy 'evening' (22:00 után, US zárás reakciók)
+  // 12:00-22:00 között "morning" slot él (nincs új lekérés ebben az ablakban)
+  const hour = new Date().getHours();
+  const slot = hour >= 22 ? 'evening' : 'morning';
+  // Érdemleges mozgás küszöb (csak ezen felül van extra lekérés a sloton kívül)
+  const SIGNIFICANT_MOVE_PCT = 1.5;
+
+  // Cache érvényesség: ugyanaz a dátum ÉS ugyanaz a slot ÉS nem volt érdemleges mozgás
+  if(!force && data.marketCommentary && data.marketCommentary.date === todayStr && data.marketCommentary.slot === slot) {
+    const c = data.marketCommentary;
+    const vwcePctDiff = Math.abs((c.vwcePct||0) - vwcePct);
+    const fxPctDiff = Math.abs((c.fxPct||0) - fxPct);
+    if(vwcePctDiff < SIGNIFICANT_MOVE_PCT && fxPctDiff < SIGNIFICANT_MOVE_PCT) {
+      el.innerHTML = blurNumbers(c.html);
+      if(dateEl) dateEl.textContent = (slot==='evening'?'este':'reggel') + ' · ' + todayStr;
+      return;
+    }
+    // különben átfut a regenerálásra (érdemleges mozgás történt)
   }
 
   if(!anthropicKey) {
@@ -4873,20 +4901,33 @@ async function fetchMarketCommentary(force=false) {
   el.innerHTML = '<span class="spin"></span><span style="color:var(--text3)">Piaci adatok lekérése...</span>';
 
   try {
-    // Portfólió kontextus
-    const fx = liveFx||395;
-    const vwceShares = etfShares('VWCE');
-    const fixmapVal = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0);
-    const dkjVal = data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
-    const vwceVal = (liveVwce||0)*vwceShares*fx;
+    // Kerekítés ezresre olvashatóság miatt
+    const fmtK = n => {
+      const abs = Math.abs(n);
+      if(abs >= 1e6) return (n>=0?'+':'')+(n/1e6).toFixed(2)+'M Ft';
+      if(abs >= 1000) return (n>=0?'+':'')+Math.round(n/1000)+' e Ft';
+      return (n>=0?'+':'')+n+' Ft';
+    };
 
-    const portfolioCtx = `Portfólió: FixMáP ${(fixmapVal/1e6).toFixed(1)}M Ft, DKJ ${(dkjVal/1e6).toFixed(2)}M Ft, VWCE ${vwceShares.toFixed(0)} db (${(vwceVal/1e6).toFixed(2)}M Ft). EUR/HUF: ${fx.toFixed(2)}. VWCE ár: €${(liveVwce||0).toFixed(2)} (${liveVwcePct!==null?(liveVwcePct>=0?'+':'')+liveVwcePct.toFixed(2)+'%':'–'} ma).`;
+    const portfolioCtx = `A Te portfóliód: FixMáP ${(fixmapVal/1e6).toFixed(1)}M Ft (napon belül nem mozog), DKJ ${(dkjVal/1e6).toFixed(2)}M Ft (napon belül nem mozog), VWCE ${vwceShares.toFixed(0)} db = ${(vwceVal/1e6).toFixed(2)}M Ft.
 
-    const prompt = `Te egy személyes pénzügyi asszisztens vagy. A mai piacról adj rövid, 2-3 mondatos kommentárt magyarul, kifejezetten az alábbi portfólió szempontjából. Legyen konkrét és releváns – mi mozgott, mi a hatása erre a portfólióra, van-e figyelemre méltó esemény. Ne légy általános, ne adj hosszú elemzést.
+TEGNAPI ZÁRÁS → MAI ÁLLAPOT változás:
+- VWCE.DE: ${vwcePct>=0?'+':''}${vwcePct.toFixed(2)}% → a Te VWCE pozíciódon ez ${fmtK(vwceDeltaFt)} (EUR-ban)
+- EUR/HUF: ${prevFx.toFixed(2)} → ${fx.toFixed(2)} (${fxPct>=0?'+':''}${fxPct.toFixed(2)}%) → a forintban kifejezett VWCE értékre ez kb. ${fmtK(fxDeltaOnVwceFt)} hatás
+- TELJES NAPI DELTA a Te portfóliódon: kb. ${fmtK(totalDailyDeltaFt)} (csak a VWCE mozog napon belül, az állampapírok nem)`;
+
+    const prompt = `Te egy személyes pénzügyi asszisztens vagy. Adj egy rövid, 2-3 mondatos magyar nyelvű kommentárt arról, hogy a TEGNAPI ZÁRÁS ÓTA mi történt a piacon, és mi a konkrét hatása ennek a portfólióra. NE az abszolút árszintet írd le, hanem a TEGNAP → MA változást és annak Ft-ban kifejezett hatását.
 
 ${portfolioCtx}
 
-Dátum: ${todayStr}. Csak a kommentárt írd, semmi más bevezető szöveg.`;
+Dátum: ${todayStr}.
+
+Szabályok:
+- Az első mondat mondja meg: mit hozott a tegnapi nap óta eltelt időszak a Te portfóliódra (összegszerűen, Ft-ban).
+- A második mondat magyarázza meg RÖVIDEN, mi volt mögötte (mi mozgatta a VWCE-t / EUR-HUF-ot — pl. amerikai tőzsdei nap, MNB döntés, EKB, makro adat, ha tudható).
+- Opcionális harmadik mondat: érdemes-e bármit tenni vagy figyelni.
+- NE általánoskodj. NE mondj "a piac vegyes képet mutat" típusú semmitmondó dolgokat.
+- Csak a kommentárt írd, semmi bevezető.`;
 
     const apiUrl = 'https://api.anthropic.com/v1/messages';
     const workerUrl = 'https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(apiUrl)+'&apikey='+encodeURIComponent(anthropicKey);
@@ -4895,8 +4936,8 @@ Dátum: ${todayStr}. Csak a kommentárt írd, semmi más bevezető szöveg.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 300,
-        system: 'Rövid, tömör pénzügyi kommentátor vagy. Mindig magyarul válaszolsz. Maximum 3 mondat.',
+        max_tokens: 350,
+        system: 'Rövid, tömör pénzügyi kommentátor vagy. Mindig magyarul válaszolsz. Maximum 3 mondat. A tegnap → ma változásra fókuszálsz, nem az abszolút árszintekre.',
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -4905,14 +4946,12 @@ Dátum: ${todayStr}. Csak a kommentárt írd, semmi más bevezető szöveg.`;
     if(data_resp.error) throw new Error(data_resp.error.message);
     const text = data_resp.content?.[0]?.text || '';
 
-    // Számok blurable span-ba csomagolva
-    const blurNumbers = t => t.replace(/(\d[\d\s]*(?:[,.]\d+)*(?:\s*(?:Ft|M Ft|milliárd|%|EUR|HUF))?)/g, '<span class="blurable">$1</span>');
     const html = `<span style="color:var(--text)">${blurNumbers(text)}</span>`;
     el.innerHTML = html;
-    if(dateEl) dateEl.textContent = 'ma · ' + todayStr;
+    if(dateEl) dateEl.textContent = (slot==='evening'?'este':'reggel') + ' · ' + todayStr;
 
-    // Cache mentése Gist-be (minden eszközön szinkronizálva)
-    data.marketCommentary = { date: todayStr, html };
+    // Cache mentése – tároljuk a slot-ot és a piaci % változásokat is
+    data.marketCommentary = { date: todayStr, slot, html, vwcePct, fxPct };
     saveData();
 
   } catch(e) {
