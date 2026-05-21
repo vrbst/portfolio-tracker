@@ -3403,6 +3403,35 @@ async function generateFiCoach(){
     const total = cb + fixmapValue + dkjValue + tbszVal;
     const proj = projectFiGoal(components, goal);
 
+    // What-if forgatókönyvek: pontosan ezekkel a havi befizetésekkel mennyi időbe telik elérni a célt?
+    // Az AI ezeket olvashatja — NEM számolja maga, mert annuity-ban gyenge.
+    const todayDate = new Date();
+    const formatReachDate = (months) => {
+      if(months === null) return 'soha (>720 hó)';
+      const d = new Date(todayDate);
+      d.setMonth(d.getMonth() + months);
+      return d.toISOString().slice(0,7);
+    };
+    const monthlyOptions = [0, 100000, 150000, 200000, 300000, 500000];
+    const scenarios = monthlyOptions.map(pmt => {
+      const altGoal = { ...goal, monthlySaving: pmt };
+      const altProj = projectFiGoal(components, altGoal);
+      return {
+        pmt,
+        months: altProj.monthsToReach,
+        date: formatReachDate(altProj.monthsToReach),
+        deltaVsCurrent: altProj.monthsToReach !== null && proj.monthsToReach !== null
+          ? proj.monthsToReach - altProj.monthsToReach
+          : null
+      };
+    });
+    const scenariosTxt = scenarios.map(s => {
+      const pmt = s.pmt === 0 ? 'havi befizetés NÉLKÜL' : `havi ${(s.pmt/1000).toFixed(0)}k Ft`;
+      const months = s.months !== null ? `${s.months} hó` : 'soha';
+      const delta = s.deltaVsCurrent !== null ? (s.deltaVsCurrent > 0 ? ` (+${s.deltaVsCurrent} hó hamarabb)` : s.deltaVsCurrent < 0 ? ` (${-s.deltaVsCurrent} hó később)` : ' (ugyanaz)') : '';
+      return `  • ${pmt}: ${months} (${s.date})${delta}`;
+    }).join('\n');
+
     const ctx = `JELENLEGI PORTFÓLIÓ (komponensenként, a saját hozamaikkal):
 - FixMáP: ${(fixmapValue/1e6).toFixed(1)}M Ft, éves kamat ${(annualCoupon/1e6).toFixed(2)}M Ft (átlagosan ${(annualCoupon/fixmapValue*100).toFixed(1)}%, fix kamatláb)
 - DKJ: ${(dkjValue/1e6).toFixed(2)}M Ft, lejáratkor +${(dkjGainAtMaturity/1000).toFixed(0)} e Ft hozam (~${dkjMonthsToMaturity} hó múlva)
@@ -3419,18 +3448,25 @@ FI CÉL:
 PROJEKCIÓ a fenti komponens-modellel:
 - A céldátumra várható vagyon: ${(proj.projectedAtTarget/1e6).toFixed(1)}M Ft
 - A cél eléréséhez szükséges idő a jelenlegi ütemmel: ${proj.monthsToReach || '>'+720} hónap (${proj.monthsToTarget - proj.monthsToReach > 0 ? '+'+(proj.monthsToTarget - proj.monthsToReach)+' hó előny' : (proj.monthsToReach - proj.monthsToTarget)+' hó csúszás'})
-- A céldátumig szükséges havi befizetés ETF-be: ${Math.round(proj.requiredMonthly/1000)} e Ft (jelenleg: ${(goal.monthlySaving/1000).toFixed(0)} e Ft)`;
+- A céldátumig szükséges havi befizetés ETF-be: ${Math.round(proj.requiredMonthly/1000)} e Ft (jelenleg: ${(goal.monthlySaving/1000).toFixed(0)} e Ft)
+
+WHAT-IF FORGATÓKÖNYVEK (a kód előre kiszámolta, KIZÁRÓLAG EZEKBŐL idézhetsz, NE találj ki saját számokat):
+${scenariosTxt}`;
 
     const prompt = `Te egy személyes pénzügyi coach vagy. Adj egy ÉRTÉKELÉST a felhasználó FI (financial independence) céljának haladásáról. Magyarul, 3-4 mondat. Konkrét, számszerű, hasznos. NE általánoskodj.
 
 ${ctx}
 
-Szabályok:
-- Első mondat: hol tart, jó vagy rossz úton van-e (a számok alapján).
-- Második mondat: mi a legfontosabb dolog amire most figyelnie kell (pl. kockázat-koncentráció, hozam-érzékenység, megtakarítási ütem, FixMáP lejárati pont 2031-ben).
-- Harmadik mondat: konkrét, akcionábilis javaslat számszerűen (pl. "ha a megtakarítást X-vel növeled, Y hónappal hamarabb érsz oda").
-- Opcionális negyedik: figyelmeztetés / pozitív megerősítés.
-- Csak az értékelést írd, semmi bevezető. NE kezdd azzal hogy "íme az értékelés". Ne legyen lista, csak folyó szöveg.`;
+KEMÉNY SZABÁLYOK (kötelező):
+- Az első mondat: hol tart, jó vagy rossz úton van-e (a fenti projekció alapján).
+- A második mondat: mi a legfontosabb dolog amire most figyelnie kell (pl. FixMáP-koncentráció ${(fixmapValue/total*100).toFixed(0)}%, 2031-es lejárat, ETF hozam-érzékenység).
+- A harmadik mondat: konkrét akcionábilis javaslat. Ha számszerű "ha-akkor" forgatókönyvet adsz, KIZÁRÓLAG a fenti WHAT-IF táblázatból idézhetsz — ne számolj fejben, ne találj ki dátumokat, ne becsülj saját időket. Idézd pontosan: "havi X k Ft mellett Y hónap alatt, kb. Z évben".
+- Opcionális 4. mondat: figyelmeztetés (pl. a 7%-os ETF feltevés egy bear market esetén nem teljesül rövid távon).
+
+TILTOTT:
+- Saját matematikai becslés (lineáris extrapoláció, "kb 9 hónappal hamarabb" stb.) → kizárólag a fenti táblázat!
+- "Íme az értékelés", "összefoglalva" — semmi bevezető.
+- Lista — folyó szövegben írj.`;
 
     const apiUrl = 'https://api.anthropic.com/v1/messages';
     const workerUrl = 'https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(apiUrl)+'&apikey='+encodeURIComponent(anthropicKey);
