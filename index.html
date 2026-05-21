@@ -1220,7 +1220,12 @@ function etfCostBasis(ticker){
 }
 
 function fixmapAnnualCoupon(){
-  return data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue*f.couponRate/100,0);
+  return data.fixmap.filter(f=>f.active).reduce((s,f)=>{
+    // A couponRate a sorozaton (fixmapSeries) van, nem közvetlenül a tételen
+    const series = data.fixmapSeries.find(sr => sr.id === f.seriesId);
+    const rate = series?.couponRate ?? f.couponRate ?? 0;  // fallback: ha valamilyen okból mégis a tételen lenne
+    return s + f.faceValue * rate / 100;
+  }, 0);
 }
 
 // FI cél projekció — KOMPONENSENKÉNT számolja a hozamot:
@@ -1384,21 +1389,30 @@ function renderFiGoal(components){
   if(proj && proj.requiredMonthly !== null){
     const req = Math.round(proj.requiredMonthly);
     const cur = Math.round(goal.monthlySaving || 0);
-    const delta = cur - req;
-    let col = 'var(--text2)';
-    let txt = '';
-    if(delta >= 0){
-      col = 'var(--green)';
-      txt = `jelenlegi befizetésed (<span class="blurable">${fmt(cur)} Ft</span>) ${delta > 0 ? '+'+fmt(delta)+' Ft puffert ad havonta' : 'pontosan elég'}`;
+    const BINARY_SEARCH_CAP = 10000000;
+    // Ha a binary search felső határig ment, a cél elérhetetlen a megadott paraméterekkel
+    if(req >= BINARY_SEARCH_CAP - 1){
+      pmtLineHtml = `
+        <div style="font-size:11px;color:var(--amber);margin-top:4px;padding:8px;background:rgba(245,158,11,0.08);border-radius:6px">
+          ⚠ A cél a jelenlegi ETF hozam mellett a céldátumig <b>nem elérhető</b> reális havi befizetéssel. Lehetőségek: később cél-dátum, alacsonyabb cél-összeg, magasabb ETF hozam-feltevés, vagy nagyobb havi DCA.
+        </div>`;
     } else {
-      col = 'var(--amber)';
-      txt = `jelenlegi befizetésed (<span class="blurable">${fmt(cur)} Ft</span>) <span style="color:var(--amber)">−${fmt(-delta)} Ft</span>-tal kevesebb mint kéne`;
+      const delta = cur - req;
+      let col = 'var(--text2)';
+      let txt = '';
+      if(delta >= 0){
+        col = 'var(--green)';
+        txt = `jelenlegi befizetésed (<span class="blurable">${fmt(cur)}</span>) ${delta > 0 ? '+'+fmt(delta)+' puffert ad havonta' : 'pontosan elég'}`;
+      } else {
+        col = 'var(--amber)';
+        txt = `jelenlegi befizetésed (<span class="blurable">${fmt(cur)}</span>) <span style="color:var(--amber)">−${fmt(-delta)}</span>-tal kevesebb mint kéne`;
+      }
+      pmtLineHtml = `
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          szükséges havi befizetés: <span style="color:${col};font-weight:600" class="blurable">${fmt(req)}</span>
+          · ${txt}
+        </div>`;
     }
-    pmtLineHtml = `
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">
-        szükséges havi befizetés: <span style="color:${col};font-weight:600" class="blurable">${fmt(req)} Ft</span>
-        · ${txt}
-      </div>`;
   }
 
   // AI coach utolsó válasza
