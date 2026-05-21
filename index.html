@@ -4848,6 +4848,56 @@ async function confirmDeleteDB(){
 // ═══════════════════════════════════════════════
 // NAPI PIACI KOMMENTÁR
 // ═══════════════════════════════════════════════
+// RSS hírek lekérése a Worker proxy-n keresztül (utolsó 24 óra)
+async function fetchRecentNews() {
+  const PROXY = 'https://cold-truth-4d27.vrbst405.workers.dev/?url=';
+  const FEEDS = [
+    { url: 'https://www.mnb.hu/rss/sajtoszoba', label: 'MNB', maxItems: 3 },
+    { url: 'https://www.portfolio.hu/rss/all.xml', label: 'Portfolio.hu', maxItems: 4 },
+    { url: 'https://feeds.reuters.com/reuters/businessNews', label: 'Reuters', maxItems: 3 },
+    { url: 'https://feeds.marketwatch.com/marketwatch/topstories/', label: 'MarketWatch', maxItems: 3 },
+  ];
+
+  const cutoff = Date.now() - 36*60*60*1000; // 36 óra (hétvégét is lefedi)
+
+  const parseFeed = (xml, label, maxItems) => {
+    const items = [];
+    // Egyaránt RSS 2.0 (<item>) és Atom (<entry>) támogatás
+    const itemRe = /<(?:item|entry)\b[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
+    const tagRe = (xml, tag) => {
+      const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+      return m ? m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '').trim() : '';
+    };
+    let m;
+    while ((m = itemRe.exec(xml)) && items.length < maxItems) {
+      const block = m[1];
+      const title = tagRe(block, 'title');
+      const dateStr = tagRe(block, 'pubDate') || tagRe(block, 'published') || tagRe(block, 'updated') || tagRe(block, 'dc:date');
+      const ts = dateStr ? Date.parse(dateStr) : NaN;
+      if (!isNaN(ts) && ts < cutoff) continue;
+      if (title) items.push({ title, label, ts: isNaN(ts) ? Date.now() : ts });
+    }
+    return items;
+  };
+
+  const results = await Promise.allSettled(
+    FEEDS.map(f =>
+      fetch(PROXY + encodeURIComponent(f.url), { method: 'GET' })
+        .then(r => r.ok ? r.text() : '')
+        .then(xml => xml ? parseFeed(xml, f.label, f.maxItems) : [])
+        .catch(() => [])
+    )
+  );
+
+  const allItems = results
+    .filter(r => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 12); // max 12 hír összesen, hogy a prompt rövid maradjon
+
+  return allItems;
+}
+
 async function fetchMarketCommentary(force=false) {
   const el = document.getElementById('marketCommentary');
   const dateEl = document.getElementById('marketCommentaryDate');
@@ -4898,9 +4948,16 @@ async function fetchMarketCommentary(force=false) {
   }
 
   if(btn) { btn.style.opacity='.5'; btn.style.pointerEvents='none'; }
-  el.innerHTML = '<span class="spin"></span><span style="color:var(--text3)">Piaci adatok lekérése...</span>';
+  el.innerHTML = '<span class="spin"></span><span style="color:var(--text3)">Piaci adatok és hírek lekérése...</span>';
 
   try {
+    // Friss hírek lekérése párhuzamosan (ha sikerül, az AI ezekből magyaráz; ha nem, marad a csak-árazás logika)
+    const recentNews = await fetchRecentNews();
+    const newsBlock = recentNews.length
+      ? '\n\nFRISS HÍREK (utolsó 24-36 óra, ebből magyarázz, NE találgass eseményeket amik nincsenek itt):\n' +
+        recentNews.map(n => `• [${n.label}] ${n.title}`).join('\n')
+      : '\n\n(Nincs elérhető friss hírlekérés — csak az árakból dolgozz, és NE találj ki konkrét eseményeket. Ha nem tudod miért mozdult valami, mondd hogy "az árak alapján X% mozgás történt, konkrét hírforrás most nem áll rendelkezésre".)';
+
     // Kerekítés ezresre olvashatóság miatt
     const fmtK = n => {
       const abs = Math.abs(n);
@@ -4918,15 +4975,16 @@ TEGNAPI ZÁRÁS → MAI ÁLLAPOT változás:
 
     const prompt = `Te egy személyes pénzügyi asszisztens vagy. Adj egy rövid, 2-3 mondatos magyar nyelvű kommentárt arról, hogy a TEGNAPI ZÁRÁS ÓTA mi történt a piacon, és mi a konkrét hatása ennek a portfólióra. NE az abszolút árszintet írd le, hanem a TEGNAP → MA változást és annak Ft-ban kifejezett hatását.
 
-${portfolioCtx}
+${portfolioCtx}${newsBlock}
 
 Dátum: ${todayStr}.
 
 Szabályok:
 - Az első mondat mondja meg: mit hozott a tegnapi nap óta eltelt időszak a Te portfóliódra (összegszerűen, Ft-ban).
-- A második mondat magyarázza meg RÖVIDEN, mi volt mögötte (mi mozgatta a VWCE-t / EUR-HUF-ot — pl. amerikai tőzsdei nap, MNB döntés, EKB, makro adat, ha tudható).
-- Opcionális harmadik mondat: érdemes-e bármit tenni vagy figyelni.
+- A második mondat magyarázza meg RÖVIDEN, mi volt mögötte — KIZÁRÓLAG a fenti FRISS HÍREK alapján, ha vannak. NE találj ki Fed-döntést, MNB-bejelentést, makro-adatot, ami nem szerepel a hírek között.
+- Opcionális harmadik mondat: érdemes-e bármit tenni vagy figyelni a hírek alapján.
 - NE általánoskodj. NE mondj "a piac vegyes képet mutat" típusú semmitmondó dolgokat.
+- Ha nincs releváns hír a mozgás magyarázatára, mondd ki: "ma nem volt jelentős hír, a mozgás technikai/zaj jellegű".
 - Csak a kommentárt írd, semmi bevezető.`;
 
     const apiUrl = 'https://api.anthropic.com/v1/messages';
