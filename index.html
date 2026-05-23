@@ -929,17 +929,14 @@ let anthropicKey=null;
 let charts={};
 
 const DEFAULT_DATA = {
-  cashTx: [],         // Állampapír pénzszámla: {id,date,type,amount,note,mkRef}
-  fixmapSeries: [],
-  fixmap: [],
-  dkjSeries: [],
-  dkj: [],
-  // Lightyear számlák
+  ledger: [],         // EGYETLEN IGAZSÁG FORRÁS — események: {date,account,type,asset,qty,huf,eur,fx,priceEur,ref,note,subtype,src}
   lyAccounts: [],     // {id, name, lyAccountId, type:'cash'|'tbsz', tbszYear}
-  lyTx: [],           // {id, accountId, date, type:'buy'|'sell', ticker, shares, priceEur, fxRate, fee, feeCurrency, ref}
-  lyCashTx: [],       // {id, accountId, date, type:'deposit'|'withdraw'|'transfer_in'|'transfer_out', amount, currency, ref, note}
-  marketCommentary: null, // {date, html} – napi piaci kommentár cache
-  fiGoal: null,       // {amount, targetDate, monthlySaving, expectedReturnPct, aiCoach:{date,text}}
+  fixmapSeries: [],   // származtatott metaadat: {id,name,couponRate,maturity,nextCoupon}
+  dkjSeries: [],      // származtatott metaadat: {id,name,maturity}
+  marketCommentary: null,
+  fiGoal: null,
+  // Az alábbi mezők a ledgerből SZÁRMAZTATOTT, csak-olvasható tükrök (rebuildDerivedViews tölti):
+  cashTx: [], fixmap: [], dkj: [], lyTx: [], lyCashTx: [],
 };
 
 let data = null;
@@ -961,6 +958,141 @@ function toast(msg,dur=2500){
   setTimeout(()=>t.classList.remove('show'),dur);
 }
 function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+// ═══════════════════════════════════════════════
+// LEDGER MOTOR — egyetlen igazság forrás
+// Esemény séma: {date, account, type, asset, qty, huf, eur, fx, priceEur, ref, note, subtype, src}
+//   account: 'kincstar' | 'ly:<accountId>'
+//   type: 'cash_in'|'cash_out'|'buy'|'sell'
+//   asset: 'HUF'|'EUR'|'FIXMAP:<seriesKey>'|'DKJ:<maturityYYMMDD>'|'VWCE'|'WBIT'
+// ═══════════════════════════════════════════════
+
+// Egy eszköz mennyisége adott napon (account=null → minden számla összesítve)
+function ledgerQty(asset, date=null, account=null){
+  return (data.ledger||[]).reduce((s,e)=>{
+    if(e.asset!==asset) return s;
+    if(account && e.account!==account) return s;
+    if(date && e.date>date) return s;
+    if(['buy','cash_in'].includes(e.type)) return s+e.qty;
+    if(['sell','cash_out'].includes(e.type)) return s-e.qty;
+    return s;
+  },0);
+}
+
+// Az összes FIXMAP:/DKJ: asset kulcs a ledgerben
+function ledgerApAssets(){
+  return [...new Set((data.ledger||[])
+    .filter(e=>e.asset.startsWith('FIXMAP:')||e.asset.startsWith('DKJ:'))
+    .map(e=>e.asset))];
+}
+
+// Kincstári állampapír névérték összesen adott napon
+function ledgerApValue(date=null){
+  return ledgerApAssets().reduce((s,a)=>s+ledgerQty(a,date),0);
+}
+
+// FixMáP éves kamat (a fixmapSeries metaadatból + a ledger aktuális névértékből)
+function ledgerFixmapAnnualCoupon(date=null){
+  return ledgerApAssets().filter(a=>a.startsWith('FIXMAP:')).reduce((s,a)=>{
+    const qty = ledgerQty(a, date);
+    if(qty<=0) return s;
+    const key = a.slice('FIXMAP:'.length);
+    const series = (data.fixmapSeries||[]).find(sr=>sr.key===key || sr.id===key);
+    const rate = series?.couponRate ?? 7;
+    return s + qty*rate/100;
+  },0);
+}
+
+// ═══════════════════════════════════════════════
+// SZÁRMAZTATOTT NÉZETEK — a ledgerből regenerálja a régi mezőket,
+// hogy a meglévő render kód átírás nélkül tovább működjön.
+// Ezt minden ledger-változás után meg kell hívni.
+// ═══════════════════════════════════════════════
+function rebuildDerivedViews(){
+  if(!data.ledger) data.ledger=[];
+  const L = data.ledger;
+
+  // --- cashTx: kincstári HUF mozgások (a régi formátumban) ---
+  data.cashTx = L.filter(e=>e.account==='kincstar' && (e.asset==='HUF')).map(e=>{
+    let type;
+    if(e.subtype==='external_in') type='deposit';
+    else if(e.subtype==='external_out') type='withdraw';
+    else if(e.subtype==='coupon') type='coupon';
+    else if(e.subtype==='buy_pay') type='buy';
+    else if(e.subtype==='sell_proceed') type='sell';
+    else if(e.subtype==='card_in') type='deposit';
+    else type = (e.type==='cash_in'?'deposit':'withdraw');
+    return {id:e.src, date:e.date, type, amount:e.qty, note:e.note||'', mkRef:e.ref};
+  });
+
+  // --- fixmap: aktív + lezárt FixMáP tételek (egy sorozat = egy aggregált tétel) ---
+  data.fixmap = [];
+  ledgerApAssets().filter(a=>a.startsWith('FIXMAP:')).forEach(a=>{
+    const key = a.slice('FIXMAP:'.length);
+    let series = (data.fixmapSeries||[]).find(sr=>sr.key===key||sr.id===key);
+    const buys = L.filter(e=>e.asset===a && e.type==='buy');
+    const qty = ledgerQty(a);
+    const firstBuy = buys.sort((x,y)=>x.date.localeCompare(y.date))[0];
+    const buyHuf = buys.reduce((s,e)=>s+(e.huf||0),0);
+    if(qty>0.5){
+      data.fixmap.push({
+        id:'fm:'+key, seriesId:series?.id||key, date:firstBuy?.date||today(),
+        faceValue:qty, buyPrice:buyHuf*(qty/buys.reduce((s,e)=>s+e.qty,0)||1),
+        active:true
+      });
+    }
+  });
+
+  // --- dkj: aktív DKJ tételek ---
+  data.dkj = [];
+  ledgerApAssets().filter(a=>a.startsWith('DKJ:')).forEach(a=>{
+    const mat6 = a.slice('DKJ:'.length); // YYMMDD
+    const maturity = '20'+mat6.slice(0,2)+'-'+mat6.slice(2,4)+'-'+mat6.slice(4,6);
+    let series = (data.dkjSeries||[]).find(sr=>sr.maturity===maturity);
+    const buys = L.filter(e=>e.asset===a && e.type==='buy');
+    const qty = ledgerQty(a);
+    const firstBuy = buys.sort((x,y)=>x.date.localeCompare(y.date))[0];
+    const buyHuf = buys.reduce((s,e)=>s+(e.huf||0),0);
+    const totalBought = buys.reduce((s,e)=>s+e.qty,0);
+    if(qty>0.5){
+      data.dkj.push({
+        id:'dkj:'+mat6, seriesId:series?.id||mat6, date:firstBuy?.date||today(),
+        faceValue:qty, originalFaceValue:totalBought,
+        buyPrice:buyHuf*(qty/totalBought||1), maturity, active:true
+      });
+    }
+  });
+
+  // --- lyTx: ETF vétel/eladás a régi formátumban ---
+  data.lyTx = L.filter(e=>(e.asset==='VWCE'||e.asset==='WBIT') && (e.type==='buy'||e.type==='sell')).map(e=>({
+    id:e.src, accountId:e.account.replace('ly:',''), date:e.date,
+    type:e.type, ticker:e.asset, shares:e.qty,
+    priceEur:e.priceEur||0, fxRate:e.fx||fxForLyEvent(e), fee:0, feeCurrency:'EUR', ref:e.ref
+  }));
+
+  // --- lyCashTx: LY pénzmozgások a régi formátumban ---
+  data.lyCashTx = L.filter(e=>e.account.startsWith('ly:') && (e.asset==='HUF'||e.asset==='EUR')).map(e=>{
+    let type;
+    if(e.subtype==='external_in') type='deposit';
+    else if(e.subtype==='external_out') type='withdraw';
+    else if(e.subtype==='internal_transfer') type=(e.type==='cash_in'?'transfer_in':'transfer_out');
+    else if(e.subtype==='conversion') type=(e.type==='cash_in'?'transfer_in':'transfer_out');
+    else if(e.subtype==='buy_pay') type='transfer_out';
+    else if(e.subtype==='sell_proceed') type='transfer_in';
+    else type=(e.type==='cash_in'?'deposit':'withdraw');
+    return {id:e.src, accountId:e.account.replace('ly:',''), date:e.date, type, amount:e.qty, currency:e.asset, ref:e.ref, note:e.note||''};
+  });
+}
+
+// Egy LY ETF esemény árfolyamának kiderítése (a közeli Conversion EUR fx-éből)
+function fxForLyEvent(e){
+  // keressük a legközelebbi conversion EUR fx-et ugyanazon a számlán, dátum köré
+  const convs = (data.ledger||[]).filter(x=>x.account===e.account && x.subtype==='conversion' && x.asset==='EUR' && x.fx);
+  if(!convs.length) return liveFx||390;
+  // legközelebbi dátum
+  convs.sort((a,b)=>Math.abs(new Date(a.date)-new Date(e.date))-Math.abs(new Date(b.date)-new Date(e.date)));
+  return convs[0].fx || liveFx || 390;
+}
 
 // ═══════════════════════════════════════════════
 // AUTH & GIST
@@ -992,16 +1124,14 @@ async function loadOrCreateGist(){
     const j=await d.json();
     data=JSON.parse(j.files[GIST_FILE].content);
     // migrate old data if needed
+    if(data.ledger===undefined) data.ledger=[];
     if(data.lyAccounts===undefined) data.lyAccounts=[];
     if(data.marketCommentary===undefined) data.marketCommentary=null;
-    if(data.lyTx===undefined) data.lyTx=[];
-    if(data.lyCashTx===undefined) data.lyCashTx=[];
     if(data.fiGoal===undefined) data.fiGoal=null;
-    if(!data.cashTx)data.cashTx=[];
     if(!data.fixmapSeries)data.fixmapSeries=[];
     if(!data.dkjSeries)data.dkjSeries=[];
-    if(!data.fixmap)data.fixmap=[];
-    if(!data.dkj)data.dkj=[];
+    // A régi mezők a ledgerből származtatottak — regeneráljuk
+    rebuildDerivedViews();
     // API key NOT stored in Gist - use localStorage instead
     const lsKey=localStorage.getItem('anthropic_api_key');
     if(lsKey){anthropicKey=lsKey;console.log('API key loaded from localStorage:',lsKey.slice(0,15)+'...');}
@@ -1017,7 +1147,16 @@ async function saveData(){
   document.getElementById('syncDot').classList.add('saving');
   document.getElementById('syncLabel').textContent='mentés...';
   try{
-    await fetch('https://api.github.com/gists/'+gistId,{method:'PATCH',headers:{Authorization:'token '+token,'Content-Type':'application/json'},body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}})});
+    // Csak az igazság-forrás mezőket mentjük; a származtatott nézeteket (cashTx/fixmap/dkj/lyTx/lyCashTx) nem
+    const toSave = {
+      ledger: data.ledger||[],
+      lyAccounts: data.lyAccounts||[],
+      fixmapSeries: data.fixmapSeries||[],
+      dkjSeries: data.dkjSeries||[],
+      marketCommentary: data.marketCommentary||null,
+      fiGoal: data.fiGoal||null,
+    };
+    await fetch('https://api.github.com/gists/'+gistId,{method:'PATCH',headers:{Authorization:'token '+token,'Content-Type':'application/json'},body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(toSave,null,2)}}})});
     toast('✓ Mentve');
   }catch(e){toast('Mentés sikertelen');}
   document.getElementById('syncDot').classList.remove('saving');
@@ -1110,18 +1249,12 @@ function showTab(name,el){
 // COMPUTED VALUES
 // ═══════════════════════════════════════════════
 function cashBalance(){
-  return data.cashTx.reduce((s,t)=>{
-    if(['deposit','coupon','expire'].includes(t.type))return s+t.amount;
-    if(['withdraw','buy','coupon_out'].includes(t.type))return s-t.amount;
-    // transfer_in, transfer_out, sell: NEM számít a pénzszámla egyenlegébe
-    return s;
-  },0);
+  // Tisztán a ledgerből: kincstári HUF egyenleg
+  return ledgerQty('HUF', null, 'kincstar');
 }
 
 function lyAccountShares(accountId, ticker) {
-  return (data.lyTx||[])
-    .filter(t => t.accountId===accountId && t.ticker===ticker)
-    .reduce((s,t) => s + (t.type==='buy' ? t.shares : -t.shares), 0);
+  return ledgerQty(ticker, null, 'ly:'+accountId);
 }
 
 function lyAccountCostBasis(accountId, ticker) {
@@ -1173,14 +1306,19 @@ function lyAccountRealizedPL(accountId, ticker) {
   return {eur: totalEur, huf: totalHuf};
 }
 
-function lyAccountCashBalance(accountId, currency='HUF') {
-  return (data.lyCashTx||[])
-    .filter(t => t.accountId===accountId && t.currency===currency)
-    .reduce((s,t) => {
-      if(t.type==='deposit' || t.type==='transfer_in') return s + t.amount;
-      if(t.type==='withdraw' || t.type==='transfer_out') return s - t.amount;
-      return s;
-    }, 0);
+function lyAccountCashBalance(accountId, currency='HUF', date=null) {
+  return ledgerQty(currency, date, 'ly:'+accountId);
+}
+
+// LY pénzszámlák összesített Ft értéke egy adott napon (HUF + EUR×fx)
+// date=null → a mai napra; date='YYYY-MM-DD' → arra a napra
+function lyTotalCashHuf(date=null, fxRate=null){
+  const fx = fxRate || liveFx || 395;
+  return (data.lyAccounts||[]).reduce((sum, acc) => {
+    const huf = lyAccountCashBalance(acc.id, 'HUF', date);
+    const eur = lyAccountCashBalance(acc.id, 'EUR', date);
+    return sum + huf + eur * fx;
+  }, 0);
 }
 
 // Összes befektetett tőke = DT- deposit összegek az összes lyAccount-ból
@@ -1207,8 +1345,7 @@ function lyTotalValue() {
 
 // Régi kompatibilitás (dashboard, chart)
 function etfShares(ticker){
-  return (data.lyTx||[]).filter(t=>t.ticker===ticker)
-    .reduce((s,t)=>s+(t.type==='buy'?t.shares:-t.shares),0);
+  return ledgerQty(ticker, null, null);
 }
 function etfCostBasis(ticker){
   const allBuys = (data.lyTx||[]).filter(t=>t.ticker===ticker&&t.type==='buy').map(t=>({...t,remaining:t.shares}));
@@ -1224,12 +1361,7 @@ function etfCostBasis(ticker){
 }
 
 function fixmapAnnualCoupon(){
-  return data.fixmap.filter(f=>f.active).reduce((s,f)=>{
-    // A couponRate a sorozaton (fixmapSeries) van, nem közvetlenül a tételen
-    const series = data.fixmapSeries.find(sr => sr.id === f.seriesId);
-    const rate = series?.couponRate ?? f.couponRate ?? 0;  // fallback: ha valamilyen okból mégis a tételen lenne
-    return s + f.faceValue * rate / 100;
-  }, 0);
+  return ledgerFixmapAnnualCoupon();
 }
 
 // Wrapper: aktuális adatokból építi fel a komponens objektumot és renderelt az FI cél kártyát
@@ -1577,7 +1709,8 @@ function renderDashboard(){
   const wbitEur=(liveWbit||0)*wbitShares;
   const tbszEur=vwceEur+wbitEur;
   const tbszVal=tbszEur*(liveFx||395);
-  const total=cb+apValue+tbszVal;
+  const lyCash=lyTotalCashHuf(); // LY pénzszámla egyenleg most (Ft-ra konvertálva, EUR-os pénzzel együtt)
+  const total=cb+apValue+tbszVal+lyCash;
   const annualYield=fixmapAnnualCoupon();
   const apEur=liveFx>0?apValue/(liveFx||395):0;
   const cbEur=liveFx>0?cb/(liveFx||395):0;
@@ -3976,7 +4109,8 @@ function renderDashMiniChart(){
     const liveAp = data.fixmap.filter(f=>f.active).reduce((s,f)=>s+f.faceValue,0)
                  + data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
     const liveEtf = ((liveVwce||0)*etfShares('VWCE') + (liveWbit||0)*etfShares('WBIT')) * liveFx;
-    const liveTotal = Math.round(liveCash + liveAp + liveEtf);
+    const liveLy = lyTotalCashHuf();
+    const liveTotal = Math.round(liveCash + liveAp + liveEtf + liveLy);
     if(liveTotal > 0) points[points.length-1].val = liveTotal;
   }
 
@@ -4194,77 +4328,30 @@ async function loadHistoricData(silent=false){
   renderDashMiniChart();
 }
 
+
+// ═══════════════════════════════════════════════
+// PORTFÓLIÓ ÉRTÉK ADOTT NAPON — tisztán a ledger motorból
+// ═══════════════════════════════════════════════
 function calcPortfolioOnDate(date){
-  let cash=0;
-  data.cashTx.forEach(t=>{
-    if(t.date>date)return;
-    // sell NEM kerül a cash-be (csak realizált P&L számításhoz)
-    // transfer_in/transfer_out NEM kerül a cash-be (befektetett tőke számításhoz)
-    if(['deposit','coupon','expire'].includes(t.type))cash+=t.amount;
-    if(['withdraw','buy','coupon_out'].includes(t.type))cash-=t.amount;
-  });
-  let ap=0;
-  const fmSellMap={};
-  data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP')).forEach(t=>{
-    // Sorozatnév kinyerése a note-ból
-    const key = t.note;
-    if(!fmSellMap[key]||t.date<fmSellMap[key]) fmSellMap[key]=t.date;
-  });
-  const firstFmSell = Object.values(fmSellMap).sort()[0] || '9999-99-99';
-  data.fixmap.forEach(f=>{
-    if(f.date>date)return;
-    if(f.active){ap+=f.faceValue;return;}
-    if(f.soldDate){if(f.soldDate>date)ap+=f.faceValue;return;}
-    // soldDate nincs beállítva (régi adat): az első FixMáP eladás előtt adjuk hozzá
-    if(firstFmSell>date)ap+=f.faceValue;
-  });
-  const dkjSellMap={};
-  data.cashTx.filter(t=>['sell','expire'].includes(t.type)&&t.note&&(t.note.includes('DKJ')||t.note.includes('Diszkont'))).forEach(t=>{
-    const m=t.note.match(/D(\d{6})/);
-    if(m){const mat='20'+m[1].slice(0,2)+'-'+m[1].slice(2,4)+'-'+m[1].slice(4,6);if(!dkjSellMap[mat]||t.date<dkjSellMap[mat])dkjSellMap[mat]=t.date;}
-  });
+  const fx = histData?.fxPrices ? (interpolate(histData.fxPrices,date)||(liveFx||395)) : (liveFx||395);
+  const vp = histData?.vwcePrices ? (interpolate(histData.vwcePrices,date)||liveVwce||0) : (liveVwce||0);
+  const wp = histData?.wbitPrices ? (interpolate(histData.wbitPrices,date)||liveWbit||0) : (liveWbit||0);
 
-  // DKJ eladások dátum+maturity szerint
-  const dkjSellByDate={};
-  data.cashTx.filter(t=>t.type==='sell'&&t.note&&t.note.includes('DKJ')).forEach(t=>{
-    const m=t.note.match(/D(\d{6})/);
-    if(!m) return;
-    const mat='20'+m[1].slice(0,2)+'-'+m[1].slice(2,4)+'-'+m[1].slice(4,6);
-    if(!dkjSellByDate[mat]) dkjSellByDate[mat]=[];
-    dkjSellByDate[mat].push({date:t.date, faceValue: t.soldFaceValue||0});
+  // Kincstári HUF pénzszámla
+  const cash = ledgerQty('HUF', date, 'kincstar');
+  // Állampapír névérték (FixMáP + DKJ)
+  const ap = ledgerApValue(date);
+  // Lightyear pénzszámlák: HUF + EUR×fx, minden LY számlán
+  let lyCash = 0;
+  (data.lyAccounts||[]).forEach(acc=>{
+    lyCash += ledgerQty('HUF', date, 'ly:'+acc.id);
+    lyCash += ledgerQty('EUR', date, 'ly:'+acc.id) * fx;
   });
+  // ETF db → EUR → HUF
+  const etfEur = ledgerQty('VWCE', date)*vp + ledgerQty('WBIT', date)*wp;
+  const etfHuf = etfEur*fx;
 
-  data.dkj.forEach(d=>{
-    if(d.date>date)return;
-    if(d.active){ap+=d.faceValue;return;}
-    // Teljesen eladott vagy részlegesen eladott tétel
-    // Az originalFaceValue-ból levonjuk az adott dátumig eladott névértékeket
-    const origFv = d.originalFaceValue||d.faceValue;
-    if(d.soldDate && d.soldDate<=date) return; // teljesen eladva és már megtörtént
-    // Mennyi volt eladva az adott dátumig ebből a maturity-ból?
-    // Egyszerűbb: ha soldDate > date, az origFv-t adjuk hozzá CSAK ha az első eladás is > date
-    const firstSell = dkjSellMap[d.maturity];
-    if(!firstSell || firstSell>date){
-      ap+=origFv; // még semmi nem volt eladva
-    } else if(d.soldDate && d.soldDate>date){
-      // Volt már részleges eladás, de még nem teljesen eladott
-      // A cashTx sell tételekből számoljuk a már eladott névértéket
-      // Mivel ezt nem tároljuk, a faceValue-t használjuk (ami a maradék)
-      // de ez az AKTUÁLIS maradék, nem a dátumkori
-      // Legkonzervatívabb: ne adjuk hozzá ha már volt eladás
-      // (jobb ha kicsit kevesebbet mutat mint túl sokat)
-    }
-  });
-  const etfHoldings={};
-  (data.lyTx||[]).filter(t=>t.date<=date).forEach(t=>{
-    if(!etfHoldings[t.ticker])etfHoldings[t.ticker]=0;
-    etfHoldings[t.ticker]+=t.type==='buy'?t.shares:-t.shares;
-  });
-  const fx=histData?.fxPrices?interpolate(histData.fxPrices,date)||(liveFx||395):(liveFx||395);
-  const vp=histData?.vwcePrices?interpolate(histData.vwcePrices,date)||liveVwce||0:liveVwce||0;
-  const wp=histData?.wbitPrices?interpolate(histData.wbitPrices,date)||liveWbit||0:liveWbit||0;
-  const etfEur=(etfHoldings['VWCE']||0)*vp+(etfHoldings['WBIT']||0)*wp;
-  return {cash,ap,etf:etfEur*fx,etfEur,fx,total:cash+ap+etfEur*fx};
+  return { cash, ap, etf:etfHuf, etfEur, fx, lyCash, total: cash+ap+etfHuf+lyCash };
 }
 
 // ═══════════════════════════════════════════════
@@ -4646,131 +4733,113 @@ function confirmMkImport() {
   const toImport = mkParsed.filter(r=>r.selected);
   if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
 
-  // Először vételek, aztán eladások (hogy FIFO tudjon működni)
-  const order = {'fixmap-buy':0,'dkj-buy':1,'fixmap-sell':2,'dkj-sell':3,'coupon':4,'deposit':5,'withdraw':6};
-  const sorted = [...toImport].sort((a,b) => {
-    const ao = order[a.appType]??9, bo = order[b.appType]??9;
-    if(ao!==bo) return ao-bo;
-    return a.date.localeCompare(b.date);
-  });
+  // Asset-kulcs segédfüggvények
+  const fixmapKey = securities => { const m=securities.match(/(\d{4})\/Q(\d)/); return m?`${m[1]}Q${m[2]}`:'?'; };
+  const dkjKey = securities => { const m=securities.match(/D(\d{6})/); return m?m[1]:'?'; };
 
-  sorted.forEach(r => {
+  // Meglévő ledger ref-ek (duplikátum-szűrés)
+  const existingRefs = new Set((data.ledger||[]).map(e=>e.ref).filter(Boolean));
+
+  let added = 0;
+  toImport.forEach(r => {
+    if(existingRefs.has(r.txId)) return; // duplikátum
+    const base = { date:r.date, account:'kincstar', ref:r.txId, note:r.securities||r.label||'', src:'mk:'+r.txId };
+
     if(r.appType==='fixmap-buy') {
-      let series = data.fixmapSeries.find(s=>s.name===r.seriesName);
-      if(!series) {
-        const id = uid();
-        const couponRate = 7;
-        const qMatch = r.securities.match(/(\d{4})\/Q(\d)/);
-        const year = qMatch ? parseInt(qMatch[1]) : 2031;
-        const q = qMatch ? parseInt(qMatch[2]) : 1;
-        const maturityMonths = {1:'01', 2:'04', 3:'07', 4:'10'};
-        const maturity = `${year}-${maturityMonths[q]||'01'}-23`;
-        // Következő kamat: vásárlás utáni első negyedéves dátum (jan/ápr/júl/okt 23.)
-        const couponMonths = [1,4,7,10];
-        const purchaseDate = new Date(r.date+'T00:00:00Z');
-        let nextCoupon = maturity;
-        outer: for(let y = purchaseDate.getUTCFullYear(); y <= year; y++) {
-          for(const m of couponMonths) {
-            const d = new Date(Date.UTC(y, m-1, 23));
-            if(d > purchaseDate) {
-              const ds = d.toISOString().split('T')[0];
-              if(ds <= maturity) { nextCoupon = ds; break outer; }
-            }
-          }
-        }
-        series = {id, name: r.seriesName, couponRate, maturity, nextCoupon, issueDate: r.date};
-        data.fixmapSeries.push(series);
-      }
-      data.fixmap.push({id:uid(), seriesId:series.id, date:r.date, faceValue:r.faceValue, buyPrice:r.amount, active:true, mkRef:r.txId});
+      const key = fixmapKey(r.securities);
+      // Sorozat metaadat regisztrálása (couponRate, maturity, nextCoupon)
+      ensureFixmapSeries(key, r.securities, r.date);
+      data.ledger.push({...base, type:'cash_out', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'buy_pay'});
+      data.ledger.push({...base, type:'buy', asset:'FIXMAP:'+key, qty:r.faceValue, huf:r.amount, subtype:'buy_asset'});
+      added++;
     }
     else if(r.appType==='dkj-buy') {
-      let series = data.dkjSeries?.find(s=>s.maturity===r.maturity);
-      if(!series) {
-        if(!data.dkjSeries) data.dkjSeries=[];
-        const name = 'D'+r.maturity.replace(/-/g,'').slice(2);
-        series = {id:uid(), name, maturity:r.maturity};
-        data.dkjSeries.push(series);
-      }
-      data.dkj.push({id:uid(), seriesId:series.id, date:r.date, faceValue:r.faceValue, originalFaceValue:r.faceValue, buyPrice:r.amount, maturity:r.maturity, active:true, mkRef:r.txId});
+      const key = dkjKey(r.securities);
+      ensureDkjSeries(key, r.maturity);
+      data.ledger.push({...base, type:'cash_out', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'buy_pay'});
+      data.ledger.push({...base, type:'buy', asset:'DKJ:'+key, qty:r.faceValue, huf:r.amount, subtype:'buy_asset'});
+      added++;
     }
     else if(r.appType==='fixmap-sell') {
-      const series = data.fixmapSeries.find(s=>r.securities.includes(s.name.replace('FixMáP ','')));
-      const items = data.fixmap.filter(f=>f.seriesId===series?.id&&f.active)
-        .sort((a,b)=>a.date.localeCompare(b.date));
-      let toSell = r.faceValue;
-      let soldCost = 0;
-      for(const item of items) {
-        if(toSell<=0) break;
-        if(item.faceValue<=toSell) {
-          soldCost += item.buyPrice||0;
-          item.active=false; item.soldDate=r.date; toSell-=item.faceValue;
-        } else {
-          const ratio = toSell/item.faceValue;
-          soldCost += Math.round((item.buyPrice||0)*ratio);
-          item.buyPrice = Math.round((item.buyPrice||0)*(1-ratio));
-          item.faceValue -= toSell; toSell=0;
-        }
-      }
-      // Eladási bevétel → cashTx sell
-      data.cashTx.push({id:uid(),date:r.date,type:'sell',amount:r.amount,
-        note:'FixMáP eladás: '+r.securities,mkRef:r.txId,cost:soldCost});
+      const key = fixmapKey(r.securities);
+      data.ledger.push({...base, type:'cash_in', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'sell_proceed'});
+      data.ledger.push({...base, type:'sell', asset:'FIXMAP:'+key, qty:r.faceValue, huf:r.amount, subtype:'sell_asset'});
+      added++;
     }
     else if(r.appType==='dkj-sell') {
-      const items = data.dkj.filter(d=>d.maturity===r.maturity&&d.active)
-        .sort((a,b)=>a.date.localeCompare(b.date));
-      let toSell = r.faceValue;
-      let soldCost = 0;
-      for(const item of items) {
-        if(toSell<=0) break;
-        if(item.faceValue<=toSell) {
-          soldCost += item.buyPrice||0;
-          item.active=false; item.soldDate=r.date; toSell-=item.faceValue;
-        } else {
-          const ratio = toSell/item.faceValue;
-          soldCost += Math.round((item.buyPrice||0)*ratio);
-          item.buyPrice = Math.round((item.buyPrice||0)*(1-ratio));
-          item.faceValue -= toSell; toSell=0;
-        }
-      }
-      // Eladási bevétel → cashTx sell
-      data.cashTx.push({id:uid(),date:r.date,type:'sell',amount:r.amount,
-        note:'DKJ eladás: '+r.securities,mkRef:r.txId,cost:soldCost});
+      const key = dkjKey(r.securities);
+      data.ledger.push({...base, type:'cash_in', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'sell_proceed'});
+      data.ledger.push({...base, type:'sell', asset:'DKJ:'+key, qty:r.faceValue, huf:r.amount, subtype:'sell_asset'});
+      added++;
     }
     else if(r.appType==='coupon') {
-      // Kamatfizetés → cashTx-be mentjük
-      const existingCoupon = data.cashTx.find(t=>t.type==='coupon'&&t.mkRef===r.txId);
-      if(!existingCoupon) {
-        data.cashTx.push({id:uid(),date:r.date,type:'coupon',amount:r.amount,note:'Kamatfizetés: '+r.securities,mkRef:r.txId});
+      data.ledger.push({...base, type:'cash_in', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'coupon'});
+      // Első töredék-kamat metaadat
+      const key = fixmapKey(r.securities);
+      const series = (data.fixmapSeries||[]).find(s=>s.key===key);
+      if(series && r.faceValue>0){
+        const regularCoupon = r.faceValue*series.couponRate/100/4;
+        if(Math.abs(r.amount-regularCoupon)>100){ series.firstCouponAmount=r.amount; series.firstCouponDate=r.date; series.nextCoupon=r.date; }
       }
-      // Első töredéknegyedév kezelése
-      const seriesName = r.securities.replace('Fix Magyar Állampapír ','FixMáP ');
-      const series = data.fixmapSeries.find(s=>s.name===seriesName);
-      if(series && r.faceValue > 0) {
-        const regularCoupon = r.faceValue * series.couponRate / 100 / 4;
-        if(Math.abs(r.amount - regularCoupon) > 100) {
-          series.firstCouponAmount = r.amount;
-          series.firstCouponDate = r.date;
-          series.nextCoupon = r.date; // következő kamat ebből számítódik
-        }
-      }
+      added++;
     }
     else if(r.appType==='transfer_in') {
-      data.cashTx.push({id:uid(), date:r.date, type:'transfer_in', amount:r.amount, note:r.label, mkRef:r.txId});
+      // Utalás érkeztetés VAGY Bankkártyás fizetés → külső friss tőke BE
+      data.ledger.push({...base, type:'cash_in', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'external_in'});
+      added++;
     }
     else if(r.appType==='transfer_out') {
-      data.cashTx.push({id:uid(), date:r.date, type:'transfer_out', amount:r.amount, note:r.label, mkRef:r.txId});
+      data.ledger.push({...base, type:'cash_out', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'external_out'});
+      added++;
     }
     else if(r.appType==='coupon_out') {
-      // Kamat kiutalás → levonja a pénzszámla egyenlegéből
-      data.cashTx.push({id:uid(), date:r.date, type:'coupon_out', amount:r.amount, note:'Kamat kiutalás', mkRef:r.txId});
+      data.ledger.push({...base, type:'cash_out', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'external_out'});
+      added++;
     }
   });
 
+  data.ledger.sort((a,b)=>a.date.localeCompare(b.date));
+  rebuildDerivedViews();
   saveData();
   renderAll();
-  toast(`✓ ${sorted.length} kincstári tranzakció importálva!`);
+  toast(`✓ ${added} kincstári tranzakció importálva!`);
   resetMkImport();
   showTab('kincstar', document.querySelector('.nav-item[onclick*="kincstar"]'));
+}
+
+// FixMáP sorozat metaadat biztosítása (couponRate, maturity, nextCoupon)
+function ensureFixmapSeries(key, securities, buyDate){
+  if(!data.fixmapSeries) data.fixmapSeries=[];
+  let series = data.fixmapSeries.find(s=>s.key===key);
+  if(series) return series;
+  const qMatch = securities.match(/(\d{4})\/Q(\d)/);
+  const year = qMatch ? parseInt(qMatch[1]) : 2031;
+  const q = qMatch ? parseInt(qMatch[2]) : 1;
+  const maturityMonths = {1:'01',2:'04',3:'07',4:'10'};
+  const maturity = `${year}-${maturityMonths[q]||'01'}-23`;
+  const couponMonths = [1,4,7,10];
+  const purchaseDate = new Date(buyDate+'T00:00:00Z');
+  let nextCoupon = maturity;
+  outer: for(let y=purchaseDate.getUTCFullYear(); y<=year; y++){
+    for(const m of couponMonths){
+      const d = new Date(Date.UTC(y,m-1,23));
+      if(d>purchaseDate){ const ds=d.toISOString().split('T')[0]; if(ds<=maturity){nextCoupon=ds; break outer;} }
+    }
+  }
+  series = { id:uid(), key, name:'FixMáP '+(qMatch?`${year}/Q${q}`:''), couponRate:7, maturity, nextCoupon, issueDate:buyDate };
+  data.fixmapSeries.push(series);
+  return series;
+}
+
+// DKJ sorozat metaadat biztosítása
+function ensureDkjSeries(key, maturity){
+  if(!data.dkjSeries) data.dkjSeries=[];
+  let series = data.dkjSeries.find(s=>s.key===key);
+  if(series) return series;
+  const mat = maturity || ('20'+key.slice(0,2)+'-'+key.slice(2,4)+'-'+key.slice(4,6));
+  series = { id:uid(), key, name:'D'+key, maturity:mat };
+  data.dkjSeries.push(series);
+  return series;
 }
 
 function resetMkImport() {
@@ -5051,74 +5120,61 @@ function confirmImport() {
   const toImport=importParsed.filter(r=>r.selected);
   if(!toImport.length) return toast('Nincs kijelölt tranzakció!');
 
-  if(!data.lyTx) data.lyTx=[];
-  if(!data.lyCashTx) data.lyCashTx=[];
-
-  // IT- ref párokat összegyűjtjük az átutalások irányának meghatározásához
-  const transferPairs={};
-  toImport.filter(r=>['transfer-in','transfer-out','transfer-in-eur'].includes(r.rowType)).forEach(r=>{
-    if(!transferPairs[r.ref]) transferPairs[r.ref]=[];
-    transferPairs[r.ref].push(r);
-  });
+  const existingRefs = new Set((data.ledger||[]).map(e=>e.ref).filter(Boolean));
+  let added = 0;
 
   toImport.forEach(r => {
+    const acc = 'ly:'+r.accountId;
+    const baseRef = r.ref;
+    const base = { date:r.date, account:acc, ref:baseRef, src:'ly:'+baseRef };
+
     if(r.rowType==='etf-buy') {
-      data.lyTx.push({id:uid(),accountId:r.accountId,date:r.date,ticker:r.ticker,
-        type:'buy',shares:r.shares,priceEur:r.priceEur,fxRate:r.fxRate,
-        fee:r.fee,feeCurrency:'EUR',ref:r.ref});
-      // EUR elköltve a vételre → pénzszámla EUR csökken
-      if(r.grossEur>0) {
-        data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-          type:'transfer_out',amount:r.grossEur,currency:'EUR',ref:r.ref+'-eur-out',
-          note:r.ticker+' vétel (EUR)'});
-      }
+      if(existingRefs.has(baseRef+'-buy')) return;
+      // EUR KI + ETF db BE
+      data.ledger.push({...base, ref:baseRef+'-buypay', type:'cash_out', asset:'EUR', qty:r.grossEur||0, subtype:'buy_pay', note:r.ticker+' vétel'});
+      data.ledger.push({...base, ref:baseRef+'-buy', type:'buy', asset:r.ticker, qty:r.shares, eur:r.grossEur||0, priceEur:r.priceEur, fx:r.fxRate, subtype:'buy_asset', note:r.ticker+' vétel'});
+      added++;
     }
     else if(r.rowType==='etf-sell') {
-      data.lyTx.push({id:uid(),accountId:r.accountId,date:r.date,ticker:r.ticker,
-        type:'sell',shares:r.shares,priceEur:r.priceEur,fxRate:r.fxRate,ref:r.ref});
-      // Eladási bevétel → lyCashTx EUR-ban
-      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'transfer_in',amount:r.proceeds,currency:'EUR',ref:r.ref+'-proceed',
-        note:r.ticker+' eladási bevétel'});
+      if(existingRefs.has(baseRef+'-sell')) return;
+      data.ledger.push({...base, ref:baseRef+'-proceed', type:'cash_in', asset:'EUR', qty:r.proceeds||0, subtype:'sell_proceed', note:r.ticker+' eladás'});
+      data.ledger.push({...base, ref:baseRef+'-sell', type:'sell', asset:r.ticker, qty:r.shares, eur:r.proceeds||0, priceEur:r.priceEur, fx:r.fxRate, subtype:'sell_asset', note:r.ticker+' eladás'});
+      added++;
     }
     else if(r.rowType==='cash-deposit') {
-      // DT- külső befizetés → egyenlegbe számít
-      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'deposit',amount:r.amount,currency:r.currency,ref:r.ref,note:'Külső befizetés'});
+      if(existingRefs.has(baseRef)) return;
+      data.ledger.push({...base, type:'cash_in', asset:r.currency, qty:r.amount, huf:r.currency==='HUF'?r.amount:undefined, subtype:'external_in', note:'Külső befizetés'});
+      added++;
     }
-    else if(r.rowType==='transfer-out') {
-      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'transfer_out',amount:r.amount,currency:r.currency,ref:r.ref,note:'Átutalás ki (TBSZ-re)'});
+    else if(r.rowType==='transfer-out' || r.rowType==='transfer-out-eur') {
+      if(existingRefs.has(baseRef+'-out')) return;
+      data.ledger.push({...base, ref:baseRef+'-out', type:'cash_out', asset:r.currency, qty:r.amount, huf:r.currency==='HUF'?r.amount:undefined, subtype:'internal_transfer', note:'Belső átutalás ki'});
+      added++;
     }
-    else if(r.rowType==='transfer-out-eur') {
-      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'transfer_out',amount:r.amount,currency:'EUR',ref:r.ref,note:'EUR átutalás ki'});
-    }
-    else if(r.rowType==='transfer-in') {
-      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'transfer_in',amount:r.amount,currency:r.currency,ref:r.ref,note:'Átutalás be'});
-    }
-    else if(r.rowType==='transfer-in-eur') {
-      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'transfer_in',amount:r.amount,currency:'EUR',ref:r.ref,note:'EUR átutalás be'});
+    else if(r.rowType==='transfer-in' || r.rowType==='transfer-in-eur') {
+      if(existingRefs.has(baseRef+'-in')) return;
+      data.ledger.push({...base, ref:baseRef+'-in', type:'cash_in', asset:r.currency, qty:r.amount, huf:r.currency==='HUF'?r.amount:undefined, subtype:'internal_transfer', note:'Belső átutalás be'});
+      added++;
     }
     else if(r.rowType==='conversion-huf') {
-      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'transfer_out',amount:r.amount,currency:'HUF',ref:r.ref,note:'ETF vételre (HUF→EUR váltás)'});
+      if(existingRefs.has(baseRef)) return;
+      data.ledger.push({...base, type:'cash_out', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'conversion', note:'HUF→EUR váltás'});
+      added++;
     }
     else if(r.rowType==='conversion-eur') {
-      // HUF→EUR váltás → EUR érkezik a pénzszámlára
-      data.lyCashTx.push({id:uid(),accountId:r.accountId,date:r.date,
-        type:'transfer_in',amount:r.amount,currency:'EUR',ref:r.ref,note:'HUF→EUR váltás'});
+      if(existingRefs.has(baseRef)) return;
+      data.ledger.push({...base, type:'cash_in', asset:'EUR', qty:r.amount, fx:r.fxRate, subtype:'conversion', note:'HUF→EUR váltás'});
+      added++;
     }
   });
 
+  data.ledger.sort((a,b)=>a.date.localeCompare(b.date));
+  rebuildDerivedViews();
   saveData();
   renderAll();
-  toast(`✓ ${toImport.length} tranzakció importálva!`);
+  toast(`✓ ${added} tranzakció importálva!`);
   resetImport();
 
-  // Navigálás az első érintett számlára
   const firstAcc=toImport.find(r=>r.accountId)?.accountId;
   if(firstAcc) {
     const navBtn=[...document.querySelectorAll('#ly-nav-items .nav-item')].find(b=>b.onclick?.toString().includes(firstAcc));
