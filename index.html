@@ -496,7 +496,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <!-- Napi piaci kommentár – donut FÖLÖTT -->
           <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0">
             <div class="panel-header" style="margin-bottom:6px">
-              <div class="panel-title">✦ napi piaci kommentár</div>
+              <div class="panel-title" style="white-space:nowrap;letter-spacing:.05em">✦ napi piaci kommentár</div>
               <div style="display:flex;align-items:center;gap:6px">
                 <span id="marketCommentaryDate" style="font-size:10px;color:var(--text3)"></span>
                 <button class="btn btn-ghost btn-sm" onclick="fetchMarketCommentary(true)" id="marketRefreshBtn" style="padding:2px 6px">↻</button>
@@ -1020,27 +1020,26 @@ function ledgerInvestedCapital(date=null, fxRate=null){
 //  - kamatok (coupon subtype): pozitív
 //  - eladások P&L: minden 'sell' eseménynél (eladási bevétel − az eladott rész FIFO-vételára)
 function ledgerRealizedPL(){
-  // Kamatok
+  // Kamatok (HUF, állampapír)
   let coupons = 0;
   (data.ledger||[]).forEach(e=>{ if(e.subtype==='coupon') coupons += (e.huf ?? e.qty); });
 
-  // Eladások P&L assetenként, FIFO-vételár alapján
   let salesPL = 0;
   const sellAssets = [...new Set((data.ledger||[]).filter(e=>e.type==='sell').map(e=>e.asset))];
   sellAssets.forEach(asset=>{
+    const isEtf = (asset==='VWCE'||asset==='WBIT');
     const events = (data.ledger||[]).filter(e=>e.asset===asset && (e.type==='buy'||e.type==='sell'))
       .sort((a,b)=>a.date.localeCompare(b.date));
-    // FIFO buy lots: {qty, unitCostHuf}
-    const lots = [];
-    const isEtf = (asset==='VWCE'||asset==='WBIT');
+    const lots = []; // FIFO: {qty, unit}  (ETF: unit EUR/db, állampapír: unit HUF/névérték)
     events.forEach(e=>{
-      const hufTotal = isEtf ? (e.eur||0)*(e.fx||liveFx||395) : (e.huf||0);
-      const unit = e.qty>0 ? hufTotal/e.qty : 0;
+      // ETF-nél EUR-ban számolunk (az eladás Sell sorának nincs fx-e, a vételé igen → fx-keveredés elkerülése).
+      // Állampapírnál HUF-ban (eleve HUF).
+      const total = isEtf ? (e.eur||0) : (e.huf||0);
+      const unit = e.qty>0 ? total/e.qty : 0;
       if(e.type==='buy'){
         lots.push({qty:e.qty, unit});
       } else { // sell
-        let toSell = e.qty;
-        let costBasis = 0;
+        let toSell = e.qty, costBasis = 0;
         while(toSell>0 && lots.length){
           const lot = lots[0];
           const used = Math.min(lot.qty, toSell);
@@ -1048,13 +1047,28 @@ function ledgerRealizedPL(){
           lot.qty -= used; toSell -= used;
           if(lot.qty<=1e-9) lots.shift();
         }
-        const proceeds = hufTotal;
-        salesPL += proceeds - costBasis;
+        const proceeds = total;
+        const plRaw = proceeds - costBasis; // ETF: EUR, állampapír: HUF
+        // ETF P&L EUR→HUF az eladáskori árfolyammal (a hozzá tartozó conversion fx, vagy fallback)
+        const plHuf = isEtf ? plRaw * etfSellFx(e) : plRaw;
+        salesPL += plHuf;
       }
     });
   });
 
   return { coupons, salesPL, total: coupons + salesPL };
+}
+
+// Egy ETF eladáshoz tartozó EUR→HUF árfolyam (az eladás körüli conversion fx, vagy a vételek átlaga, vagy liveFx)
+function etfSellFx(sellEvent){
+  const acc = sellEvent.account;
+  // legközelebbi conversion EUR fx ugyanazon a számlán
+  const convs = (data.ledger||[]).filter(e=>e.account===acc && e.subtype==='conversion' && e.asset==='EUR' && e.fx);
+  if(convs.length){
+    convs.sort((a,b)=>Math.abs(new Date(a.date)-new Date(sellEvent.date))-Math.abs(new Date(b.date)-new Date(sellEvent.date)));
+    return convs[0].fx;
+  }
+  return liveFx || 390;
 }
 
 // ═══════════════════════════════════════════════
@@ -5580,7 +5594,12 @@ async function fetchMarketCommentary(force=false) {
   const minutesNow = now.getHours()*60 + now.getMinutes();
   const EU_CLOSE_MIN = 17*60 + 30; // 17:30 magyar idő
   const slot = minutesNow >= EU_CLOSE_MIN ? 'post_close' : 'pre_close';
-  const slotLabel = slot==='post_close' ? 'EU zárás után' : 'EU zárás előtt';
+  // Dátum címke: hónap-nap óra:perc (év és slot felirat nélkül)
+  const fmtDateLabel = () => {
+    const d = new Date();
+    const p = n => String(n).padStart(2,'0');
+    return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
   // Érdemleges mozgás küszöb (csak ezen felül van extra lekérés a sloton kívül)
   const SIGNIFICANT_MOVE_PCT = 1.5;
 
@@ -5591,7 +5610,7 @@ async function fetchMarketCommentary(force=false) {
     const fxPctDiff = Math.abs((c.fxPct||0) - fxPct);
     if(vwcePctDiff < SIGNIFICANT_MOVE_PCT && fxPctDiff < SIGNIFICANT_MOVE_PCT) {
       el.innerHTML = blurNumbers(c.html);
-      if(dateEl) dateEl.textContent = slotLabel + ' · ' + todayStr;
+      if(dateEl) dateEl.textContent = c.label || fmtDateLabel();
       return;
     }
     // különben átfut a regenerálásra (érdemleges mozgás történt)
@@ -5661,10 +5680,11 @@ Szabályok:
 
     const html = `<span style="color:var(--text)">${blurNumbers(text)}</span>`;
     el.innerHTML = html;
-    if(dateEl) dateEl.textContent = slotLabel + ' · ' + todayStr;
+    const label = fmtDateLabel();
+    if(dateEl) dateEl.textContent = label;
 
-    // Cache mentése – tároljuk a slot-ot és a piaci % változásokat is
-    data.marketCommentary = { date: todayStr, slot, html, vwcePct, fxPct };
+    // Cache mentése – tároljuk a slot-ot, a címkét és a piaci % változásokat is
+    data.marketCommentary = { date: todayStr, slot, label, html, vwcePct, fxPct };
     saveData();
 
   } catch(e) {
