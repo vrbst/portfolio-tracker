@@ -5573,10 +5573,14 @@ async function fetchMarketCommentary(force=false) {
   const fxDeltaOnVwceFt = Math.round(vwceVal * fxPct/100);            // FX hatás a VWCE érték Ft-jára
   const totalDailyDeltaFt = vwceDeltaFt + fxDeltaOnVwceFt;            // teljes portfólió napi delta (FixMáP/DKJ napon belül nem mozog)
 
-  // Slot meghatározása: 'morning' (12:00 előtt magyar idő) vagy 'evening' (22:00 után, US zárás reakciók)
-  // 12:00-22:00 között "morning" slot él (nincs új lekérés ebben az ablakban)
-  const hour = new Date().getHours();
-  const slot = hour >= 22 ? 'evening' : 'morning';
+  // Slot az EU piaczáráshoz kötve. A VWCE az Xetra-n (Frankfurt) van jegyezve, ami 17:30 CET-kor zár.
+  // - 'pre_close' (00:00–17:30 magyar idő): a tegnapi EU zárás állapota
+  // - 'post_close' (17:30 után): a mai EU záróárak — ez a napi friss aktualitás
+  const now = new Date();
+  const minutesNow = now.getHours()*60 + now.getMinutes();
+  const EU_CLOSE_MIN = 17*60 + 30; // 17:30 magyar idő
+  const slot = minutesNow >= EU_CLOSE_MIN ? 'post_close' : 'pre_close';
+  const slotLabel = slot==='post_close' ? 'EU zárás után' : 'EU zárás előtt';
   // Érdemleges mozgás küszöb (csak ezen felül van extra lekérés a sloton kívül)
   const SIGNIFICANT_MOVE_PCT = 1.5;
 
@@ -5587,7 +5591,7 @@ async function fetchMarketCommentary(force=false) {
     const fxPctDiff = Math.abs((c.fxPct||0) - fxPct);
     if(vwcePctDiff < SIGNIFICANT_MOVE_PCT && fxPctDiff < SIGNIFICANT_MOVE_PCT) {
       el.innerHTML = blurNumbers(c.html);
-      if(dateEl) dateEl.textContent = (slot==='evening'?'este':'reggel') + ' · ' + todayStr;
+      if(dateEl) dateEl.textContent = slotLabel + ' · ' + todayStr;
       return;
     }
     // különben átfut a regenerálásra (érdemleges mozgás történt)
@@ -5657,7 +5661,7 @@ Szabályok:
 
     const html = `<span style="color:var(--text)">${blurNumbers(text)}</span>`;
     el.innerHTML = html;
-    if(dateEl) dateEl.textContent = (slot==='evening'?'este':'reggel') + ' · ' + todayStr;
+    if(dateEl) dateEl.textContent = slotLabel + ' · ' + todayStr;
 
     // Cache mentése – tároljuk a slot-ot és a piaci % változásokat is
     data.marketCommentary = { date: todayStr, slot, html, vwcePct, fxPct };
