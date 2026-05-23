@@ -284,10 +284,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 .ai-scenario{width:420px;flex-shrink:0}
 
 /* DASHBOARD LAYOUT */
-.dash-layout{display:grid;grid-template-columns:1fr 340px;grid-template-rows:1fr auto;gap:10px}
-.dash-main{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:10px;align-self:stretch}
+.dash-layout{display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto 1fr;gap:10px}
+.dash-main{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:10px}
 .dash-side{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:10px}
-.dash-upcoming{grid-column:1;grid-row:2}
+.dash-upcoming{grid-column:1;grid-row:2;display:flex;flex-direction:column}
 .dash-header-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
 .range-btns{display:flex;gap:3px;align-self:flex-start;margin-top:4px;flex-wrap:nowrap;flex-shrink:0}
 .pie-wrap{position:relative;width:160px;height:160px}
@@ -461,7 +461,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         <div class="dash-main">
 
           <!-- Nagy érték + mini chart -->
-          <div class="panel" style="margin-bottom:0;flex:1;display:flex;flex-direction:column">
+          <div class="panel" style="margin-bottom:0;height:520px;display:flex;flex-direction:column">
             <div class="dash-header-row" style="flex-shrink:0;margin-bottom:8px">
               <div>
                 <div style="font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">portfóliók</div>
@@ -487,28 +487,20 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <!-- Közelgő események – placeholder, mobilon ide kerül -->
         </div>
 
-        <!-- Jobb oszlop: kártyák + donut -->
+        <!-- Jobb oszlop: kártyák + donut + közelgő események -->
         <div class="dash-side">
 
           <!-- Befektetett tőke kártyák -->
           <div id="dashCards" style="display:flex;flex-direction:column;gap:4px"></div>
 
-          <!-- Napi piaci kommentár – donut FÖLÖTT -->
+          <!-- Közelgő események – donut FÖLÖTT, keskeny oszlopban -->
           <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0">
-            <div class="panel-header" style="margin-bottom:6px">
-              <div class="panel-title" style="white-space:nowrap;letter-spacing:.05em">✦ napi piaci kommentár</div>
-              <div style="display:flex;align-items:center;gap:6px">
-                <span id="marketCommentaryDate" style="font-size:10px;color:var(--text3)"></span>
-                <button class="btn btn-ghost btn-sm" onclick="fetchMarketCommentary(true)" id="marketRefreshBtn" style="padding:2px 6px">↻</button>
-              </div>
-            </div>
-            <div id="marketCommentary" style="font-size:11px;color:var(--text2);line-height:1.65;min-height:155px;max-height:155px;overflow-y:auto">
-              <span style="color:var(--text3)">Betöltés...</span>
-            </div>
+            <div class="panel-header" style="margin-bottom:6px"><div class="panel-title">közelgő események</div></div>
+            <div id="upcomingEvents" style="min-height:155px;max-height:200px;overflow-y:auto"></div>
           </div>
 
           <!-- Donut -->
-          <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0;padding:10px 14px">
+          <div class="panel" style="display:flex;flex-direction:column;margin-bottom:0;padding:5px 14px">
             <div class="panel-header"><div class="panel-title">megoszlás</div></div>
             <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:4px">
               <div class="pie-wrap" style="width:110px;height:110px">
@@ -525,10 +517,18 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
         </div>
 
-        <!-- Közelgő események: dash-layout közvetlen gyereke → order működik mobilon -->
-        <div class="panel dash-upcoming" style="margin-bottom:0">
-          <div class="panel-header"><div class="panel-title">közelgő események</div></div>
-          <div id="upcomingEvents" style="max-height:280px;overflow-y:auto"></div>
+        <!-- Napi piaci kommentár: széles alsó sorban -->
+        <div class="panel dash-upcoming" style="margin-bottom:0;display:flex;flex-direction:column">
+          <div class="panel-header" style="margin-bottom:6px">
+            <div class="panel-title" style="white-space:nowrap;letter-spacing:.05em">✦ napi piaci kommentár</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span id="marketCommentaryDate" style="font-size:10px;color:var(--text3)"></span>
+              <button class="btn btn-ghost btn-sm" onclick="fetchMarketCommentary(true)" id="marketRefreshBtn" style="padding:2px 6px">↻</button>
+            </div>
+          </div>
+          <div id="marketCommentary" style="font-size:12px;color:var(--text2);line-height:1.7;overflow-y:auto;flex:1">
+            <span style="color:var(--text3)">Betöltés...</span>
+          </div>
         </div>
 
       </div><!-- /.dash-layout -->
@@ -1965,12 +1965,12 @@ function renderUpcoming(){
           <div style="display:flex;align-items:center;gap:10px">
             <span style="color:${e.color};font-size:8px">●</span>
             <div>
-              <div style="font-size:13px;font-weight:500;color:${col}">${label}</div>
+              <div style="font-size:12px;font-weight:500;color:var(--text)">${label}</div>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">${e.series} · ${e.type}</div>
             </div>
           </div>
           <div style="text-align:right">
-            <div class="blurable" style="font-size:13px;color:var(--green);font-weight:500">+${fmt(e.amount)} Ft</div>
+            <div class="blurable" style="font-size:12px;color:var(--green);font-weight:500">+${fmt(e.amount)}</div>
             <div style="font-size:10px;color:var(--text3);margin-top:2px">${e.date}</div>
           </div>
         </div>`;
@@ -2638,10 +2638,13 @@ function renderLyDetailTable(accountId, ticker) {
   emptyEl.style.display='none';
 
   // Tooltip generáló: teljes hozam, árfolyam hozam HUF-ban, devizahatás
-  const makeTooltip = (shares, priceEur, fxRate, lp, fx) => {
+  // costHuf = a tényleges befektetett összeg (konverziós fee-vel együtt) — a "Teljes hozam" ehhez viszonyít,
+  // így konzisztens a táblázat sorában látott P&L %-kal
+  const makeTooltip = (shares, priceEur, fxRate, lp, fx, costHuf) => {
     if(!lp) return '';
-    const plHuf = shares * lp * fx - shares * priceEur * fxRate;
-    const plHufPct = plHuf / (shares * priceEur * fxRate) * 100;
+    const baseCost = costHuf!=null ? costHuf : shares * priceEur * fxRate;
+    const plHuf = shares * lp * fx - baseCost;
+    const plHufPct = baseCost>0 ? plHuf / baseCost * 100 : 0;
     const priceReturnHuf = shares * (lp - priceEur) * fx;
     const priceReturnPct = (lp - priceEur) / priceEur * 100;
     const fxEffect = shares * priceEur * (fx - fxRate);
@@ -2679,7 +2682,7 @@ function renderLyDetailTable(accountId, ticker) {
   const totPlPct=totPl!==null&&totCost>0?totPl/totCost*100:null;
   const plCol=totPl!==null?(totPl>=0?'var(--green)':'var(--red)'):'';
   const avgFx = totCostEur>0 ? totCost/totCostEur : fx;
-    const totTtId = lp ? makeTooltipId(makeTooltip(totShares, totCostEur/totShares, avgFx, lp, fx)) : '';
+    const totTtId = lp ? makeTooltipId(makeTooltip(totShares, totCostEur/totShares, avgFx, lp, fx, totCost)) : '';
   bodyEl.innerHTML=`
     <tr style="border-top:2px solid var(--green);border-bottom:2px solid var(--green);font-weight:500;background:var(--bg3)">
       <td style="font-size:10px;color:var(--text2);white-space:nowrap">összesítés</td>
@@ -2697,7 +2700,7 @@ function renderLyDetailTable(accountId, ticker) {
     const plFt=valFt!==null?valFt-b.costHuf:null;
     const plPct=plFt!==null&&b.costHuf>0?plFt/b.costHuf*100:null;
     const col=plFt!==null?(plFt>=0?'var(--green)':'var(--red)'):'';
-    const ttId = lp ? makeTooltipId(makeTooltip(b.shares, b.priceEur, b.fxRate, lp, fx)) : '';
+    const ttId = lp ? makeTooltipId(makeTooltip(b.shares, b.priceEur, b.fxRate, lp, fx, b.costHuf)) : '';
     return `<tr>
       <td style="white-space:nowrap;font-size:10px">${b.date}</td>
       <td class="r blurable">${b.shares.toFixed(4)}</td>
