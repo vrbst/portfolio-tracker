@@ -1003,6 +1003,60 @@ function ledgerFixmapAnnualCoupon(date=null){
   },0);
 }
 
+// Befektetett tőke = minden külső friss tőke beáramlás − külső kivét, MINDEN számlán
+// (kincstári Utalás érkeztetés + Bankkártyás fizetés + Lightyear DT-deposit; EUR-t fx-szel HUF-ra)
+function ledgerInvestedCapital(date=null, fxRate=null){
+  const fx = fxRate || liveFx || 395;
+  return (data.ledger||[]).reduce((s,e)=>{
+    if(date && e.date>date) return s;
+    const hufVal = e.asset==='EUR' ? e.qty*fx : (e.huf ?? e.qty);
+    if(e.subtype==='external_in') return s + hufVal;
+    if(e.subtype==='external_out') return s - hufVal;
+    return s;
+  },0);
+}
+
+// Realizált profit:
+//  - kamatok (coupon subtype): pozitív
+//  - eladások P&L: minden 'sell' eseménynél (eladási bevétel − az eladott rész FIFO-vételára)
+function ledgerRealizedPL(){
+  // Kamatok
+  let coupons = 0;
+  (data.ledger||[]).forEach(e=>{ if(e.subtype==='coupon') coupons += (e.huf ?? e.qty); });
+
+  // Eladások P&L assetenként, FIFO-vételár alapján
+  let salesPL = 0;
+  const sellAssets = [...new Set((data.ledger||[]).filter(e=>e.type==='sell').map(e=>e.asset))];
+  sellAssets.forEach(asset=>{
+    const events = (data.ledger||[]).filter(e=>e.asset===asset && (e.type==='buy'||e.type==='sell'))
+      .sort((a,b)=>a.date.localeCompare(b.date));
+    // FIFO buy lots: {qty, unitCostHuf}
+    const lots = [];
+    const isEtf = (asset==='VWCE'||asset==='WBIT');
+    events.forEach(e=>{
+      const hufTotal = isEtf ? (e.eur||0)*(e.fx||liveFx||395) : (e.huf||0);
+      const unit = e.qty>0 ? hufTotal/e.qty : 0;
+      if(e.type==='buy'){
+        lots.push({qty:e.qty, unit});
+      } else { // sell
+        let toSell = e.qty;
+        let costBasis = 0;
+        while(toSell>0 && lots.length){
+          const lot = lots[0];
+          const used = Math.min(lot.qty, toSell);
+          costBasis += used*lot.unit;
+          lot.qty -= used; toSell -= used;
+          if(lot.qty<=1e-9) lots.shift();
+        }
+        const proceeds = hufTotal;
+        salesPL += proceeds - costBasis;
+      }
+    });
+  });
+
+  return { coupons, salesPL, total: coupons + salesPL };
+}
+
 // ═══════════════════════════════════════════════
 // SZÁRMAZTATOTT NÉZETEK — a ledgerből regenerálja a régi mezőket,
 // hogy a meglévő render kód átírás nélkül tovább működjön.
@@ -1258,7 +1312,7 @@ function lyAccountShares(accountId, ticker) {
 }
 
 function lyAccountCostBasis(accountId, ticker) {
-  // FIFO: returns remaining lots with costHuf
+  // FIFO: returns remaining lots with costHuf (a konverziós fee-t is beleszámítva)
   const buys = (data.lyTx||[])
     .filter(t => t.accountId===accountId && t.ticker===ticker && t.type==='buy')
     .sort((a,b) => a.date.localeCompare(b.date))
@@ -1275,12 +1329,36 @@ function lyAccountCostBasis(accountId, ticker) {
       toSell -= used;
     }
   });
-  return buys.filter(b => b.remaining > 0.0001).map(b => ({
-    ...b,
-    shares: b.remaining,
-    costHuf: b.remaining * b.priceEur * b.fxRate +
-      (b.remaining/b.shares) * (b.feeCurrency==='EUR' ? (b.fee||0)*b.fxRate : (b.fee||0)),
-  }));
+  return buys.filter(b => b.remaining > 0.0001).map(b => {
+    const ratio = b.remaining / b.shares; // a megmaradt rész aránya
+    const convFee = lyBuyConversionFee(accountId, b.date, b.shares*b.priceEur); // a vételhez tartozó konverziós fee (HUF)
+    const buyFeeHuf = b.feeCurrency==='EUR' ? (b.fee||0)*b.fxRate : (b.fee||0);
+    return {
+      ...b,
+      shares: b.remaining,
+      costHuf: b.remaining * b.priceEur * b.fxRate + ratio*buyFeeHuf + ratio*convFee,
+    };
+  });
+}
+
+// Egy ETF vételhez tartozó konverziós fee (HUF): az időben legközelebbi conversion esemény fee-je,
+// arányosan ha a konverzióból több vétel lett
+function lyBuyConversionFee(accountId, buyDate, buyEur){
+  const acc = 'ly:'+accountId;
+  const convs = (data.ledger||[])
+    .filter(e=>e.account===acc && e.subtype==='conversion' && e.asset==='HUF' && (e.feeHuf||0)>0);
+  if(!convs.length) return 0;
+  // legközelebbi konverzió a vétel dátumához
+  convs.sort((a,b)=>Math.abs(new Date(a.date)-new Date(buyDate))-Math.abs(new Date(b.date)-new Date(buyDate)));
+  const conv = convs[0];
+  // mekkora EUR-vétel lett ebből a konverzióból? (az adott napon ugyanazon a számlán)
+  const sameConvBuys = (data.ledger||[])
+    .filter(e=>e.account===acc && e.type==='buy' && (e.asset==='VWCE'||e.asset==='WBIT') && e.date===conv.date);
+  const totalConvEur = sameConvBuys.reduce((s,e)=>s+(e.eur||0),0);
+  if(totalConvEur<=0) return conv.feeHuf||0;
+  // arányos rész a vételhez
+  const share = Math.min(1, buyEur/totalConvEur);
+  return (conv.feeHuf||0)*share;
 }
 
 function lyAccountRealizedPL(accountId, ticker) {
@@ -1717,15 +1795,8 @@ function renderDashboard(){
   const totalEur=cbEur+apEur+tbszEur;
   const hasLive=liveVwce&&liveFx;
 
-  // Befektetett tőke = nettó befizetett összeg
-  // Állampapír: Utalás érkeztetés + Bankkártyás fizetés - Utalás indítás - Kamat kiutalás
-  const apInvested = data.cashTx
-    .reduce((s,t) => {
-      if(t.type==='transfer_in') return s + t.amount;
-      if(t.type==='transfer_out' || t.type==='coupon_out') return s - t.amount;
-      return s;
-    }, 0);
-  const totalInvested = apInvested + lyTotalInvested();
+  // Befektetett tőke = minden külső friss tőke beáramlás, MINDEN számlán (kincstár + Lightyear)
+  const totalInvested = ledgerInvestedCapital(null, liveFx||395);
 
   // Nagy értékkijelző
   const bigEl=document.getElementById('dashTotalBig');
@@ -1748,18 +1819,11 @@ function renderDashboard(){
   
   if(subEl)subEl.innerHTML=`<span class="blurable">≈ ${fmtEur(totalEur)}</span>${pillHtml}`;
 
-  // Realizált profit számítás
-  // 1. Kapott kamatok (coupon típusú cashTx)
-  const totalCoupons = data.cashTx
-    .filter(t=>t.type==='coupon')
-    .reduce((s,t)=>s+t.amount, 0);
-
-  // 2. Eladások P&L = eladási bevétel - vételár (cost mező a sell cashTx-ben)
-  const dkjPL = data.cashTx
-    .filter(t=>t.type==='sell')
-    .reduce((s,t)=>s+(t.amount-(t.cost||0)), 0);
-
-  const realizedPL = totalCoupons + dkjPL;
+  // Realizált profit a ledgerből: kamatok (pozitív) + eladások P&L (FIFO vételár alapján)
+  const realized = ledgerRealizedPL();
+  const totalCoupons = realized.coupons;
+  const dkjPL = realized.salesPL;
+  const realizedPL = realized.total;
 
   document.getElementById('dashCards').innerHTML=`
     <div class="stat-card">
@@ -5032,16 +5096,18 @@ async function handleImportFiles(files) {
         // HUF Conversion = HUF elköltve ETF vételre (negatív összeg a számlán)
         const acc = resolveAcc();
         const grossAmt = parseFloat(r['Gross Amount'])||0; // negatív szám
+        const feeHuf = parseFloat(r.Fee)||0; // a konverziós díj HUF-ban
         importParsed.push({rowType:'conversion-huf',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
-          amount:Math.abs(grossAmt),currency:'HUF',ref:ref+'-conv-huf',isDuplicate:false,selected:true});
+          amount:Math.abs(grossAmt),currency:'HUF',feeHuf,ref:ref+'-conv-huf',isDuplicate:false,selected:true});
       }
       else if(r.Type==='Conversion'&&r.CCY==='EUR') {
         // EUR Conversion: pozitív = HUF→EUR váltás (EUR érkezett) → transfer_in
         const acc = resolveAcc();
         const grossAmt = parseFloat(r['Gross Amount'])||0;
+        const fxR = parseFloat(r['FX Rate'])||0;
         if(grossAmt > 0.1) {
           importParsed.push({rowType:'conversion-eur',date,accountId:acc?.id||null,accountName:acc?.name||lyId||'?',
-            amount:grossAmt,currency:'EUR',ref:ref+'-conv-eur',isDuplicate:false,selected:true});
+            amount:grossAmt,currency:'EUR',fxRate:fxR,ref:ref+'-conv-eur',isDuplicate:false,selected:true});
         }
       }
       // Withdrawal DT- stb. → skip
@@ -5158,7 +5224,7 @@ function confirmImport() {
     }
     else if(r.rowType==='conversion-huf') {
       if(existingRefs.has(baseRef)) return;
-      data.ledger.push({...base, type:'cash_out', asset:'HUF', qty:r.amount, huf:r.amount, subtype:'conversion', note:'HUF→EUR váltás'});
+      data.ledger.push({...base, type:'cash_out', asset:'HUF', qty:r.amount, huf:r.amount, feeHuf:r.feeHuf||0, subtype:'conversion', note:'HUF→EUR váltás'});
       added++;
     }
     else if(r.rowType==='conversion-eur') {
