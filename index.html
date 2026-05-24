@@ -361,8 +361,13 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
   /* Táblák: vízszintes scroll */
   .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  /* Állampapír táblák mobilon: ne préselődjenek össze, hanem vízszintesen görgethetők legyenek */
-  .bond-table{min-width:860px}
+  /* Állampapír táblák mobilon: ne préselődjenek össze, hanem vízszintesen görgethetők legyenek.
+     A table-layout:fixed + százalékos colgroup átfedő szövegeket okoz mobilon → auto layout,
+     a colgroup teljes kikapcsolása, és bő min-width hogy minden szám elférjen. */
+  .bond-table{min-width:1120px!important;table-layout:auto!important}
+  .bond-table colgroup{display:none!important}
+  .bond-table th,.bond-table td{white-space:nowrap!important;padding:8px 14px!important;width:auto!important}
+  .bond-table .detail-row td{padding-left:28px!important}
 
   .balance-bar{flex-wrap:wrap}
 
