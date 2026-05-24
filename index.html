@@ -356,9 +356,13 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
   /* Chart magasság */
   .chart-wrap{height:160px!important}
+  /* Fő chart kártya mobilon ~30%-kal alacsonyabb (520 → 365px) */
+  #dashChartPanel{height:365px!important}
 
   /* Táblák: vízszintes scroll */
   .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* Állampapír táblák mobilon: ne préselődjenek össze, hanem vízszintesen görgethetők legyenek */
+  .bond-table{min-width:860px}
 
   .balance-bar{flex-wrap:wrap}
 
@@ -382,8 +386,9 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .mob-nav-btn.active{color:var(--green)}
   .mob-nav-btn svg{width:18px;height:18px;stroke-width:1.8}
 
-  /* Extra padding a tartalom aljának hogy ne takarja a nav */
-  .content{padding-bottom:70px!important}
+  /* Extra padding a tartalom aljának hogy ne takarja a bottom nav (nav magassága + safe-area) */
+  .content{padding-bottom:calc(90px + env(safe-area-inset-bottom))!important}
+  .page{padding-bottom:20px}
 
   .ly-detail-wrap{font-size:10px}
   .ly-detail-wrap th,.ly-detail-wrap td{padding:5px 6px!important;white-space:nowrap}}
@@ -461,7 +466,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
         <div class="dash-main">
 
           <!-- Nagy érték + mini chart -->
-          <div class="panel" style="margin-bottom:0;height:520px;display:flex;flex-direction:column">
+          <div class="panel" id="dashChartPanel" style="margin-bottom:0;height:520px;display:flex;flex-direction:column">
             <div class="dash-header-row" style="flex-shrink:0;margin-bottom:8px">
               <div>
                 <div style="font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">portfóliók</div>
