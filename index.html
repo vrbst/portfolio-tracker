@@ -1093,42 +1093,59 @@ function rebuildDerivedViews(){
     return {id:e.src, date:e.date, type, amount:e.qty, note:e.note||'', mkRef:e.ref};
   });
 
-  // --- fixmap: aktív + lezárt FixMáP tételek (egy sorozat = egy aggregált tétel) ---
+  // --- fixmap: MINDEN vásárlás külön tétel (FIFO-val kezelve a részleges eladásokat) ---
   data.fixmap = [];
   ledgerApAssets().filter(a=>a.startsWith('FIXMAP:')).forEach(a=>{
     const key = a.slice('FIXMAP:'.length);
-    let series = (data.fixmapSeries||[]).find(sr=>sr.key===key||sr.id===key);
-    const buys = L.filter(e=>e.asset===a && e.type==='buy');
-    const qty = ledgerQty(a);
-    const firstBuy = buys.sort((x,y)=>x.date.localeCompare(y.date))[0];
-    const buyHuf = buys.reduce((s,e)=>s+(e.huf||0),0);
-    if(qty>0.5){
-      data.fixmap.push({
-        id:'fm:'+key, seriesId:series?.id||key, date:firstBuy?.date||today(),
-        faceValue:qty, buyPrice:buyHuf*(qty/buys.reduce((s,e)=>s+e.qty,0)||1),
-        active:true
-      });
-    }
+    const series = (data.fixmapSeries||[]).find(sr=>sr.key===key||sr.id===key);
+    // Vásárlások időrendben → külön tételek; eladások FIFO-val csökkentik a tételeket
+    const buys = L.filter(e=>e.asset===a && e.type==='buy').sort((x,y)=>x.date.localeCompare(y.date))
+      .map((e,i)=>({ id:'fm:'+key+':'+i, seriesId:series?.id||key, date:e.date,
+        faceValue:e.qty, originalFaceValue:e.qty, buyPrice:e.huf||e.qty, active:true, soldDate:null }));
+    const sells = L.filter(e=>e.asset===a && e.type==='sell').sort((x,y)=>x.date.localeCompare(y.date));
+    sells.forEach(sell=>{
+      let toSell = sell.qty;
+      for(const lot of buys){
+        if(toSell<=0) break;
+        if(!lot.active) continue;
+        if(lot.faceValue<=toSell){
+          toSell -= lot.faceValue; lot.active=false; lot.soldDate=sell.date; lot.faceValue=0;
+        } else {
+          const ratio = toSell/lot.faceValue;
+          lot.buyPrice = Math.round(lot.buyPrice*(1-ratio));
+          lot.faceValue -= toSell; toSell=0;
+        }
+      }
+    });
+    // Csak a nem teljesen eladott tételeket tartjuk meg (faceValue>0)
+    buys.filter(l=>l.faceValue>0.5).forEach(l=>data.fixmap.push(l));
   });
 
-  // --- dkj: aktív DKJ tételek ---
+  // --- dkj: MINDEN vásárlás külön tétel (FIFO részleges eladással) ---
   data.dkj = [];
   ledgerApAssets().filter(a=>a.startsWith('DKJ:')).forEach(a=>{
-    const mat6 = a.slice('DKJ:'.length); // YYMMDD
+    const mat6 = a.slice('DKJ:'.length);
     const maturity = '20'+mat6.slice(0,2)+'-'+mat6.slice(2,4)+'-'+mat6.slice(4,6);
-    let series = (data.dkjSeries||[]).find(sr=>sr.maturity===maturity);
-    const buys = L.filter(e=>e.asset===a && e.type==='buy');
-    const qty = ledgerQty(a);
-    const firstBuy = buys.sort((x,y)=>x.date.localeCompare(y.date))[0];
-    const buyHuf = buys.reduce((s,e)=>s+(e.huf||0),0);
-    const totalBought = buys.reduce((s,e)=>s+e.qty,0);
-    if(qty>0.5){
-      data.dkj.push({
-        id:'dkj:'+mat6, seriesId:series?.id||mat6, date:firstBuy?.date||today(),
-        faceValue:qty, originalFaceValue:totalBought,
-        buyPrice:buyHuf*(qty/totalBought||1), maturity, active:true
-      });
-    }
+    const series = (data.dkjSeries||[]).find(sr=>sr.maturity===maturity);
+    const buys = L.filter(e=>e.asset===a && e.type==='buy').sort((x,y)=>x.date.localeCompare(y.date))
+      .map((e,i)=>({ id:'dkj:'+mat6+':'+i, seriesId:series?.id||mat6, date:e.date,
+        faceValue:e.qty, originalFaceValue:e.qty, buyPrice:e.huf||e.qty, maturity, active:true, soldDate:null }));
+    const sells = L.filter(e=>e.asset===a && e.type==='sell').sort((x,y)=>x.date.localeCompare(y.date));
+    sells.forEach(sell=>{
+      let toSell = sell.qty;
+      for(const lot of buys){
+        if(toSell<=0) break;
+        if(!lot.active) continue;
+        if(lot.faceValue<=toSell){
+          toSell -= lot.faceValue; lot.active=false; lot.soldDate=sell.date; lot.faceValue=0;
+        } else {
+          const ratio = toSell/lot.faceValue;
+          lot.buyPrice = Math.round(lot.buyPrice*(1-ratio));
+          lot.faceValue -= toSell; toSell=0;
+        }
+      }
+    });
+    buys.filter(l=>l.faceValue>0.5).forEach(l=>data.dkj.push(l));
   });
 
   // --- lyTx: ETF vétel/eladás a régi formátumban ---
@@ -2267,10 +2284,16 @@ function renderAllampapir(){
     }
 
     const detailRows=s.items.map(f=>`<tr class="detail-row" id="d-${rowId}-${f.id}">
-      <td colspan="2" style="color:var(--text3)">${f.date}</td>
+      <td style="color:var(--text3);padding-left:48px">${f.date}</td>
       <td class="r blurable" style="color:var(--text)">${fmt(f.faceValue)}</td>
       <td class="r blurable" style="color:var(--text)">${fmt(f.buyPrice||f.faceValue)}</td>
-      <td colspan="4" style="color:var(--text3)">${f.active?'aktív':'lezárt'}</td>
+      <td class="r" style="color:var(--text3)">–</td>
+      <td class="r"></td>
+      <td class="r"></td>
+      <td class="r"></td>
+      <td class="r"></td>
+      <td><span style="font-size:10px;color:var(--text3)">${f.active?'aktív':'lezárt'}</span></td>
+      <td></td>
     </tr>`).join('');
     return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
       <td><div style="display:flex;align-items:center;gap:10px"><div class="ins-avatar ins-avatar-ap">FM</div><div><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></div></div></td>
@@ -2312,10 +2335,16 @@ function renderAllampapir(){
     const rowId='dkj-'+s.maturity.replace(/-/g,'');
     const isLegacy=s.id.startsWith('legacy-');
     const detailRows=s.items.filter(d=>d.active).map(d=>`<tr class="detail-row" id="d-${rowId}-${d.id}">
-      <td colspan="2" style="color:var(--text3)">${d.date}</td>
+      <td style="color:var(--text3);padding-left:48px">${d.date}</td>
       <td class="r blurable" style="color:var(--text)">${fmt(d.faceValue)}</td>
       <td class="r blurable" style="color:var(--text)">${fmt(d.buyPrice)}</td>
-      <td colspan="6" style="color:var(--green)">+${fmt(Math.round(d.faceValue-d.buyPrice))}</td>
+      <td class="r" style="color:var(--text3)">–</td>
+      <td class="r blurable" style="color:var(--green)">+${fmt(Math.round(d.faceValue-d.buyPrice))}</td>
+      <td class="r"></td>
+      <td class="r"></td>
+      <td class="r"></td>
+      <td><span style="font-size:10px;color:var(--text3)">aktív</span></td>
+      <td></td>
     </tr>`).join('');
     const daysLeft=Math.max(0,Math.round((new Date(s.maturity)-new Date())/(1000*60*60*24)));
     return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
