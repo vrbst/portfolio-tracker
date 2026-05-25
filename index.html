@@ -1839,26 +1839,31 @@ function renderDashboard(){
   // Befektetett tőke = minden külső friss tőke beáramlás, MINDEN számlán (kincstár + Lightyear)
   const totalInvested = ledgerInvestedCapital(null, liveFx||395);
 
-  // Nagy értékkijelző
+  // Nagy értékkijelző — amíg nincs live ár, ne mutassunk becsült összeget
   const bigEl=document.getElementById('dashTotalBig');
   const subEl=document.getElementById('dashTotalSub');
   const totalFormatted=fmt(Math.round(total));
   if(bigEl){
-    bigEl.dataset.value=totalFormatted;
-    bigEl.innerHTML=blurOn
-      ?'<span style="filter:blur(6px);user-select:none">*****</span>'
-      :'<span>'+totalFormatted+'</span>';
+    if(!hasLive){
+      bigEl.dataset.value='';
+      bigEl.innerHTML='<span style="color:var(--text3);font-size:0.5em;font-family:var(--font-mono)"><span class="spin"></span> betöltés…</span>';
+    } else {
+      bigEl.dataset.value=totalFormatted;
+      bigEl.innerHTML=blurOn
+        ?'<span style="filter:blur(6px);user-select:none">*****</span>'
+        :'<span>'+totalFormatted+'</span>';
+    }
   }
   
-  // P&L pill Growy-stílusban
+  // P&L pill Growy-stílusban — csak ha van live adat
   const diff=total-totalInvested;
   const pct=totalInvested>0?diff/totalInvested*100:0;
   const pillCol=diff>=0?'var(--green)':'var(--red)';
   const pillBg=diff>=0?'rgba(61,214,140,0.1)':'rgba(248,113,113,0.1)';
   const pillSign=diff>=0?'+':'';
-  const pillHtml=totalInvested>0?`<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;background:${pillBg};color:${pillCol};font-size:12px;font-weight:500;margin-left:10px;vertical-align:middle">${pillSign}${pct.toFixed(2)}% (<span class="blurable">${pillSign}${fmtM(diff)}</span>)</span>`:'';
+  const pillHtml=(hasLive&&totalInvested>0)?`<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;background:${pillBg};color:${pillCol};font-size:12px;font-weight:500;margin-left:10px;vertical-align:middle">${pillSign}${pct.toFixed(2)}% (<span class="blurable">${pillSign}${fmtM(diff)}</span>)</span>`:'';
   
-  if(subEl)subEl.innerHTML=`<span class="blurable">≈ ${fmtEur(totalEur)}</span>${pillHtml}`;
+  if(subEl)subEl.innerHTML=hasLive?`<span class="blurable">≈ ${fmtEur(totalEur)}</span>${pillHtml}`:'';
 
   // Realizált profit a ledgerből: kamatok (pozitív) + eladások P&L (FIFO vételár alapján)
   const realized = ledgerRealizedPL();
@@ -1879,8 +1884,8 @@ function renderDashboard(){
     </div>
     <div class="stat-card">
       <div class="stat-label">eur / huf árfolyam</div>
-      <div class="stat-value" style="font-size:15px">${(liveFx||395).toFixed(2)} Ft ${getFxChangeHtml()}</div>
-      <div class="stat-sub">${liveVwce?'live':'becsült'}</div>
+      <div class="stat-value" style="font-size:15px">${liveFx?(liveFx.toFixed(2)+' Ft '+getFxChangeHtml()):'–'}</div>
+      <div class="stat-sub">${liveFx?'live':'betöltés…'}</div>
     </div>
   `;
   renderPie(cb,apValue,tbszVal);
@@ -1899,7 +1904,8 @@ function renderDashboard(){
 }
 
 function renderPie(cb,ap,tbsz){
-  destroyChart('pie');
+  // Várunk amíg a live árak megvannak — addig nem rajzolunk (ne villanjon fel becsült állapot)
+  if(!liveVwce || !liveFx) return;
   const vwceShares=etfShares('VWCE');
   const wbitShares=etfShares('WBIT');
   const vwceVal=(liveVwce||0)*vwceShares*(liveFx||395);
@@ -1908,12 +1914,21 @@ function renderPie(cb,ap,tbsz){
   const vals=[ap,vwceVal,wbitVal];
   const colors=['#60a5fa','#4ade9a','#f59e0b'];
   const total=vals.reduce((s,v)=>s+v,0);
-  if(total<=0)return;
-  charts['pie']=new Chart(document.getElementById('pieChart'),{
-    type:'doughnut',
-    data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:0,hoverOffset:0}]},
-    options:{responsive:true,maintainAspectRatio:true,aspectRatio:1,cutout:'75%',plugins:{legend:{display:false},tooltip:{enabled:false}}}
-  });
+  if(total<=0){ destroyChart('pie'); return; }
+
+  // Ha a chart MÁR LÉTEZIK, csak az adatot frissítjük animáció nélkül (élő frissítés ne pörögjön újra)
+  const existing = charts['pie'];
+  if(existing && existing.data.labels.length===labels.length){
+    existing.data.datasets[0].data = vals;
+    existing.update('none');
+  } else {
+    destroyChart('pie');
+    charts['pie']=new Chart(document.getElementById('pieChart'),{
+      type:'doughnut',
+      data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:0,hoverOffset:0}]},
+      options:{responsive:true,maintainAspectRatio:true,aspectRatio:1,cutout:'75%',plugins:{legend:{display:false},tooltip:{enabled:false}}}
+    });
+  }
   document.getElementById('pieLegend').innerHTML=labels.map((l,i)=>{
     const pct=total>0?(vals[i]/total*100).toFixed(1):'0.0';
     const eur=liveFx>0?vals[i]/(liveFx||395):0;
@@ -2106,6 +2121,17 @@ function renderCashflowChart(){
   const tickColors=months.map((_,i)=>i===currentMonth?'#e8e6e0':'#55534f');
   const highlight=i=>i===currentMonth;
 
+  // Ha a chart MÁR LÉTEZIK és ugyanaz az év (azonos labels), csak az adatokat frissítjük animáció nélkül
+  const existingCf = charts['cf'];
+  if(existingCf && existingCf._cfYear===year){
+    existingCf.data.datasets[0].data = valsReal;
+    existingCf.data.datasets[1].data = valsFixmap;
+    existingCf.data.datasets[2].data = valsDkj;
+    existingCf.update('none');
+    return;
+  }
+
+  destroyChart('cf');
   charts['cf']=new Chart(document.getElementById('cashflowChart'),{
     type:'bar',
     data:{
@@ -2155,6 +2181,7 @@ function renderCashflowChart(){
       }
     }
   });
+  charts['cf']._cfYear=year;
   if(blurOn)setTimeout(applyBlur,50);
 }
 
@@ -2557,7 +2584,7 @@ function renderLyCards(accountId) {
     <div class="stat-card"><div class="stat-label">portfólió érték</div><div class="stat-value blurable">${totalVal>0?fmtM(totalVal):'–'}</div><div class="stat-sub blurable">${totalVal>0?fmtEur(totalVal/fx,0):'–'}</div></div>
     <div class="stat-card"><div class="stat-label">befektetett</div><div class="stat-value blurable">${fmtM(invested)}</div></div>
     <div class="stat-card"><div class="stat-label">P&L (unrealized)</div><div class="stat-value blurable" style="color:${plCol}">${invested>0?(pl>=0?'+':'')+fmtM(pl):'–'}</div><div class="stat-sub" style="color:${plCol}">${invested>0?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</div></div>
-    <div class="stat-card"><div class="stat-label">EUR / HUF</div><div class="stat-value">${fx.toFixed(2)} Ft</div><div class="stat-sub">${liveFx?'live':'becsült'}</div></div>
+    <div class="stat-card"><div class="stat-label">EUR / HUF</div><div class="stat-value">${liveFx?fx.toFixed(2)+' Ft':'–'}</div><div class="stat-sub">${liveFx?'live':'betöltés…'}</div></div>
   `;
   if(blurOn) applyBlur();
 }
@@ -4192,6 +4219,7 @@ function renderDashMiniChart(){
   const ctx = document.getElementById('dashMiniChart');
   if(!ctx) return;
   if(!histData) return; // vár amíg a historikus adatok betöltődnek
+  if(!liveVwce || !liveFx) return; // vár amíg a live árak megvannak (ne villanjon becsült állapot)
 
   const todayStr = new Date().toISOString().split('T')[0];
   const firstTx = getFirstTransactionDate();
@@ -4244,6 +4272,17 @@ function renderDashMiniChart(){
   gradient.addColorStop(0,'rgba(74,222,154,0.18)');
   gradient.addColorStop(0.5,'rgba(74,222,154,0.05)');
   gradient.addColorStop(1,'rgba(74,222,154,0)');
+
+  // Ha a chart MÁR LÉTEZIK és ugyanaz az időtáv (azonos labels), akkor csak az adatot frissítjük
+  // animáció nélkül — így a percenkénti élő frissítés nem rajzolja újra animáltan az egész chartot.
+  const existing = charts['dashMini'];
+  if(existing && existing.data.labels.length===labels.length &&
+     existing.data.labels[0]===labels[0] && existing.data.labels[labels.length-1]===labels[labels.length-1]){
+    existing.data.labels = labels;
+    existing.data.datasets[0].data = vals;
+    existing.update('none'); // animáció nélküli frissítés
+    return;
+  }
 
   if(charts['dashMini']) charts['dashMini'].destroy();
 
@@ -4590,7 +4629,7 @@ function toggleBlur(){
   document.getElementById('hideBtn').innerHTML=blurOn?'🙈 <span class="lbl">mutat</span>':'👁 <span class="lbl">elrejt</span>';
   applyBlur();
   renderCashflowChart();
-  Object.values(charts).forEach(c=>{try{c.update();}catch(e){}});
+  Object.values(charts).forEach(c=>{try{c.update('none');}catch(e){}});
 }
 function applyBlur(){
   document.querySelectorAll('.blurable').forEach(el=>{
@@ -5629,21 +5668,37 @@ async function fetchMarketCommentary(force=false) {
   const fxDeltaOnVwceFt = Math.round(vwceVal * fxPct/100);            // FX hatás a VWCE érték Ft-jára
   const totalDailyDeltaFt = vwceDeltaFt + fxDeltaOnVwceFt;            // teljes portfólió napi delta (FixMáP/DKJ napon belül nem mozog)
 
-  // Slot az EU piaczáráshoz kötve. A VWCE az Xetra-n (Frankfurt) van jegyezve, ami 17:30 CET-kor zár.
-  // - 'pre_close' (00:00–17:30 magyar idő): a tegnapi EU zárás állapota
-  // - 'post_close' (17:30 után): a mai EU záróárak — ez a napi friss aktualitás
+  // Slot az EU piac ritmusához kötve. A VWCE az Xetra-n (Frankfurt) van jegyezve (nyit 9:00, zár 17:30 CET).
+  // - 'morning' (09:30–17:30): reggeli lekérés — mi történt éjjel (Ázsia/USA) + EU nyitás
+  // - 'post_close' (17:30 után): a mai EU záróárak
+  // - 'pre_morning' (00:00–09:30): az előző nap zárása (még nincs friss reggeli adat)
   const now = new Date();
   const minutesNow = now.getHours()*60 + now.getMinutes();
-  const EU_CLOSE_MIN = 17*60 + 30; // 17:30 magyar idő
-  const slot = minutesNow >= EU_CLOSE_MIN ? 'post_close' : 'pre_close';
-  // Dátum címke: hónap-nap óra:perc (év és slot felirat nélkül)
-  const fmtDateLabel = () => {
+  const EU_OPEN_MIN = 9*60 + 30;   // 09:30 magyar idő — reggeli lekérés (a nyitás után picivel)
+  const EU_CLOSE_MIN = 17*60 + 30; // 17:30 magyar idő — zárás
+  const dow = now.getDay(); // 0=vasárnap, 6=szombat
+  const isWeekend = (dow===0 || dow===6);
+  let slot;
+  if(isWeekend) slot='weekend';
+  else if(minutesNow >= EU_CLOSE_MIN) slot='post_close';
+  else if(minutesNow >= EU_OPEN_MIN) slot='morning';
+  else slot='pre_morning';
+
+  // Dátum címke
+  const fmtDateLabel = (weekendMode) => {
     const d = new Date();
     const p = n => String(n).padStart(2,'0');
+    if(weekendMode) return 'pénteki zárás';
     return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   };
-  // Érdemleges mozgás küszöb (csak ezen felül van extra lekérés a sloton kívül)
   const SIGNIFICANT_MOVE_PCT = 1.5;
+
+  // HÉTVÉGE: ha van bármilyen korábbi kommentár, azt mutatjuk "pénteki zárás" címkével, és NEM hívunk AI-t
+  if(!force && isWeekend && data.marketCommentary && data.marketCommentary.html) {
+    el.innerHTML = blurNumbers(data.marketCommentary.html);
+    if(dateEl) dateEl.textContent = 'pénteki zárás';
+    return;
+  }
 
   // Cache érvényesség: ugyanaz a dátum ÉS ugyanaz a slot ÉS nem volt érdemleges mozgás
   if(!force && data.marketCommentary && data.marketCommentary.date === todayStr && data.marketCommentary.slot === slot) {
@@ -5652,7 +5707,7 @@ async function fetchMarketCommentary(force=false) {
     const fxPctDiff = Math.abs((c.fxPct||0) - fxPct);
     if(vwcePctDiff < SIGNIFICANT_MOVE_PCT && fxPctDiff < SIGNIFICANT_MOVE_PCT) {
       el.innerHTML = blurNumbers(c.html);
-      if(dateEl) dateEl.textContent = c.label || fmtDateLabel();
+      if(dateEl) dateEl.textContent = c.label || fmtDateLabel(false);
       return;
     }
     // különben átfut a regenerálásra (érdemleges mozgás történt)
@@ -5682,21 +5737,28 @@ async function fetchMarketCommentary(force=false) {
       return (n>=0?'+':'')+n+' Ft';
     };
 
+    // A kontextus a slottól függ: reggel éjszakai/nyitási, este záró
+    const isMorning = slot==='morning' || slot==='pre_morning';
+    const periodLabel = isMorning ? 'TEGNAPI ZÁRÁS → MAI NYITÁS' : 'TEGNAPI ZÁRÁS → MAI ZÁRÁS';
+    const periodDesc = isMorning
+      ? 'mi történt az éjszaka folyamán (ázsiai és amerikai piacok) és hogyan nyitott az európai piac ma reggel'
+      : 'mi történt a mai kereskedési nap során az európai zárásig';
+
     const portfolioCtx = `A Te portfóliód: FixMáP ${(fixmapVal/1e6).toFixed(1)}M Ft (napon belül nem mozog), DKJ ${(dkjVal/1e6).toFixed(2)}M Ft (napon belül nem mozog), VWCE ${vwceShares.toFixed(0)} db = ${(vwceVal/1e6).toFixed(2)}M Ft.
 
-TEGNAPI ZÁRÁS → MAI ÁLLAPOT változás:
+${periodLabel} változás:
 - VWCE.DE: ${vwcePct>=0?'+':''}${vwcePct.toFixed(2)}% → a Te VWCE pozíciódon ez ${fmtK(vwceDeltaFt)} (EUR-ban)
 - EUR/HUF: ${prevFx.toFixed(2)} → ${fx.toFixed(2)} (${fxPct>=0?'+':''}${fxPct.toFixed(2)}%) → a forintban kifejezett VWCE értékre ez kb. ${fmtK(fxDeltaOnVwceFt)} hatás
 - TELJES NAPI DELTA a Te portfóliódon: kb. ${fmtK(totalDailyDeltaFt)} (csak a VWCE mozog napon belül, az állampapírok nem)`;
 
-    const prompt = `Te egy személyes pénzügyi asszisztens vagy. Adj egy rövid, 2-3 mondatos magyar nyelvű kommentárt arról, hogy a TEGNAPI ZÁRÁS ÓTA mi történt a piacon, és mi a konkrét hatása ennek a portfólióra. NE az abszolút árszintet írd le, hanem a TEGNAP → MA változást és annak Ft-ban kifejezett hatását.
+    const prompt = `Te egy személyes pénzügyi asszisztens vagy. Adj egy rövid, 2-3 mondatos magyar nyelvű kommentárt arról, hogy ${periodDesc}, és mi a konkrét hatása ennek a portfólióra. NE az abszolút árszintet írd le, hanem a változást és annak Ft-ban kifejezett hatását.
 
 ${portfolioCtx}${newsBlock}
 
 Dátum: ${todayStr}.
 
 Szabályok:
-- Az első mondat mondja meg: mit hozott a tegnapi nap óta eltelt időszak a Te portfóliódra (összegszerűen, Ft-ban).
+- Az első mondat mondja meg: mit hozott ez az időszak a Te portfóliódra (összegszerűen, Ft-ban).
 - A második mondat magyarázza meg RÖVIDEN, mi volt mögötte — KIZÁRÓLAG a fenti FRISS HÍREK alapján, ha vannak. NE találj ki Fed-döntést, MNB-bejelentést, makro-adatot, ami nem szerepel a hírek között.
 - Opcionális harmadik mondat: érdemes-e bármit tenni vagy figyelni a hírek alapján.
 - NE általánoskodj. NE mondj "a piac vegyes képet mutat" típusú semmitmondó dolgokat.
@@ -5722,7 +5784,7 @@ Szabályok:
 
     const html = `<span style="color:var(--text)">${blurNumbers(text)}</span>`;
     el.innerHTML = html;
-    const label = fmtDateLabel();
+    const label = fmtDateLabel(false);
     if(dateEl) dateEl.textContent = label;
 
     // Cache mentése – tároljuk a slot-ot, a címkét és a piaci % változásokat is
@@ -5745,7 +5807,29 @@ function startAutoRefresh(){
   if(refreshInterval)clearInterval(refreshInterval);
   refreshInterval=setInterval(()=>{
     fetchLive();
+    // Élő EU-zárás frissítés: ha az app nyitva van és átléptük a 17:30-at,
+    // és aznap még nincs zárás utáni kommentár → 1× automatikus frissítés (token-takarékos)
+    maybeRefreshCommentaryAtClose();
   }, 60000); // percenként
+}
+
+// Záráskori/reggeli automatikus kommentár-frissítés (csak hétköznap, slotonként max 1×)
+function maybeRefreshCommentaryAtClose(){
+  if(!anthropicKey) return;
+  const now = new Date();
+  const dow = now.getDay();
+  if(dow===0 || dow===6) return; // hétvégén nem
+  const minutesNow = now.getHours()*60 + now.getMinutes();
+  const todayStr = now.toISOString().split('T')[0];
+  // Aktuális slot meghatározása (ugyanaz a logika mint a fetchMarketCommentary-ben)
+  let slot;
+  if(minutesNow >= 17*60+30) slot='post_close';
+  else if(minutesNow >= 9*60+30) slot='morning';
+  else return; // 09:30 előtt nincs friss adat
+  // Ha aznap ehhez a slothoz már van kommentár, ne hívjunk újra
+  if(data.marketCommentary && data.marketCommentary.date===todayStr && data.marketCommentary.slot===slot) return;
+  // Egyébként egyszer lekérjük
+  fetchMarketCommentary(false);
 }
 
 async function manualRefresh(){
