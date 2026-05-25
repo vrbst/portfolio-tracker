@@ -4288,8 +4288,6 @@ function renderDashMiniChart(){
 
   // Aktív szegmens színe (hover-pozícióig); inaktív szegmens (utána) szürke
   const grayCol = 'rgba(160,160,160,0.35)';
-  const grayFillTop = 'rgba(160,160,160,0.06)';
-  // Hover állapot tárolása a chart-on
   let hoverIndex = null;
 
   charts['dashMini'] = new Chart(ctx,{
@@ -4304,30 +4302,25 @@ function renderDashMiniChart(){
       pointRadius:0,
       pointHoverRadius:4,
       pointHoverBackgroundColor:lineCol,
-      // Szegmens-alapú színezés: a hover index utáni részt szürkére színezzük
       segment:{
         borderColor: seg => (hoverIndex !== null && seg.p0DataIndex >= hoverIndex) ? grayCol : lineCol,
       },
     }]},
     options:{
       responsive:true, maintainAspectRatio:false,
+      onHover:(e, els, chart)=>{
+        const newIndex = (els && els.length) ? els[0].index : null;
+        if(newIndex !== hoverIndex){
+          hoverIndex = newIndex;
+          chart.update('none');
+        }
+      },
       plugins:{legend:{display:false}, tooltip:{
         callbacks:{
           title:ctx=>ctx[0].label,
           label:ctx=>blurOn?'  ···':'  '+fmtM(ctx.raw)
         },
         displayColors:false, padding:10,
-        // Hover esemény → újraszínezés
-        external:function(ctx){
-          const tooltip = ctx.tooltip;
-          const newIndex = (tooltip && tooltip.opacity > 0 && tooltip.dataPoints && tooltip.dataPoints.length)
-            ? tooltip.dataPoints[0].dataIndex
-            : null;
-          if(newIndex !== hoverIndex){
-            hoverIndex = newIndex;
-            ctx.chart.update('none'); // animáció nélküli újrarajzol
-          }
-        }
       }},
       scales:{
         x:{display:true,ticks:{color:'rgba(255,255,255,0.18)',font:{size:10},maxTicksLimit:6,maxRotation:0},grid:{display:false},border:{display:false}},
@@ -4336,6 +4329,26 @@ function renderDashMiniChart(){
       interaction:{mode:'index',intersect:false}
     }
   });
+
+  // Gyors lehúzás: a canvas elhagyásakor nullázzuk a hover-t és újrarajzolunk.
+  // Több eseményt is figyelünk, mert gyors mozgásnál nem mind tüzel megbízhatóan.
+  if(!ctx._leaveBound){
+    ctx._leaveBound = true;
+    const resetHover = ()=>{
+      const ch = charts['dashMini'];
+      if(ch && ch._setHover) ch._setHover(null);
+    };
+    ['mouseout','mouseleave','pointerout','pointerleave','pointercancel'].forEach(ev=>
+      ctx.addEventListener(ev, resetHover)
+    );
+  }
+  // a chartra akasztott setter, hogy az esemény mindig az AKTUÁLIS chart hoverIndex-ét állítsa
+  charts['dashMini']._setHover = (v)=>{
+    if(hoverIndex !== v){
+      hoverIndex = v;
+      charts['dashMini'].update('none');
+    }
+  };
 }
 
 // ═══════════════════════════════════════════════
@@ -5921,10 +5934,8 @@ function getPortfolioContext() {
   const wbitVal = (liveWbit||0)*wbitShares*(liveFx||395);
   const total = cb+apValue+vwceVal+wbitVal;
 
-  // Befektetett tőke (nettó befizetések)
-  const apInvested = data.cashTx.filter(t=>t.type==='transfer_in').reduce((s,t)=>s+t.amount,0)
-    - data.cashTx.filter(t=>t.type==='transfer_out'||t.type==='coupon_out').reduce((s,t)=>s+t.amount,0);
-  const totalInvested = apInvested + lyTotalInvested();
+  // Befektetett tőke (ledger-alapú: minden külső friss tőke beáramlás)
+  const totalInvested = ledgerInvestedCapital(null, liveFx||395);
 
   // Portfólió nyitási dátuma
   const firstDate = getFirstTransactionDate();
@@ -6071,9 +6082,7 @@ function getAiQuickPrompt(type) {
   const dkjValue = data.dkj.filter(d=>d.active).reduce((s,d)=>s+d.faceValue,0);
   const total = apValue + etfTotal;
 
-  const apInvested = data.cashTx.filter(t=>t.type==='transfer_in').reduce((s,t)=>s+t.amount,0)
-    - data.cashTx.filter(t=>t.type==='transfer_out'||t.type==='coupon_out').reduce((s,t)=>s+t.amount,0);
-  const totalInvested = apInvested + lyTotalInvested();
+  const totalInvested = ledgerInvestedCapital(null, liveFx||395);
   const pl = total - totalInvested;
   const plPct = totalInvested>0 ? pl/totalInvested*100 : 0;
 
