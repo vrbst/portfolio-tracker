@@ -2478,7 +2478,7 @@ function renderLyAccountsPages() {
         </div>
       </div>
 
-      <div class="ap-layout">
+      <div class="ap-layout" style="align-items:stretch">
         <!-- BAL (fő) oszlop: pozíciók + detail + tranzakciók -->
         <div class="ap-main">
           <!-- Pozíciók lista -->
@@ -2525,12 +2525,12 @@ function renderLyAccountsPages() {
             <div id="ly-realized-${acc.id}" style="margin-top:12px;display:none"></div>
           </div>
           <!-- Tranzakciók -->
-          <div class="panel" style="margin-top:12px" id="ly-tx-panel-${acc.id}">
+          <div class="panel" style="margin-top:12px;flex:1;display:flex;flex-direction:column;min-height:200px" id="ly-tx-panel-${acc.id}">
             <div class="panel-header">
               <div class="panel-title">pénzmozgások</div>
               <button class="btn btn-ghost btn-sm" onclick="openLyCashModal('deposit','${acc.id}')">+ befizetés</button>
             </div>
-            <div class="tbl-wrap" style="max-height:250px;overflow-y:auto"><table>
+            <div class="tbl-wrap" style="flex:1;overflow-y:auto"><table>
               <thead style="position:sticky;top:0;background:var(--bg2)"><tr>
                 <th>dátum</th><th>típus</th><th>pénznem</th><th class="r">összeg</th><th>megjegyzés</th><th></th>
               </tr></thead>
@@ -2597,6 +2597,8 @@ function renderLyCards(accountId) {
   const wbitTotalPct = totalPct(liveWbitPct);
   const colorOf = p => p==null ? '' : 'color:'+(p>=0?'var(--green)':'var(--red)');
   const pctTag = p => p==null ? '' : ' <span style="font-size:11px">('+(p>=0?'+':'')+p.toFixed(2)+'%)</span>';
+  // Az alsó (Ft) sorhoz kisebb %, hogy vizuálisan a felső EUR %-kal egyezzen
+  const pctTagSm = p => p==null ? '' : ' <span style="font-size:9px">('+(p>=0?'+':'')+p.toFixed(2)+'%)</span>';
   const fxCol = fxPct==null ? '' : 'color:'+(fxPct>=0?'var(--green)':'var(--red)');
 
   el.innerHTML=`
@@ -2604,8 +2606,8 @@ function renderLyCards(accountId) {
     <div class="stat-card"><div class="stat-label">befektetett</div><div class="stat-value blurable">${fmtM(invested)}</div></div>
     <div class="stat-card"><div class="stat-label">P&L (unrealized)</div><div class="stat-value blurable" style="color:${plCol}">${invested>0?(pl>=0?'+':'')+fmtM(pl):'–'}</div><div class="stat-sub" style="color:${plCol}">${invested>0?(plPct>=0?'+':'')+plPct.toFixed(2)+'%':'–'}</div></div>
     <div class="stat-card"><div class="stat-label">EUR / HUF</div><div class="stat-value" style="${fxCol}">${liveFx?fx.toFixed(2)+' Ft':'–'}${liveFx?pctTag(fxPct):''}</div><div class="stat-sub">${liveFx?'live':'betöltés…'}</div></div>
-    <div class="stat-card"><div class="stat-label">VWCE árfolyam</div><div class="stat-value" style="${colorOf(liveVwce!=null?liveVwcePct:null)}">${liveVwce?fmtEur(liveVwce):'–'}${liveVwce?pctTag(liveVwcePct):''}</div><div class="stat-sub" style="${colorOf(liveVwce&&liveFx?vwceTotalPct:null)}">${liveVwce&&liveFx?fmt(liveVwce*fx)+pctTag(vwceTotalPct):'betöltés…'}</div></div>
-    <div class="stat-card"><div class="stat-label">WBIT árfolyam</div><div class="stat-value" style="${colorOf(liveWbit!=null?liveWbitPct:null)}">${liveWbit?fmtEur(liveWbit):'–'}${liveWbit?pctTag(liveWbitPct):''}</div><div class="stat-sub" style="${colorOf(liveWbit&&liveFx?wbitTotalPct:null)}">${liveWbit&&liveFx?fmt(liveWbit*fx)+pctTag(wbitTotalPct):'betöltés…'}</div></div>
+    <div class="stat-card"><div class="stat-label">VWCE árfolyam</div><div class="stat-value" style="${colorOf(liveVwce!=null?liveVwcePct:null)}">${liveVwce?fmtEur(liveVwce):'–'}${liveVwce?pctTag(liveVwcePct):''}</div><div class="stat-sub" style="${colorOf(liveVwce&&liveFx?vwceTotalPct:null)}">${liveVwce&&liveFx?fmt(liveVwce*fx)+pctTagSm(vwceTotalPct):'betöltés…'}</div></div>
+    <div class="stat-card"><div class="stat-label">WBIT árfolyam</div><div class="stat-value" style="${colorOf(liveWbit!=null?liveWbitPct:null)}">${liveWbit?fmtEur(liveWbit):'–'}${liveWbit?pctTag(liveWbitPct):''}</div><div class="stat-sub" style="${colorOf(liveWbit&&liveFx?wbitTotalPct:null)}">${liveWbit&&liveFx?fmt(liveWbit*fx)+pctTagSm(wbitTotalPct):'betöltés…'}</div></div>
   `;
   if(blurOn) applyBlur();
 }
@@ -5684,6 +5686,19 @@ async function fetchMarketCommentary(force=false) {
   const btn = document.getElementById('marketRefreshBtn');
   if(!el) return;
 
+  // Amíg nincs live ár (VWCE + EUR/HUF), NE menjen ki az AI kérés — különben fals (becsült)
+  // adatból dolgozna. A meglévő cache-t mutatjuk, vagy egy "betöltés" placeholdert.
+  if(!liveVwce || !liveFx){
+    if(data.marketCommentary && data.marketCommentary.html){
+      el.innerHTML = data.marketCommentary.html;
+      if(dateEl) dateEl.textContent = data.marketCommentary.label || '';
+      if(blurOn) applyBlur();
+    } else {
+      el.innerHTML = '<span style="color:var(--text3)">Élő adatra várok…</span>';
+    }
+    return;
+  }
+
   const todayStr = new Date().toISOString().split('T')[0];
   const blurNumbers = t => t.replace(/(\d[\d\s]*(?:[,.]\d+)*(?:\s*(?:Ft|M Ft|milliárd|%|EUR|HUF))?)/g, '<span class="blurable">$1</span>');
 
@@ -5778,12 +5793,33 @@ async function fetchMarketCommentary(force=false) {
       ? 'mi történt az éjszaka folyamán (ázsiai és amerikai piacok) és hogyan nyitott az európai piac ma reggel'
       : 'mi történt a mai kereskedési nap során az európai zárásig';
 
+    // Állampapír rövid kontextus: éves kamat, következő FixMáP kamatfizetés, legközelebbi DKJ lejárat
+    const annualCoupon = ledgerFixmapAnnualCoupon();
+    let nextCouponInfo = '';
+    const fmSeries = (data.fixmapSeries||[]).filter(sr=>data.fixmap.some(f=>f.active&&(f.seriesId===sr.id||f.seriesId===sr.key)));
+    const couponDates = fmSeries.map(sr=>sr.maturity?nextCouponDate(sr.maturity):null).filter(Boolean).sort();
+    if(couponDates.length){
+      const d = couponDates[0];
+      const days = Math.round((new Date(d)-new Date())/(1000*60*60*24));
+      if(days>=0 && days<=45) nextCouponInfo = ` Következő FixMáP kamatfizetés: ${d} (${days} nap múlva, kb. ${fmtK(annualCoupon/ (fmSeries.length||1))} negyedévente).`;
+    }
+    let dkjMatInfo = '';
+    const activeDkj = data.dkj.filter(d=>d.active).sort((a,b)=>a.maturity.localeCompare(b.maturity));
+    if(activeDkj.length){
+      const d = activeDkj[0];
+      const days = Math.round((new Date(d.maturity)-new Date())/(1000*60*60*24));
+      if(days>=0 && days<=60) dkjMatInfo = ` Legközelebbi DKJ lejárat: ${d.maturity} (${days} nap múlva, ${fmtK(d.faceValue)} névérték).`;
+    }
+    const bondCtx = (nextCouponInfo||dkjMatInfo)
+      ? `\n\nÁllampapír figyelő (csak ha 1-2 héten belül esedékes, RÖVIDEN említsd):${nextCouponInfo}${dkjMatInfo}`
+      : '';
+
     const portfolioCtx = `A Te portfóliód: FixMáP ${(fixmapVal/1e6).toFixed(1)}M Ft (napon belül nem mozog), DKJ ${(dkjVal/1e6).toFixed(2)}M Ft (napon belül nem mozog), VWCE ${vwceShares.toFixed(0)} db = ${(vwceVal/1e6).toFixed(2)}M Ft.
 
 ${periodLabel} változás:
 - VWCE.DE: ${vwcePct>=0?'+':''}${vwcePct.toFixed(2)}% → a Te VWCE pozíciódon ez ${fmtK(vwceDeltaFt)} (EUR-ban)
 - EUR/HUF: ${prevFx.toFixed(2)} → ${fx.toFixed(2)} (${fxPct>=0?'+':''}${fxPct.toFixed(2)}%) → a forintban kifejezett VWCE értékre ez kb. ${fmtK(fxDeltaOnVwceFt)} hatás
-- TELJES NAPI DELTA a Te portfóliódon: kb. ${fmtK(totalDailyDeltaFt)} (csak a VWCE mozog napon belül, az állampapírok nem)`;
+- TELJES NAPI DELTA a Te portfóliódon: kb. ${fmtK(totalDailyDeltaFt)} (csak a VWCE mozog napon belül, az állampapírok nem)${bondCtx}`;
 
     const prompt = `Te egy személyes pénzügyi asszisztens vagy. Adj egy rövid, 2-3 mondatos magyar nyelvű kommentárt arról, hogy ${periodDesc}, és mi a konkrét hatása ennek a portfólióra. NE az abszolút árszintet írd le, hanem a változást és annak Ft-ban kifejezett hatását.
 
@@ -5794,7 +5830,8 @@ Dátum: ${todayStr}.
 Szabályok:
 - Az első mondat mondja meg: mit hozott ez az időszak a Te portfóliódra (összegszerűen, Ft-ban).
 - A második mondat magyarázza meg RÖVIDEN, mi volt mögötte — KIZÁRÓLAG a fenti FRISS HÍREK alapján, ha vannak. NE találj ki Fed-döntést, MNB-bejelentést, makro-adatot, ami nem szerepel a hírek között.
-- Opcionális harmadik mondat: érdemes-e bármit tenni vagy figyelni a hírek alapján.
+- HA az "Állampapír figyelő" sorban szerepel közelgő kamatfizetés vagy lejárat (1-2 héten belül), egy fél mondatban említsd meg. Egyébként NE foglalkozz az állampapírral (napon belül úgyse mozog).
+- Opcionális: érdemes-e bármit tenni vagy figyelni.
 - NE általánoskodj. NE mondj "a piac vegyes képet mutat" típusú semmitmondó dolgokat.
 - Ha nincs releváns hír a mozgás magyarázatára, mondd ki: "ma nem volt jelentős hír, a mozgás technikai/zaj jellegű".
 - Csak a kommentárt írd, semmi bevezető.`;
