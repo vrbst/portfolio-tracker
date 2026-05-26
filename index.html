@@ -590,7 +590,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div class="panel" style="margin-top:0">
             <div class="tbl-wrap"><table class="bond-table">
               <colgroup>
-                <col style="width:22%"><col style="width:10%"><col style="width:10%"><col style="width:6%"><col style="width:11%"><col style="width:8%"><col style="width:6%"><col style="width:9%"><col style="width:6%"><col style="width:12%">
+                <col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:4%"><col style="width:11%"><col style="width:8%"><col style="width:6%"><col style="width:4%"><col style="width:6%"><col style="width:21%">
               </colgroup>
               <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">várható hozam</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r"></th><th>státusz</th><th></th></tr></thead>
               <tbody id="dkjBody"></tbody>
@@ -1872,7 +1872,7 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">befektetett tőke</div>
       <div class="stat-value blurable" style="font-size:15px">${fmtM(totalInvested)}</div>
-      ${totalInvested>0?(()=>{const diff=total-totalInvested;const pct=diff/totalInvested*100;const col=diff>=0?'var(--green)':'var(--red)';return '<div style="font-size:11px;margin-top:2px;color:'+col+'"><span class="blurable">'+(diff>=0?'+':'')+fmtM(diff)+'</span> ('+(diff>=0?'+':'')+pct.toFixed(2)+'%)</div>';})():''}
+      ${(hasLive&&totalInvested>0)?(()=>{const diff=total-totalInvested;const pct=diff/totalInvested*100;const col=diff>=0?'var(--green)':'var(--red)';return '<div style="font-size:11px;margin-top:2px;color:'+col+'"><span class="blurable">'+(diff>=0?'+':'')+fmtM(diff)+'</span> ('+(diff>=0?'+':'')+pct.toFixed(2)+'%)</div>';})():''}
     </div>
     <div class="stat-card">
       <div class="stat-label">realizált profit</div>
@@ -2392,10 +2392,10 @@ function renderAllampapir(){
       <td class="r" style="color:var(--text3)">–</td>
       <td><span class="badge b-etf">aktív</span></td>
       <td style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        <div style="display:inline-flex;gap:4px;justify-content:flex-end">
-          ${!isLegacy?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-dkj-series','${s.id}')">✎</button>`:`<button class="btn btn-ghost btn-sm" onclick="openModal('reassign-dkj','${s.id}')">✎</button>`}
-          <button class="btn btn-ghost btn-sm" onclick="openModal('sell-dkj-series','${s.maturity}')">eladás</button>
-          <button class="btn btn-ghost btn-sm" onclick="expireDKJSeries('${s.maturity}')">lejárt</button>
+        <div style="display:inline-flex;gap:3px;justify-content:flex-end">
+          ${!isLegacy?`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('edit-dkj-series','${s.id}')">✎</button>`:`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('reassign-dkj','${s.id}')">✎</button>`}
+          <button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('sell-dkj-series','${s.maturity}')">eladás</button>
+          <button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="expireDKJSeries('${s.maturity}')">lejárt</button>
         </div>
       </td>
     </tr>${detailRows}`;
@@ -2480,7 +2480,7 @@ function renderLyAccountsPages() {
 
       <div class="ap-layout" style="align-items:stretch">
         <!-- BAL (fő) oszlop: pozíciók + detail + tranzakciók -->
-        <div class="ap-main">
+        <div class="ap-main" style="min-height:0">
           <!-- Pozíciók lista -->
           <div id="ly-list-${acc.id}">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -2525,12 +2525,12 @@ function renderLyAccountsPages() {
             <div id="ly-realized-${acc.id}" style="margin-top:12px;display:none"></div>
           </div>
           <!-- Tranzakciók -->
-          <div class="panel" style="margin-top:12px;flex:1;display:flex;flex-direction:column;min-height:200px" id="ly-tx-panel-${acc.id}">
+          <div class="panel" style="margin-top:12px;display:flex;flex-direction:column" id="ly-tx-panel-${acc.id}">
             <div class="panel-header">
               <div class="panel-title">pénzmozgások</div>
               <button class="btn btn-ghost btn-sm" onclick="openLyCashModal('deposit','${acc.id}')">+ befizetés</button>
             </div>
-            <div class="tbl-wrap" style="flex:1;overflow-y:auto"><table>
+            <div class="tbl-wrap" style="flex:1;min-height:120px;max-height:calc((100vh - 360px) * 0.7);overflow-y:auto"><table>
               <thead style="position:sticky;top:0;background:var(--bg2)"><tr>
                 <th>dátum</th><th>típus</th><th>pénznem</th><th class="r">összeg</th><th>megjegyzés</th><th></th>
               </tr></thead>
@@ -2674,6 +2674,11 @@ function renderLyInstrumentList(accountId) {
         +`<div>Devizahatás: <span style="${c(fxEffect)}">${s(fxEffect/1000)}e Ft</span> <span style="${c(fxEffectPct)}">(${s(fxEffectPct)}%)</span></div>`;
     })() : '';
     const ttId = ttHtml ? makeTooltipId(ttHtml) : '';
+    // EUR P&L: aktuális EUR érték − vételi EUR költségalap (saját előjel/szín, mert a devizahatás miatt eltérhet a Ft-tól)
+    const valEur = ins.lp ? ins.shares*ins.lp : 0;
+    const plEur = valEur - totCostEur;
+    const plEurPct = totCostEur>0 ? plEur/totCostEur*100 : 0;
+    const plEurCol = plEur>=0?'var(--green)':'var(--red)';
     // Tooltip a live ár cellához: az egységár Ft-ban
     const livePriceTtHtml = ins.lp ? `<div style="font-weight:600;font-size:13px;color:var(--text)">${fmt(ins.lp*fx)}</div>` : '';
     const livePriceTtId = livePriceTtHtml ? makeTooltipId(livePriceTtHtml) : '';
@@ -2687,7 +2692,7 @@ function renderLyInstrumentList(accountId) {
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.shares.toFixed(4)} db</td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div>${fmtM(ins.cost)}</div><div style="font-size:10px;color:var(--text3)">${fmtEur(totCostEur)}</div></td>
       <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div>${ins.val>0?fmtM(ins.val):'–'}</div><div style="font-size:10px;color:var(--text3)">${ins.lp?fmtEur(ins.shares*ins.lp):'–'}</div></td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol};cursor:help" data-ttid="${ttId}">${ins.cost>0?(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span>':'–'}</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol};cursor:help" data-ttid="${ttId}">${ins.cost>0?(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span>'+(ins.lp?'<div style="font-size:10px;color:'+plEurCol+';opacity:0.85">'+(plEur>=0?'+':'')+fmtEur(plEur)+' ('+(plEurPct>=0?'+':'')+plEurPct.toFixed(2)+'%)</div>':''):'–'}</td>
       <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border);${ins.lp?'cursor:help':''}" data-ttid="${livePriceTtId}">${ins.lp?fmtEur(ins.lp):'–'}${ins.pct!==null?'<br><span style="font-size:10px;color:'+pctCol+'">'+(ins.pct>=0?'+':'')+ins.pct.toFixed(2)+'%</span>':''}</td>
       <td style="padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text3);font-size:16px">›</td>
     </tr>`;
