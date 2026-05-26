@@ -4353,18 +4353,6 @@ function renderDashMiniChart(){
     }
   });
 
-  // Gyors lehúzás: a canvas elhagyásakor nullázzuk a hover-t és újrarajzolunk.
-  // Több eseményt is figyelünk, mert gyors mozgásnál nem mind tüzel megbízhatóan.
-  if(!ctx._leaveBound){
-    ctx._leaveBound = true;
-    const resetHover = ()=>{
-      const ch = charts['dashMini'];
-      if(ch && ch._setHover) ch._setHover(null);
-    };
-    ['mouseout','mouseleave','pointerout','pointerleave','pointercancel'].forEach(ev=>
-      ctx.addEventListener(ev, resetHover)
-    );
-  }
   // a chartra akasztott setter, hogy az esemény mindig az AKTUÁLIS chart hoverIndex-ét állítsa
   charts['dashMini']._setHover = (v)=>{
     if(hoverIndex !== v){
@@ -4372,6 +4360,23 @@ function renderDashMiniChart(){
       charts['dashMini'].update('none');
     }
   };
+
+  // Gyors lehúzás MEGBÍZHATÓ kezelése: document-szintű mousemove figyelő.
+  // Minden egérmozgásnál ellenőrzi, hogy a kurzor a chart téglalapján BELÜL van-e.
+  // Ha kívül (akármilyen gyorsan hagyta el a chartot) → teljes színre reset.
+  // Ez azért robusztus, mert a document a chart elhagyása UTÁN is megkapja a mozgást.
+  if(!window._dashChartMouseTracker){
+    window._dashChartMouseTracker = true;
+    document.addEventListener('mousemove', (e)=>{
+      const ch = charts['dashMini'];
+      if(!ch || hoverIndex===null) return; // nincs mit resetelni
+      const cv = ch.canvas;
+      if(!cv) return;
+      const r = cv.getBoundingClientRect();
+      const inside = e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+      if(!inside && ch._setHover) ch._setHover(null);
+    }, {passive:true});
+  }
 }
 
 // ═══════════════════════════════════════════════
