@@ -2383,7 +2383,7 @@ function renderAllampapir(){
   const dkjSeriesMap={};
   // Init from definitions
   data.dkjSeries.forEach(ds=>{
-    dkjSeriesMap[ds.id]={id:ds.id,name:ds.name,maturity:ds.maturity,items:[],totalFace:0,totalBuy:0,active:false};
+    dkjSeriesMap[ds.id]={id:ds.id,name:ds.name,maturity:ds.maturity,items:[],totalFace:0,totalBuy:0,totalOrigFace:0,active:false};
   });
   // Also handle legacy DKJ without seriesId (grouped by maturity)
   data.dkj.forEach(d=>{
