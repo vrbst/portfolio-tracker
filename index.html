@@ -344,8 +344,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
   .ap-cards-grid{grid-template-columns:1fr}
   /* Állampapír két oszlop mobilon egymás alá; a kártyák a fő tartalom ELÉ kerüljenek */
   .ap-layout{display:flex;flex-direction:column}
-  .ap-main{order:2}
-  .ap-side{order:1}
+  .ap-main{order:2;min-width:0;width:100%}
+  .ap-side{order:1;min-width:0;width:100%}
+  /* A táblát a saját wrap-je görgesse, ne feszítse szét az oldalt */
+  .ap-main .tbl-wrap{max-width:100%}
 
   /* AI layout mobilon */
   .ai-layout{flex-direction:column}
