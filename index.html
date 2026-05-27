@@ -1108,15 +1108,19 @@ function rebuildDerivedViews(){
     // Vásárlások időrendben → külön tételek; eladások FIFO-val csökkentik a tételeket
     const buys = L.filter(e=>e.asset===a && e.type==='buy').sort((x,y)=>x.date.localeCompare(y.date))
       .map((e,i)=>({ id:'fm:'+key+':'+i, seriesId:series?.id||key, date:e.date,
-        faceValue:e.qty, originalFaceValue:e.qty, buyPrice:e.huf||e.qty, active:true, soldDate:null }));
+        faceValue:e.qty, originalFaceValue:e.qty, buyPrice:e.huf||e.qty, origBuyPrice:e.huf||e.qty, active:true, soldDate:null, soldAmount:0 }));
     const sells = L.filter(e=>e.asset===a && e.type==='sell').sort((x,y)=>x.date.localeCompare(y.date));
     sells.forEach(sell=>{
       let toSell = sell.qty;
+      const sellUnit = sell.qty>0 ? (sell.huf||0)/sell.qty : 0; // eladási ár névérték-egységenként
       for(const lot of buys){
         if(toSell<=0) break;
         if(!lot.active) continue;
+        const sold = Math.min(lot.faceValue, toSell); // ebben a lépésben ennyit adunk el a tételből
+        lot.soldAmount = (lot.soldAmount||0) + Math.round(sellUnit*sold); // akkumulálva
+        lot.soldDate = sell.date; // a legutolsó eladás dátuma
         if(lot.faceValue<=toSell){
-          toSell -= lot.faceValue; lot.active=false; lot.soldDate=sell.date; lot.faceValue=0;
+          toSell -= lot.faceValue; lot.active=false; lot.faceValue=0;
         } else {
           const ratio = toSell/lot.faceValue;
           lot.buyPrice = Math.round(lot.buyPrice*(1-ratio));
@@ -1124,27 +1128,32 @@ function rebuildDerivedViews(){
         }
       }
     });
-    // Csak a nem teljesen eladott tételeket tartjuk meg (faceValue>0)
-    buys.filter(l=>l.faceValue>0.5).forEach(l=>data.fixmap.push(l));
+    // Aktív tételek + lezárt (eladott) tételek is — a render halványítva mutatja a lezártakat
+    buys.forEach(l=>data.fixmap.push(l));
   });
 
   // --- dkj: MINDEN vásárlás külön tétel (FIFO részleges eladással) ---
   data.dkj = [];
+  const todayIso = new Date().toISOString().split('T')[0];
   ledgerApAssets().filter(a=>a.startsWith('DKJ:')).forEach(a=>{
     const mat6 = a.slice('DKJ:'.length);
     const maturity = '20'+mat6.slice(0,2)+'-'+mat6.slice(2,4)+'-'+mat6.slice(4,6);
     const series = (data.dkjSeries||[]).find(sr=>sr.maturity===maturity);
     const buys = L.filter(e=>e.asset===a && e.type==='buy').sort((x,y)=>x.date.localeCompare(y.date))
       .map((e,i)=>({ id:'dkj:'+mat6+':'+i, seriesId:series?.id||mat6, date:e.date,
-        faceValue:e.qty, originalFaceValue:e.qty, buyPrice:e.huf||e.qty, maturity, active:true, soldDate:null }));
+        faceValue:e.qty, originalFaceValue:e.qty, buyPrice:e.huf||e.qty, origBuyPrice:e.huf||e.qty, maturity, active:true, soldDate:null, soldAmount:0, matured:false }));
     const sells = L.filter(e=>e.asset===a && e.type==='sell').sort((x,y)=>x.date.localeCompare(y.date));
     sells.forEach(sell=>{
       let toSell = sell.qty;
+      const sellUnit = sell.qty>0 ? (sell.huf||0)/sell.qty : 0;
       for(const lot of buys){
         if(toSell<=0) break;
         if(!lot.active) continue;
+        const sold = Math.min(lot.faceValue, toSell);
+        lot.soldAmount = (lot.soldAmount||0) + Math.round(sellUnit*sold);
+        lot.soldDate = sell.date;
         if(lot.faceValue<=toSell){
-          toSell -= lot.faceValue; lot.active=false; lot.soldDate=sell.date; lot.faceValue=0;
+          toSell -= lot.faceValue; lot.active=false; lot.faceValue=0;
         } else {
           const ratio = toSell/lot.faceValue;
           lot.buyPrice = Math.round(lot.buyPrice*(1-ratio));
@@ -1152,7 +1161,11 @@ function rebuildDerivedViews(){
         }
       }
     });
-    buys.filter(l=>l.faceValue>0.5).forEach(l=>data.dkj.push(l));
+    // Lejárt jelölés: ha még aktív de a maturity elmúlt → lejárt (névértéken kifizetve)
+    buys.forEach(l=>{
+      if(l.active && maturity < todayIso){ l.matured=true; l.active=false; }
+    });
+    buys.forEach(l=>data.dkj.push(l));
   });
 
   // --- lyTx: ETF vétel/eladás a régi formátumban ---
@@ -2249,8 +2262,9 @@ function renderAllampapir(){
   const fmSeriesMap={};
   data.fixmap.forEach(f=>{
     const sid=f.seriesId||'legacy';
-    if(!fmSeriesMap[sid])fmSeriesMap[sid]={seriesId:sid,items:[],totalFace:0,totalBuy:0,active:false};
+    if(!fmSeriesMap[sid])fmSeriesMap[sid]={seriesId:sid,items:[],totalFace:0,totalBuy:0,totalOrigFace:0,active:false};
     fmSeriesMap[sid].items.push(f);
+    fmSeriesMap[sid].totalOrigFace+=f.originalFaceValue||0;
     if(f.active){fmSeriesMap[sid].totalFace+=f.faceValue;fmSeriesMap[sid].totalBuy+=(f.buyPrice||f.faceValue);fmSeriesMap[sid].active=true;}
   });
   const fmSeriesList=Object.values(fmSeriesMap);
@@ -2317,21 +2331,30 @@ function renderAllampapir(){
       }
     }
 
-    const detailRows=s.items.map(f=>`<tr class="detail-row" id="d-${rowId}-${f.id}">
-      <td style="color:var(--text3);padding-left:48px">${f.date}</td>
-      <td class="r blurable" style="color:var(--text)">${fmt(f.faceValue)}</td>
-      <td class="r blurable" style="color:var(--text)">${fmt(f.buyPrice||f.faceValue)}</td>
-      <td class="r" style="color:var(--text3)">–</td>
-      <td class="r"></td>
-      <td class="r"></td>
-      <td class="r"></td>
-      <td class="r"></td>
-      <td><span style="font-size:10px;color:var(--text3)">${f.active?'aktív':'lezárt'}</span></td>
-      <td></td>
-    </tr>`).join('');
-    return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
+    const detailRows=s.items.map(f=>{
+      const closed=!f.active;
+      const faceShown=closed?f.originalFaceValue:f.faceValue;
+      const buyShown=closed?f.origBuyPrice:(f.buyPrice||f.faceValue);
+      const statusTxt=f.active?'aktív':(f.matured?'lejárt':'eladva');
+      const statusCol=f.active?'var(--text3)':(f.matured?'var(--blue)':'var(--amber)');
+      const rowStyle=closed?'opacity:0.5':'';
+      const soldInfo=closed&&f.soldAmount?` <span style="font-size:9px;color:var(--text3)">(${f.soldDate})</span>`:'';
+      return `<tr class="detail-row" id="d-${rowId}-${f.id}" style="${rowStyle}">
+        <td style="color:var(--text3);padding-left:48px">${f.date}${soldInfo}</td>
+        <td class="r blurable" style="color:var(--text)">${fmt(faceShown)}</td>
+        <td class="r blurable" style="color:var(--text)">${fmt(buyShown)}</td>
+        <td class="r" style="color:var(--text3)">–</td>
+        <td class="r"></td>
+        <td class="r"></td>
+        <td class="r"></td>
+        <td class="r blurable" style="font-size:10px;color:var(--text3)">${closed&&f.soldAmount?fmt(f.soldAmount):''}</td>
+        <td><span style="font-size:10px;color:${statusCol}">${statusTxt}</span></td>
+        <td></td>
+      </tr>`;
+    }).join('');
+    return `<tr style="cursor:pointer${s.active?'':';opacity:0.55'}" onclick="toggleExpand('${rowId}',this)">
       <td><div style="display:flex;align-items:center;gap:10px"><div class="ins-avatar ins-avatar-ap">FM</div><div><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></div></div></td>
-      <td class="r blurable">${fmt(s.totalFace)}</td>
+      <td class="r blurable">${fmt(s.active?s.totalFace:s.totalOrigFace)}</td>
       <td class="r blurable">${fmt(s.totalBuy)}</td>
       <td class="r">${couponRate?couponRate+'%':'–'}</td>
       <td class="r pos blurable">${qCoupon?'+'+fmt(qCoupon):'–'}<div style="font-size:10px;color:var(--text3)">${nextCoupon!=='–'?nextCoupon:''}</div></td>
@@ -2359,48 +2382,59 @@ function renderAllampapir(){
   // Also handle legacy DKJ without seriesId (grouped by maturity)
   data.dkj.forEach(d=>{
     const key=d.seriesId||('legacy-'+d.maturity);
-    if(!dkjSeriesMap[key])dkjSeriesMap[key]={id:key,name:'D'+d.maturity.replace(/-/g,'').slice(2),maturity:d.maturity,items:[],totalFace:0,totalBuy:0,active:false};
+    if(!dkjSeriesMap[key])dkjSeriesMap[key]={id:key,name:'D'+d.maturity.replace(/-/g,'').slice(2),maturity:d.maturity,items:[],totalFace:0,totalBuy:0,totalOrigFace:0,active:false};
     dkjSeriesMap[key].items.push(d);
+    dkjSeriesMap[key].totalOrigFace+=d.originalFaceValue||0;
     if(d.active){dkjSeriesMap[key].totalFace+=d.faceValue;dkjSeriesMap[key].totalBuy+=d.buyPrice;dkjSeriesMap[key].active=true;}
   });
-  const seriesList=Object.values(dkjSeriesMap).filter(s=>s.active||s.items.length>0).sort((a,b)=>a.maturity.localeCompare(b.maturity));
-  document.getElementById('dkjBody').innerHTML=seriesList.filter(s=>s.active).map(s=>{
+  const seriesList=Object.values(dkjSeriesMap).filter(s=>s.items.length>0).sort((a,b)=>a.maturity.localeCompare(b.maturity));
+  document.getElementById('dkjBody').innerHTML=seriesList.map(s=>{
     const expectedReturn=s.totalFace-s.totalBuy;
     const rowId='dkj-'+s.maturity.replace(/-/g,'');
     const isLegacy=s.id.startsWith('legacy-');
-    const detailRows=s.items.filter(d=>d.active).map(d=>`<tr class="detail-row" id="d-${rowId}-${d.id}">
-      <td style="color:var(--text3);padding-left:48px">${d.date}</td>
-      <td class="r blurable" style="color:var(--text)">${fmt(d.faceValue)}</td>
-      <td class="r blurable" style="color:var(--text)">${fmt(d.buyPrice)}</td>
-      <td class="r" style="color:var(--text3)">–</td>
-      <td class="r blurable" style="color:var(--green)">+${fmt(Math.round(d.faceValue-d.buyPrice))}</td>
-      <td class="r"></td>
-      <td class="r"></td>
-      <td class="r"></td>
-      <td><span style="font-size:10px;color:var(--text3)">aktív</span></td>
-      <td></td>
-    </tr>`).join('');
+    const detailRows=s.items.map(d=>{
+      const closed=!d.active;
+      const faceShown=closed?d.originalFaceValue:d.faceValue;
+      const buyShown=closed?d.origBuyPrice:d.buyPrice;
+      const statusTxt=d.active?'aktív':(d.matured?'lejárt':'eladva');
+      const statusCol=d.active?'var(--text3)':(d.matured?'var(--blue)':'var(--amber)');
+      const profit=closed?(d.soldAmount?d.soldAmount-buyShown:faceShown-buyShown):(d.faceValue-d.buyPrice);
+      const soldInfo=closed&&d.soldDate?` <span style="font-size:9px;color:var(--text3)">(${d.soldDate})</span>`:'';
+      return `<tr class="detail-row" id="d-${rowId}-${d.id}" style="${closed?'opacity:0.5':''}">
+        <td style="color:var(--text3);padding-left:48px">${d.date}${soldInfo}</td>
+        <td class="r blurable" style="color:var(--text)">${fmt(faceShown)}</td>
+        <td class="r blurable" style="color:var(--text)">${fmt(buyShown)}</td>
+        <td class="r" style="color:var(--text3)">–</td>
+        <td class="r blurable" style="color:${profit>=0?'var(--green)':'var(--red)'}">${profit>=0?'+':''}${fmt(Math.round(profit))}</td>
+        <td class="r"></td>
+        <td class="r"></td>
+        <td class="r"></td>
+        <td><span style="font-size:10px;color:${statusCol}">${statusTxt}</span></td>
+        <td></td>
+      </tr>`;
+    }).join('');
     const daysLeft=Math.max(0,Math.round((new Date(s.maturity)-new Date())/(1000*60*60*24)));
-    return `<tr style="cursor:pointer" onclick="toggleExpand('${rowId}',this)">
-      <td><div style="display:flex;align-items:center;gap:10px"><div class="ins-avatar ins-avatar-dkj">DK</div><div><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${s.name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.filter(d=>d.active).length} tétel</span></div></div></td>
-      <td class="r blurable">${fmt(s.totalFace)}</td>
-      <td class="r blurable">${fmt(s.totalBuy)}</td>
+    const statusBadge=s.active?'<span class="badge b-etf">aktív</span>':'<span class="badge b-cash">lezárt</span>';
+    return `<tr style="cursor:pointer${s.active?'':';opacity:0.55'}" onclick="toggleExpand('${rowId}',this)">
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="ins-avatar ins-avatar-dkj">DK</div><div><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${s.name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></div></div></td>
+      <td class="r blurable">${fmt(s.active?s.totalFace:s.totalOrigFace)}</td>
+      <td class="r blurable">${fmt(s.active?s.totalBuy:s.items.reduce((a,d)=>a+(d.origBuyPrice||0),0))}</td>
       <td class="r" style="color:var(--text3)">–</td>
-      <td class="r pos blurable">+${fmt(Math.round(expectedReturn))}</td>
+      <td class="r pos blurable">${s.active?'+'+fmt(Math.round(expectedReturn)):'–'}</td>
       <td class="r">${s.maturity}</td>
-      <td class="r" style="font-size:11px;color:${daysLeft<=30?'var(--amber)':'var(--text2)'}">${daysLeft} nap</td>
+      <td class="r" style="font-size:11px;color:${s.active?(daysLeft<=30?'var(--amber)':'var(--text2)'):'var(--text3)'}">${s.active?daysLeft+' nap':'–'}</td>
       <td class="r" style="color:var(--text3)">–</td>
-      <td><span class="badge b-etf">aktív</span></td>
+      <td>${statusBadge}</td>
       <td style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
         <div style="display:inline-flex;gap:3px;justify-content:flex-end">
           ${!isLegacy?`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('edit-dkj-series','${s.id}')">✎</button>`:`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('reassign-dkj','${s.id}')">✎</button>`}
-          <button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('sell-dkj-series','${s.maturity}')">eladás</button>
-          <button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="expireDKJSeries('${s.maturity}')">lejárt</button>
+          ${s.active?`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('sell-dkj-series','${s.maturity}')">eladás</button>`:''}
+          ${s.active?`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="expireDKJSeries('${s.maturity}')">lejárt</button>`:''}
         </div>
       </td>
     </tr>${detailRows}`;
   }).join('');
-  document.getElementById('dkjEmpty').style.display=seriesList.filter(s=>s.active).length?'none':'block';
+  document.getElementById('dkjEmpty').style.display=seriesList.length?'none':'block';
 }
 
 function toggleExpand(rowId, clickedTr){
