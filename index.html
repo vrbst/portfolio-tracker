@@ -433,13 +433,6 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 <div id="app">
   <div class="header">
     <div class="header-logo">portfólió<span>.</span></div>
-    <div style="display:flex;align-items:center;gap:6px">
-      <div style="font-size:10px;color:var(--text3);letter-spacing:.06em">adatbázis:</div>
-      <button class="db-switch-btn" id="dbSwitchBtn" onclick="switchDB()" title="Adatbázis váltás">
-        <span id="dbSwitchLabel">portfolio.json</span>
-        <span style="opacity:.5;margin-left:4px">⇄</span>
-      </button>
-    </div>
     <div class="header-right">
       <button class="hbtn" id="hideBtn" onclick="toggleBlur()" title="Összegek elrejtése">👁 <span class="lbl">elrejt</span></button>
       <button class="hbtn" onclick="saveData()"><div class="sync-dot" id="syncDot"></div><span class="lbl" id="syncLabel">mentés</span></button>
@@ -897,9 +890,10 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 // ═══════════════════════════════════════════════
 const DB_FILES = {
   v1: 'portfolio-tracker-v2.json',   // eredeti adatbázis
-  v2: 'portfolio-tracker-v2-new.json' // új, import-alapú adatbázis
+  v2: 'portfolio-tracker-v2-new.json' // új, import-alapú adatbázis (DEFAULT)
 };
-let currentDB = localStorage.getItem('activeDB') || 'v1';
+// Alapértelmezett az új (import-alapú) adatbázis; a választó eltávolítva
+let currentDB = 'v2';
 let GIST_FILE = DB_FILES[currentDB];
 
 function switchDB() {
@@ -2597,7 +2591,7 @@ function renderLyAccountsPages() {
               <div class="panel-title">pénzmozgások</div>
               <button class="btn btn-ghost btn-sm" onclick="openLyCashModal('deposit','${acc.id}')">+ befizetés</button>
             </div>
-            <div class="tbl-wrap" style="flex:1;min-height:120px;max-height:calc((100vh - 360px) * 0.7);overflow-y:auto"><table>
+            <div class="tbl-wrap" style="flex:1;min-height:120px;max-height:calc((100vh - 360px) * 0.7);overflow-y:auto;overflow-x:auto"><table style="min-width:480px">
               <thead style="position:sticky;top:0;background:var(--bg2)"><tr>
                 <th>dátum</th><th>típus</th><th>pénznem</th><th class="r">összeg</th><th>megjegyzés</th><th></th>
               </tr></thead>
@@ -2756,10 +2750,10 @@ function renderLyInstrumentList(accountId) {
           <div><div style="font-family:var(--font-head);font-size:14px;font-weight:600">${ins.ticker}</div><div style="font-size:11px;color:var(--text2)">${ins.name}</div></div>
         </div>
       </td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)">${ins.shares.toFixed(4)} db</td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div>${fmtM(ins.cost)}</div><div style="font-size:10px;color:var(--text3)">${fmtEur(totCostEur)}</div></td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div>${ins.val>0?fmtM(ins.val):'–'}</div><div style="font-size:10px;color:var(--text3)">${ins.lp?fmtEur(ins.shares*ins.lp):'–'}</div></td>
-      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol};cursor:help" data-ttid="${ttId}">${ins.cost>0?(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span>'+(ins.lp?'<div style="font-size:10px;color:'+plEurCol+';opacity:0.85">'+(plEur>=0?'+':'')+fmtEur(plEur)+' ('+(plEurPct>=0?'+':'')+plEurPct.toFixed(2)+'%)</div>':''):'–'}</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);white-space:nowrap">${ins.shares.toFixed(4)} db</td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div style="white-space:nowrap">${fmtM(ins.cost)}</div><div style="font-size:10px;color:var(--text3);white-space:nowrap">${fmtEur(totCostEur)}</div></td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border)"><div style="white-space:nowrap">${ins.val>0?fmtM(ins.val):'–'}</div><div style="font-size:10px;color:var(--text3);white-space:nowrap">${ins.lp?fmtEur(ins.shares*ins.lp):'–'}</div></td>
+      <td class="r blurable" style="padding:14px 16px;border-bottom:1px solid var(--border);color:${plCol};cursor:help" data-ttid="${ttId}">${ins.cost>0?'<div style="white-space:nowrap">'+(pl>=0?'+':'')+fmtM(pl)+' <span style="font-size:10px">('+plPct.toFixed(2)+'%)</span></div>'+(ins.lp?'<div style="font-size:10px;white-space:nowrap;color:'+plEurCol+';opacity:0.85">'+(plEur>=0?'+':'')+fmtEur(plEur)+' ('+(plEurPct>=0?'+':'')+plEurPct.toFixed(2)+'%)</div>':''):'–'}</td>
       <td class="r" style="padding:14px 16px;border-bottom:1px solid var(--border);${ins.lp?'cursor:help':''}" data-ttid="${livePriceTtId}">${ins.lp?fmtEur(ins.lp):'–'}${ins.pct!==null?'<br><span style="font-size:10px;color:'+pctCol+'">'+(ins.pct>=0?'+':'')+ins.pct.toFixed(2)+'%</span>':''}</td>
       <td style="padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text3);font-size:16px">›</td>
     </tr>`;
@@ -2899,11 +2893,11 @@ function renderLyCashTx(accountId) {
   const typeLabel={deposit:'befizetés',withdraw:'kifizetés',transfer_in:'átutalás be',transfer_out:'átutalás ki'};
   const typeCol={deposit:'var(--green)',withdraw:'var(--red)',transfer_in:'var(--blue)',transfer_out:'var(--amber)'};
   el.innerHTML=txs.map(t=>`<tr>
-    <td>${t.date}</td>
-    <td style="color:${typeCol[t.type]||'var(--text2)'}">${typeLabel[t.type]||t.type}</td>
+    <td style="white-space:nowrap">${t.date}</td>
+    <td style="color:${typeCol[t.type]||'var(--text2)'};white-space:nowrap">${typeLabel[t.type]||t.type}</td>
     <td>${t.currency}</td>
-    <td class="r blurable">${t.currency==='HUF'?fmt(t.amount):fmtEur(t.amount)}</td>
-    <td style="color:var(--text3);font-size:11px">${t.note||'–'}</td>
+    <td class="r blurable" style="white-space:nowrap">${t.currency==='HUF'?fmt(t.amount):fmtEur(t.amount)}</td>
+    <td style="color:var(--text3);font-size:11px;white-space:nowrap">${t.note||'–'}</td>
     <td></td>
   </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">Nincs mozgás.</td></tr>';
 }
