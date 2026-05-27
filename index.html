@@ -592,7 +592,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
               <colgroup>
                 <col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:4%"><col style="width:11%"><col style="width:8%"><col style="width:6%"><col style="width:4%"><col style="width:6%"><col style="width:21%">
               </colgroup>
-              <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">várható hozam</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r"></th><th>státusz</th><th></th></tr></thead>
+              <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">hozam</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r"></th><th>státusz</th><th></th></tr></thead>
               <tbody id="dkjBody"></tbody>
             </table></div>
             <div class="empty" id="dkjEmpty" style="display:none">Még nincs DKJ pozíció.</div>
@@ -2383,15 +2383,22 @@ function renderAllampapir(){
   const dkjSeriesMap={};
   // Init from definitions
   data.dkjSeries.forEach(ds=>{
-    dkjSeriesMap[ds.id]={id:ds.id,name:ds.name,maturity:ds.maturity,items:[],totalFace:0,totalBuy:0,totalOrigFace:0,active:false};
+    dkjSeriesMap[ds.id]={id:ds.id,name:ds.name,maturity:ds.maturity,items:[],totalFace:0,totalBuy:0,totalOrigFace:0,realizedPL:0,active:false};
   });
   // Also handle legacy DKJ without seriesId (grouped by maturity)
   data.dkj.forEach(d=>{
     const key=d.seriesId||('legacy-'+d.maturity);
-    if(!dkjSeriesMap[key])dkjSeriesMap[key]={id:key,name:'D'+d.maturity.replace(/-/g,'').slice(2),maturity:d.maturity,items:[],totalFace:0,totalBuy:0,totalOrigFace:0,active:false};
+    if(!dkjSeriesMap[key])dkjSeriesMap[key]={id:key,name:'D'+d.maturity.replace(/-/g,'').slice(2),maturity:d.maturity,items:[],totalFace:0,totalBuy:0,totalOrigFace:0,realizedPL:0,active:false};
+    if(dkjSeriesMap[key].realizedPL===undefined) dkjSeriesMap[key].realizedPL=0;
     dkjSeriesMap[key].items.push(d);
     dkjSeriesMap[key].totalOrigFace+=d.originalFaceValue||0;
     if(d.active){dkjSeriesMap[key].totalFace+=d.faceValue;dkjSeriesMap[key].totalBuy+=d.buyPrice;dkjSeriesMap[key].active=true;}
+    // Realizált hozam: a lezárt (eladott/lejárt) tételekből
+    if(!d.active){
+      const buyShown=d.origBuyPrice||d.buyPrice||0;
+      const proceeds=d.soldAmount?d.soldAmount:(d.originalFaceValue||d.faceValue||0); // lejáratnál névérték, eladásnál a bevétel
+      dkjSeriesMap[key].realizedPL+=(proceeds-buyShown);
+    }
   });
   const seriesList=Object.values(dkjSeriesMap).filter(s=>s.items.length>0).sort((a,b)=>{
     // Aktívak elöl, utána lezártak; mindkét csoport lejárat szerint növekvő
@@ -2430,7 +2437,7 @@ function renderAllampapir(){
       <td class="r blurable">${fmt(s.active?s.totalFace:s.totalOrigFace)}</td>
       <td class="r blurable">${fmt(s.active?s.totalBuy:s.items.reduce((a,d)=>a+(d.origBuyPrice||0),0))}</td>
       <td class="r" style="color:var(--text3)">–</td>
-      <td class="r pos blurable">${s.active?'+'+fmt(Math.round(expectedReturn)):'–'}</td>
+      <td class="r pos blurable" style="color:${s.active?'var(--green)':(s.realizedPL>=0?'var(--green)':'var(--red)')}">${s.active?'+'+fmt(Math.round(expectedReturn)):(s.realizedPL>=0?'+':'')+fmt(Math.round(s.realizedPL))}</td>
       <td class="r">${s.maturity}</td>
       <td class="r" style="font-size:11px;color:${s.active?(daysLeft<=30?'var(--amber)':'var(--text2)'):'var(--text3)'}">${s.active?daysLeft+' nap':'–'}</td>
       <td class="r" style="color:var(--text3)">–</td>
