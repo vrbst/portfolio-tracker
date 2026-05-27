@@ -2431,12 +2431,26 @@ function renderAllampapir(){
       </tr>`;
     }).join('');
     const daysLeft=Math.max(0,Math.round((new Date(s.maturity)-new Date())/(1000*60*60*24)));
+    // Annualizált (évesített) hozam: tételenként számolva, majd vételár-súlyozott átlag.
+    // Tételenként: (eredeti névérték/eredeti vételár - 1) × (365/futamidő_nap) × 100
+    let annualYield=null;
+    let wSum=0, wYield=0;
+    s.items.forEach(d=>{
+      const face=d.originalFaceValue||d.faceValue||0;
+      const buy=d.origBuyPrice||d.buyPrice||0;
+      if(buy>0 && face>0 && d.date){
+        const termDays=Math.max(1,Math.round((new Date(s.maturity)-new Date(d.date))/(1000*60*60*24)));
+        const y=(face/buy-1)*(365/termDays)*100;
+        wSum+=buy; wYield+=y*buy; // vételár-súlyozott
+      }
+    });
+    if(wSum>0) annualYield=wYield/wSum;
     const statusBadge=s.active?'<span class="badge b-etf">aktív</span>':'<span class="badge b-cash">lezárt</span>';
     return `<tr style="cursor:pointer${s.active?'':';opacity:0.55'}" onclick="toggleExpand('${rowId}',this)">
       <td><div style="display:flex;align-items:center;gap:10px"><div class="ins-avatar ins-avatar-dkj">DK</div><div><button class="expand-btn" id="btn-${rowId}">▶</button> <span class="asset-name">${s.name}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${s.items.length} tétel</span></div></div></td>
       <td class="r blurable">${fmt(s.active?s.totalFace:s.totalOrigFace)}</td>
       <td class="r blurable">${fmt(s.active?s.totalBuy:s.items.reduce((a,d)=>a+(d.origBuyPrice||0),0))}</td>
-      <td class="r" style="color:var(--text3)">–</td>
+      <td class="r" style="color:var(--text2);font-size:11px">${annualYield!=null?annualYield.toFixed(2)+'%':'–'}</td>
       <td class="r pos blurable" style="color:${s.active?'var(--green)':(s.realizedPL>=0?'var(--green)':'var(--red)')}">${s.active?'+'+fmt(Math.round(expectedReturn)):(s.realizedPL>=0?'+':'')+fmt(Math.round(s.realizedPL))}</td>
       <td class="r">${s.maturity}</td>
       <td class="r" style="font-size:11px;color:${s.active?(daysLeft<=30?'var(--amber)':'var(--text2)'):'var(--text3)'}">${s.active?daysLeft+' nap':'–'}</td>
