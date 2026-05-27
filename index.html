@@ -2267,7 +2267,13 @@ function renderAllampapir(){
     fmSeriesMap[sid].totalOrigFace+=f.originalFaceValue||0;
     if(f.active){fmSeriesMap[sid].totalFace+=f.faceValue;fmSeriesMap[sid].totalBuy+=(f.buyPrice||f.faceValue);fmSeriesMap[sid].active=true;}
   });
-  const fmSeriesList=Object.values(fmSeriesMap);
+  const fmSeriesList=Object.values(fmSeriesMap).sort((a,b)=>{
+    // Aktívak elöl, utána lezártak; mindkét csoport lejárat szerint növekvő
+    if(a.active!==b.active) return a.active?-1:1;
+    const ma=(data.fixmapSeries.find(x=>x.id===a.seriesId)||{}).maturity||'9999';
+    const mb=(data.fixmapSeries.find(x=>x.id===b.seriesId)||{}).maturity||'9999';
+    return ma.localeCompare(mb);
+  });
   // Várható össz kamat számítása lejáratig (összesített kártyához)
   let totalFutureInterest=0;
   fmSeriesList.filter(s=>s.active).forEach(s=>{
@@ -2333,12 +2339,12 @@ function renderAllampapir(){
 
     const detailRows=s.items.map(f=>{
       const closed=!f.active;
-      const faceShown=closed?f.originalFaceValue:f.faceValue;
-      const buyShown=closed?f.origBuyPrice:(f.buyPrice||f.faceValue);
+      const faceShown=closed?(f.originalFaceValue||f.faceValue||0):f.faceValue;
+      const buyShown=closed?(f.origBuyPrice||f.buyPrice||f.faceValue||0):(f.buyPrice||f.faceValue);
       const statusTxt=f.active?'aktív':(f.matured?'lejárt':'eladva');
       const statusCol=f.active?'var(--text3)':(f.matured?'var(--blue)':'var(--amber)');
       const rowStyle=closed?'opacity:0.5':'';
-      const soldInfo=closed&&f.soldAmount?` <span style="font-size:9px;color:var(--text3)">(${f.soldDate})</span>`:'';
+      const soldInfo=closed&&f.soldDate?` <span style="font-size:9px;color:var(--text3)">(${f.soldDate})</span>`:'';
       return `<tr class="detail-row" id="d-${rowId}-${f.id}" style="${rowStyle}">
         <td style="color:var(--text3);padding-left:48px">${f.date}${soldInfo}</td>
         <td class="r blurable" style="color:var(--text)">${fmt(faceShown)}</td>
@@ -2387,15 +2393,19 @@ function renderAllampapir(){
     dkjSeriesMap[key].totalOrigFace+=d.originalFaceValue||0;
     if(d.active){dkjSeriesMap[key].totalFace+=d.faceValue;dkjSeriesMap[key].totalBuy+=d.buyPrice;dkjSeriesMap[key].active=true;}
   });
-  const seriesList=Object.values(dkjSeriesMap).filter(s=>s.items.length>0).sort((a,b)=>a.maturity.localeCompare(b.maturity));
+  const seriesList=Object.values(dkjSeriesMap).filter(s=>s.items.length>0).sort((a,b)=>{
+    // Aktívak elöl, utána lezártak; mindkét csoport lejárat szerint növekvő
+    if(a.active!==b.active) return a.active?-1:1;
+    return a.maturity.localeCompare(b.maturity);
+  });
   document.getElementById('dkjBody').innerHTML=seriesList.map(s=>{
     const expectedReturn=s.totalFace-s.totalBuy;
     const rowId='dkj-'+s.maturity.replace(/-/g,'');
     const isLegacy=s.id.startsWith('legacy-');
     const detailRows=s.items.map(d=>{
       const closed=!d.active;
-      const faceShown=closed?d.originalFaceValue:d.faceValue;
-      const buyShown=closed?d.origBuyPrice:d.buyPrice;
+      const faceShown=closed?(d.originalFaceValue||d.faceValue||0):d.faceValue;
+      const buyShown=closed?(d.origBuyPrice||d.buyPrice||0):d.buyPrice;
       const statusTxt=d.active?'aktív':(d.matured?'lejárt':'eladva');
       const statusCol=d.active?'var(--text3)':(d.matured?'var(--blue)':'var(--amber)');
       const profit=closed?(d.soldAmount?d.soldAmount-buyShown:faceShown-buyShown):(d.faceValue-d.buyPrice);
