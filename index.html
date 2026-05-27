@@ -836,7 +836,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div class="panel-title">összes tranzakció</div>
           <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ CSV export</button>
         </div>
-        <div class="tbl-wrap" style="max-height:calc(100vh - 52px - 16px - 24px - 90px);overflow-y:auto"><table>
+        <div class="tbl-wrap" style="max-height:calc(100vh - 52px - 16px - 24px - 90px);overflow-y:auto;overflow-x:auto"><table style="min-width:680px">
           <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr><th>dátum</th><th>típus</th><th>eszköz</th><th class="r">vételár (Ft)</th><th class="r">névérték / db</th><th class="r">árfolyam (EUR)</th><th class="r">megjegyzés</th><th></th></tr></thead>
           <tbody id="txBody"></tbody>
         </table></div>
@@ -3289,13 +3289,13 @@ function renderTranzakciok(){
   all.sort((a,b)=>b.date.localeCompare(a.date)||(typeOrder[a.type]||9)-(typeOrder[b.type]||9));
 
   document.getElementById('txBody').innerHTML=all.map(t=>`<tr>
-    <td>${t.date}</td>
-    <td><span class="badge ${typeBadge[t.type]||'b-deposit'}">${typeLabel[t.type]||t.type}</span></td>
-    <td>${t.asset}</td>
-    <td class="r blurable">${t.vetelar||'–'}</td>
-    <td class="r blurable" style="color:var(--text2)">${t.nevd||'–'}</td>
-    <td class="r" style="color:var(--text2)">${t.rate||'–'}</td>
-    <td class="r" style="color:var(--text3)">${t.note}</td>
+    <td style="white-space:nowrap">${t.date}</td>
+    <td style="white-space:nowrap"><span class="badge ${typeBadge[t.type]||'b-deposit'}">${typeLabel[t.type]||t.type}</span></td>
+    <td style="white-space:nowrap">${t.asset}</td>
+    <td class="r blurable" style="white-space:nowrap">${t.vetelar||'–'}</td>
+    <td class="r blurable" style="color:var(--text2);white-space:nowrap">${t.nevd||'–'}</td>
+    <td class="r" style="color:var(--text2);white-space:nowrap">${t.rate||'–'}</td>
+    <td class="r" style="color:var(--text3);white-space:nowrap">${t.note}</td>
     <td style="white-space:nowrap">
       <button class="btn btn-ghost btn-sm" onclick="${t.editCall}" style="margin-right:4px">✎</button>
       <button class="btn btn-danger btn-sm" onclick="${t.deleteCall}">×</button>
