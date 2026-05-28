@@ -566,7 +566,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div class="panel" style="margin-top:0">
             <div class="tbl-wrap"><table class="bond-table">
               <colgroup>
-                <col style="width:20%"><col style="width:11%"><col style="width:11%"><col style="width:7%"><col style="width:12%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:11%">
+                <col style="width:17%"><col style="width:11%"><col style="width:11%"><col style="width:6%"><col style="width:11%"><col style="width:9%"><col style="width:7%"><col style="width:11%"><col style="width:7%"><col style="width:10%">
               </colgroup>
               <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">köv. kamat</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r">várható kamat</th><th>státusz</th><th></th></tr></thead>
               <tbody id="fixmapBody"></tbody>
@@ -585,7 +585,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
           <div class="panel" style="margin-top:0">
             <div class="tbl-wrap"><table class="bond-table">
               <colgroup>
-                <col style="width:20%"><col style="width:11%"><col style="width:11%"><col style="width:7%"><col style="width:12%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:11%">
+                <col style="width:17%"><col style="width:11%"><col style="width:11%"><col style="width:6%"><col style="width:11%"><col style="width:9%"><col style="width:7%"><col style="width:11%"><col style="width:7%"><col style="width:10%">
               </colgroup>
               <thead><tr><th>sorozat</th><th class="r">névérték</th><th class="r">vételár</th><th class="r">kamat %</th><th class="r">hozam</th><th class="r">lejárat</th><th class="r">hátralévő</th><th class="r"></th><th>státusz</th><th></th></tr></thead>
               <tbody id="dkjBody"></tbody>
@@ -2365,9 +2365,9 @@ function renderAllampapir(){
       <td class="r pos blurable" style="font-size:11px">${futureInterest}</td>
       <td><span class="badge ${s.active?'b-etf':'b-cash'}">${s.active?'aktív':'lezárt'}</span></td>
       <td style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        <div style="display:inline-flex;gap:4px;justify-content:flex-end">
-          ${sr?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-fixmap-series','${s.seriesId}')">✎</button>`:''}
-          ${s.active?`<button class="btn btn-ghost btn-sm" onclick="openModal('sell-fixmap-series','${s.seriesId}')">eladás</button>`:''}
+        <div style="display:inline-flex;gap:2px;justify-content:flex-end">
+          ${sr?`<button class="btn btn-ghost btn-sm" style="padding:3px 6px" title="szerkesztés" onclick="openModal('edit-fixmap-series','${s.seriesId}')">✎</button>`:''}
+          ${s.active?`<button class="btn btn-ghost btn-sm" style="padding:3px 6px" title="eladás" onclick="openModal('sell-fixmap-series','${s.seriesId}')">↓</button>`:''}
         </div>
       </td>
     </tr>${detailRows}`;
@@ -2453,10 +2453,10 @@ function renderAllampapir(){
       <td class="r" style="color:var(--text3)">–</td>
       <td>${statusBadge}</td>
       <td style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        <div style="display:inline-flex;gap:3px;justify-content:flex-end">
-          ${!isLegacy?`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('edit-dkj-series','${s.id}')">✎</button>`:`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('reassign-dkj','${s.id}')">✎</button>`}
-          ${s.active?`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="openModal('sell-dkj-series','${s.maturity}')">eladás</button>`:''}
-          ${s.active?`<button class="btn btn-ghost btn-sm" style="padding:3px 7px" onclick="expireDKJSeries('${s.maturity}')">lejárt</button>`:''}
+        <div style="display:inline-flex;gap:2px;justify-content:flex-end">
+          ${!isLegacy?`<button class="btn btn-ghost btn-sm" style="padding:3px 6px" title="szerkesztés" onclick="openModal('edit-dkj-series','${s.id}')">✎</button>`:`<button class="btn btn-ghost btn-sm" style="padding:3px 6px" title="hozzárendelés" onclick="openModal('reassign-dkj','${s.id}')">✎</button>`}
+          ${s.active?`<button class="btn btn-ghost btn-sm" style="padding:3px 6px" title="eladás" onclick="openModal('sell-dkj-series','${s.maturity}')">↓</button>`:''}
+          ${s.active?`<button class="btn btn-ghost btn-sm" style="padding:3px 6px" title="lejárt" onclick="expireDKJSeries('${s.maturity}')">✓</button>`:''}
         </div>
       </td>
     </tr>${detailRows}`;
