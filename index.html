@@ -2478,9 +2478,13 @@ function deleteDKJ(id){data.dkj=data.dkj.filter(d=>d.id!==id);renderAllampapir()
 function expireDKJ(id){
   const d=data.dkj.find(d=>d.id===id);
   if(!d)return;
-  d.active=false;
-  data.cashTx.push({id:uid(),date:d.maturity,type:'expire',amount:d.faceValue,note:'DKJ lejárat'});
-  renderAll();
+  const matKey=d.maturity.replace(/-/g,'').slice(2);
+  const eid=uid();
+  const base={ date:d.maturity, account:'kincstar', ref:'manual:'+eid, src:'manual:'+eid, note:'DKJ lejárat' };
+  data.ledger.push({ ...base, type:'cash_in', asset:'HUF', qty:d.faceValue, huf:d.faceValue, subtype:'sell_proceed' });
+  data.ledger.push({ ...base, type:'sell', asset:'DKJ:'+matKey, qty:d.faceValue, huf:d.faceValue, subtype:'sell_asset' });
+  rebuildDerivedViews();
+  renderAll(); saveData();
   toast('DKJ lejárat rögzítve, összeg a pénzszámlán');
 }
 
@@ -3719,20 +3723,23 @@ function submitCoupon(){
   const note=document.getElementById('f-note').value;
   const withdraw=document.getElementById('f-withdraw')?.checked;
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
+  // Kamat a ledgerbe: cash_in HUF subtype:'coupon'
+  const cid=uid();
+  data.ledger.push({ date, account:'kincstar', type:'cash_in', asset:'HUF', qty:amount, huf:amount, subtype:'coupon', ref:'manual:'+cid, src:'manual:'+cid, note:note||'Kamatfizetés' });
   if(withdraw){
-    data.cashTx.push({id:uid(),date,type:'withdraw',amount,note:(note||'Kamatfizetés')+' – kiutalás'});
+    const wid=uid();
+    data.ledger.push({ date, account:'kincstar', type:'cash_out', asset:'HUF', qty:amount, huf:amount, subtype:'external_out', ref:'manual:'+wid, src:'manual:'+wid, note:(note||'Kamatfizetés')+' – kiutalás' });
   }
-  data.cashTx.push({id:uid(),date,type:'coupon',amount,note:note||'Kamatfizetés'});
   // Auto-advance nextCoupon date on all active fixmap series where nextCoupon <= date
   data.fixmapSeries.forEach(sr=>{
     if(sr.nextCoupon&&sr.nextCoupon<=date){
       const d=new Date(sr.nextCoupon+'T00:00:00Z');
       d.setUTCMonth(d.getUTCMonth()+3);
       sr.nextCoupon=d.toISOString().split('T')[0];
-      // Clear firstCouponAmount since first coupon is now paid
       sr.firstCouponAmount=null;
     }
   });
+  rebuildDerivedViews();
   closeModal(); renderAll(); saveData();
   toast(withdraw?'Kamat rögzítve és kiutalva: '+fmt(amount):'Kamatfizetés rögzítve: +'+fmt(amount));
 }
@@ -3742,7 +3749,11 @@ function submitDeposit(){
   const amount=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
-  data.cashTx.push({id:uid(),date,type:'deposit',amount,note});
+  // FONTOS: a ledgerbe írunk (single source of truth), nem a derived view-ba — máskülönben
+  // a rebuildDerivedViews törölné. A subtype:'external_in' jelzi: külső pénzbeáramlás.
+  const id=uid();
+  data.ledger.push({ date, account:'kincstar', type:'cash_in', asset:'HUF', qty:amount, huf:amount, subtype:'external_in', ref:'manual:'+id, src:'manual:'+id, note:note||'Befizetés' });
+  rebuildDerivedViews();
   closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); saveData(); toast('Befizetés rögzítve');
 }
 function submitWithdraw(){
@@ -3750,7 +3761,9 @@ function submitWithdraw(){
   const amount=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
-  data.cashTx.push({id:uid(),date,type:'withdraw',amount,note});
+  const id=uid();
+  data.ledger.push({ date, account:'kincstar', type:'cash_out', asset:'HUF', qty:amount, huf:amount, subtype:'external_out', ref:'manual:'+id, src:'manual:'+id, note:note||'Kiutalás' });
+  rebuildDerivedViews();
   closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); saveData(); toast('Kiutalás rögzítve');
 }
 
@@ -3972,24 +3985,14 @@ function submitFixmapSeriesSell(){
   const sellPrice=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
   if(!sid||!date||!faceSell||!sellPrice)return toast('Töltsd ki a kötelező mezőket!');
-  // FIFO
-  let remaining=faceSell;
-  const items=data.fixmap.filter(f=>f.active&&(f.seriesId||'legacy')===sid).sort((a,b)=>a.date.localeCompare(b.date));
-  for(const item of items){
-    if(remaining<=0)break;
-    if(item.faceValue<=remaining){item.active=false;item.soldDate=date;remaining-=item.faceValue;}
-    else{
-      const ratio=remaining/item.faceValue;
-      data.fixmap.push({...item,id:uid(),faceValue:item.faceValue-remaining,buyPrice:(item.buyPrice||item.faceValue)*(1-ratio)});
-      item.faceValue=remaining;
-      item.buyPrice=(item.buyPrice||item.faceValue)*ratio;
-      item.active=false;
-      item.soldDate=date;
-      remaining=0;
-    }
-  }
   const sr=data.fixmapSeries.find(x=>x.id===sid);
-  data.cashTx.push({id:uid(),date,type:'sell',amount:sellPrice,note:'FixMáP eladás'+(sr?' '+sr.name:'')+(note?' – '+note:'')});
+  const key=sr?.key||sid;
+  // Ledger eseménypár: cash_in (pénz beérkezik) + sell (állampapír kikerül)
+  const id=uid();
+  const base={ date, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'FixMáP eladás'+(sr?' '+sr.name:'')+(note?' – '+note:'') };
+  data.ledger.push({ ...base, type:'cash_in', asset:'HUF', qty:sellPrice, huf:sellPrice, subtype:'sell_proceed' });
+  data.ledger.push({ ...base, type:'sell', asset:'FIXMAP:'+key, qty:faceSell, huf:sellPrice, subtype:'sell_asset' });
+  rebuildDerivedViews();
   closeModal(); renderAll(); saveData(); toast('FixMáP eladás rögzítve');
 }
 
@@ -4015,8 +4018,13 @@ function submitFixmap(){
   if(Math.round(bal)<buyPrice)
     return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
 
-  data.fixmap.push({id:uid(),seriesId:sid,date,faceValue,buyPrice,active:true});
-  data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'FixMáP vétel'});
+  const sr=data.fixmapSeries.find(x=>x.id===sid);
+  const key=sr?.key||sid;
+  const id=uid();
+  const base={ date, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'FixMáP vétel'+(sr?' '+sr.name:'') };
+  data.ledger.push({ ...base, type:'cash_out', asset:'HUF', qty:buyPrice, huf:buyPrice, subtype:'buy_pay' });
+  data.ledger.push({ ...base, type:'buy', asset:'FIXMAP:'+key, qty:faceValue, huf:buyPrice, subtype:'buy_asset' });
+  rebuildDerivedViews();
   closeModal(); renderAll(); saveData(); toast('FixMáP vétel rögzítve');
 }
 function updateDKJSellInfo(maturity){
@@ -4054,51 +4062,48 @@ function submitDKJSeriesSell(){
   const sellPrice=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
   if(!maturity||!date||!faceSell||!sellPrice)return toast('Töltsd ki a kötelező mezőket!');
-
-  // FIFO: reduce active DKJ items for this series
-  let remaining=faceSell;
-  const items=data.dkj.filter(d=>d.active&&d.maturity===maturity).sort((a,b)=>a.date.localeCompare(b.date));
-  for(const item of items){
-    if(remaining<=0)break;
-    if(item.faceValue<=remaining){
-      item.active=false;
-      remaining-=item.faceValue;
-    } else {
-      // partial sell: split the item
-      const origFv = item.faceValue;
-      const origBp = item.buyPrice;
-      const keepFv = origFv - remaining;
-      const keepBp = Math.round(origBp * keepFv / origFv);
-      const soldBp = Math.round(origBp * remaining / origFv);
-      item.faceValue = remaining;
-      item.buyPrice = soldBp;
-      item.active = false;
-      const newItem = Object.assign({}, item, {id:uid(), faceValue:keepFv, buyPrice:keepBp, active:true});
-      data.dkj.push(newItem);
-      remaining = 0;
-    }
-  }
-  data.cashTx.push({id:uid(),date,type:'sell',amount:sellPrice,note:'DKJ eladás D'+maturity.replace(/-/g,'').slice(2)+(note?' – '+note:'')});
+  const matKey=maturity.replace(/-/g,'').slice(2);
+  const id=uid();
+  const base={ date, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'DKJ eladás D'+matKey+(note?' – '+note:'') };
+  data.ledger.push({ ...base, type:'cash_in', asset:'HUF', qty:sellPrice, huf:sellPrice, subtype:'sell_proceed' });
+  data.ledger.push({ ...base, type:'sell', asset:'DKJ:'+matKey, qty:faceSell, huf:sellPrice, subtype:'sell_asset' });
+  rebuildDerivedViews();
   closeModal(); renderAll(); saveData(); toast('DKJ eladás rögzítve');
 }
 
 function expireDKJSeries(maturity){
-  const items=data.dkj.filter(d=>d.active&&d.maturity===maturity);
-  const totalFace=items.reduce((s,d)=>s+d.faceValue,0);
-  items.forEach(d=>d.active=false);
-  data.cashTx.push({id:uid(),date:maturity,type:'expire',amount:totalFace,note:'DKJ lejárat D'+maturity.replace(/-/g,'').slice(2)});
-  renderAll(); toast('DKJ lejárat rögzítve, '+fmt(totalFace)+' a pénzszámlán');
+  // Lejárat: a sorozat aktív tételeinek névértéke kifizetődik a pénzszámlára.
+  // Ledger-szinten: cash_in HUF + sell esemény névértéken (lejáratkor névértéken fizet).
+  const matKey=maturity.replace(/-/g,'').slice(2);
+  // Mennyi aktív névérték van még? A ledgerből számolva.
+  const buys=(data.ledger||[]).filter(e=>e.asset==='DKJ:'+matKey && e.type==='buy').reduce((s,e)=>s+e.qty,0);
+  const sells=(data.ledger||[]).filter(e=>e.asset==='DKJ:'+matKey && e.type==='sell').reduce((s,e)=>s+e.qty,0);
+  const totalFace=buys-sells;
+  if(totalFace<=0) return toast('Nincs aktív DKJ ezen a lejáraton.');
+  const id=uid();
+  const base={ date:maturity, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'DKJ lejárat D'+matKey };
+  data.ledger.push({ ...base, type:'cash_in', asset:'HUF', qty:totalFace, huf:totalFace, subtype:'sell_proceed' });
+  data.ledger.push({ ...base, type:'sell', asset:'DKJ:'+matKey, qty:totalFace, huf:totalFace, subtype:'sell_asset' });
+  rebuildDerivedViews();
+  renderAll(); saveData(); toast('DKJ lejárat rögzítve, '+fmt(totalFace)+' a pénzszámlán');
 }
 
 function submitDKJSell(id){
+  // Régi, egyedi tétel eladása — már nem érdemes támogatni, mert a ledger-alapú
+  // logikában a sorozat-szintű eladás (submitDKJSeriesSell) FIFO-val működik. De
+  // a meglévő hívókat megőrizzük: a tétel maturity-jét kibányásszuk és átirányítjuk.
   const d=data.dkj.find(d=>d.id===id);
   if(!d)return;
   const date=document.getElementById('f-date').value;
   const amount=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
-  d.active=false;
-  data.cashTx.push({id:uid(),date,type:'sell',amount,note:'DKJ eladás'+(note?' – '+note:'')});
+  const matKey=d.maturity.replace(/-/g,'').slice(2);
+  const eid=uid();
+  const base={ date, account:'kincstar', ref:'manual:'+eid, src:'manual:'+eid, note:'DKJ eladás'+(note?' – '+note:'') };
+  data.ledger.push({ ...base, type:'cash_in', asset:'HUF', qty:amount, huf:amount, subtype:'sell_proceed' });
+  data.ledger.push({ ...base, type:'sell', asset:'DKJ:'+matKey, qty:d.faceValue, huf:amount, subtype:'sell_asset' });
+  rebuildDerivedViews();
   closeModal(); renderAll(); saveData(); toast('DKJ eladás rögzítve');
 }
 // submitFixmapSell removed - replaced by submitFixmapSeriesSell
@@ -4155,8 +4160,13 @@ function submitDKJ(){
   if(!ds)return toast('Érvénytelen sorozat!');
   const bal=cashBalance();
   if(Math.round(bal)<Math.round(buyPrice))return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
-  data.dkj.push({id:uid(),seriesId:sid,date,faceValue,buyPrice,maturity:ds.maturity,active:true});
-  data.cashTx.push({id:uid(),date,type:'buy',amount:buyPrice,note:'DKJ vétel – '+ds.name});
+  // DKJ asset key = maturity YYMMDD (YYYY-MM-DD → YYMMDD)
+  const matKey=ds.maturity.replace(/-/g,'').slice(2);
+  const id=uid();
+  const base={ date, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'DKJ vétel – '+ds.name };
+  data.ledger.push({ ...base, type:'cash_out', asset:'HUF', qty:buyPrice, huf:buyPrice, subtype:'buy_pay' });
+  data.ledger.push({ ...base, type:'buy', asset:'DKJ:'+matKey, qty:faceValue, huf:buyPrice, subtype:'buy_asset' });
+  rebuildDerivedViews();
   closeModal(); renderAll(); saveData(); toast('DKJ vétel rögzítve');
 }
 function onFeeChange(isEdit){
@@ -5794,7 +5804,7 @@ async function fetchMarketCommentary(force=false) {
   // - 'pre_morning' (00:00–09:30): az előző nap zárása (még nincs friss reggeli adat)
   const now = new Date();
   const minutesNow = now.getHours()*60 + now.getMinutes();
-  const EU_OPEN_MIN = 9*60 + 30;   // 09:30 magyar idő — reggeli lekérés (a nyitás után picivel)
+  const EU_OPEN_MIN = 9*60 + 31;   // 09:31 magyar idő — reggeli lekérés (a nyitás után picivel)
   const EU_CLOSE_MIN = 17*60 + 30; // 17:30 magyar idő — zárás
   const dow = now.getDay(); // 0=vasárnap, 6=szombat
   const isWeekend = (dow===0 || dow===6);
@@ -5966,8 +5976,8 @@ function maybeRefreshCommentaryAtClose(){
   // Aktuális slot meghatározása (ugyanaz a logika mint a fetchMarketCommentary-ben)
   let slot;
   if(minutesNow >= 17*60+30) slot='post_close';
-  else if(minutesNow >= 9*60+30) slot='morning';
-  else return; // 09:30 előtt nincs friss adat
+  else if(minutesNow >= 9*60+31) slot='morning';
+  else return; // 09:31 előtt nincs friss adat
   // Ha aznap ehhez a slothoz már van kommentár, ne hívjunk újra
   if(data.marketCommentary && data.marketCommentary.date===todayStr && data.marketCommentary.slot===slot) return;
   // Egyébként egyszer lekérjük
