@@ -875,7 +875,7 @@ th.sort-desc::after{content:' ↓';color:var(--green)}
 
 
 <!-- MODALS -->
-<div class="modal-backdrop" id="modalBackdrop" onclick="closeModalOutside(event)">
+<div class="modal-backdrop" id="modalBackdrop" onmousedown="modalMouseDown(event)" onmouseup="modalMouseUp(event)">
   <div class="modal">
     <div class="modal-title" id="modalTitle">Tranzakció</div>
     <div id="modalBody"></div>
@@ -945,6 +945,27 @@ let data = null;
 // UTILS
 // ═══════════════════════════════════════════════
 const fmt = n => new Intl.NumberFormat('hu-HU').format(Math.round(n))+' Ft';
+// Számtagolás beviteli mezőkhöz: a megjelenítésnél szóközzel tagolja az ezreseket.
+// Használat: <input type="text" inputmode="numeric" oninput="formatNumberInput(this)">
+// A parser (parseNumberInput) levágja a szóközöket és visszaadja a numerikus értéket.
+function formatNumberInput(el){
+  const cursor = el.selectionStart;
+  const before = el.value;
+  // Csak számok és szóköz marad; bármi más kidobódik
+  const digits = before.replace(/[^\d]/g,'');
+  if(!digits){ el.value=''; return; }
+  const formatted = new Intl.NumberFormat('hu-HU').format(parseInt(digits,10));
+  el.value = formatted;
+  // Kurzort próbáljuk a megfelelő pozícióban tartani (a szóközök miatt a hossz változhat)
+  const diff = formatted.length - before.length;
+  try { el.setSelectionRange(cursor+diff, cursor+diff); } catch(e){}
+}
+function parseNumberInput(el){
+  if(!el) return 0;
+  const v = String(el.value).replace(/[^\d.-]/g,'');
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
 // fmtM most a PONTOS összeget adja (a korábbi rövidített "M Ft" helyett), hogy mindenhol a teljes szám látszódjon.
 const fmtM = n => fmt(n);
 // fmtMShort: rövidített "M Ft" formátum — CSAK a donut chart legendájához
@@ -2226,8 +2247,16 @@ function renderCash(){
 }
 
 function deleteCashTx(id){
-  data.cashTx=data.cashTx.filter(t=>t.id!==id);
+  if(!confirm('Biztosan törlöd ezt a tranzakciót? A kapcsolódó ledger-események is törlődnek.'))return;
+  // A cashTx.id a ledger esemény src-je. Egy manuális rögzítésnél több ledger esemény osztozik
+  // ugyanazon a ref-előtagon ('manual:<uid>'). Töröljük az összes hozzátartozót.
+  const ev = (data.ledger||[]).find(e=>e.src===id);
+  if(!ev) return toast('Nem található a ledgerben — nem törölhető');
+  const baseRef = (ev.ref||'').split(':').slice(0,2).join(':'); // 'manual:<uid>'
+  data.ledger = data.ledger.filter(e=>!(e.ref||'').startsWith(baseRef));
+  rebuildDerivedViews();
   renderCash(); renderDashboard(); renderTranzakciok();
+  saveData();
   toast('Törölve');
 }
 
@@ -2472,7 +2501,20 @@ function toggleExpand(rowId, clickedTr){
   details.forEach(r=>r.classList.toggle('open',!isOpen));
 }
 
-function deleteFixmap(id){data.fixmap=data.fixmap.filter(f=>f.id!==id);renderAllampapir();renderDashboard();toast('Törölve');}
+function deleteFixmap(id){
+  if(!confirm('Biztosan törlöd ezt a FixMáP tételt?'))return;
+  const f=data.fixmap.find(x=>x.id===id);
+  if(!f) return toast('Nem található');
+  const key=f.id.split(':')[1];
+  const buyEv=(data.ledger||[]).find(e=>e.asset==='FIXMAP:'+key && e.type==='buy' && e.date===f.date && Math.abs(e.qty-(f.originalFaceValue||f.faceValue))<1);
+  if(!buyEv) return toast('Ledger esemény nem található');
+  const baseRef=(buyEv.ref||'').split(':').slice(0,2).join(':');
+  data.ledger=data.ledger.filter(e=>!(e.ref||'').startsWith(baseRef));
+  rebuildDerivedViews();
+  renderAllampapir(); renderDashboard();
+  saveData();
+  toast('Törölve');
+}
 function deleteDKJ(id){data.dkj=data.dkj.filter(d=>d.id!==id);renderAllampapir();renderDashboard();toast('Törölve');}
 
 function expireDKJ(id){
@@ -2975,33 +3017,111 @@ function deleteLyCashTx(id) {
 function openLyBuyModal(ticker, accountId) {
   const acc=getLyAccount(accountId);
   const lp=ticker==='VWCE'?liveVwce:liveWbit;
+  const fx=liveFx||395;
   document.getElementById('modalTitle').textContent=ticker+' vétel – '+(acc?acc.name:'');
   document.getElementById('modalBody').innerHTML=`
     <input type="hidden" id="f-account-id" value="${accountId}">
     <div class="form-row">
       <div class="form-group"><div class="form-label">ETF</div>
-        <select class="form-select" id="f-ticker">
+        <select class="form-select" id="f-ticker" onchange="recalcETFModal()">
           <option value="VWCE" ${ticker==='VWCE'?'selected':''}>VWCE</option>
           <option value="WBIT" ${ticker==='WBIT'?'selected':''}>WBIT</option>
         </select>
       </div>
       <div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
     </div>
+    <div class="form-row full"><div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+        <input type="checkbox" id="f-deposit-first" style="margin:0" checked>
+        <span>HUF feltöltése a TBSZ-re a vételhez</span>
+      </label>
+    </div></div>
     <div class="form-row">
-      <div class="form-group"><div class="form-label">darabszám</div><input class="form-input" id="f-shares" type="number" step="0.0001" oninput="recalcETFModal()"></div>
-      <div class="form-group"><div class="form-label">árfolyam (EUR/db)</div><input class="form-input" id="f-price" type="number" step="0.0001" placeholder="${lp?lp.toFixed(2):'148.50'}" oninput="recalcETFModal()"></div>
+      <div class="form-group"><div class="form-label">befizetett összeg</div>
+        <input class="form-input" id="f-huf" type="text" inputmode="numeric" placeholder="40 000" oninput="formatNumberInput(this);onHufChange()">
+      </div>
+      <div class="form-group"><div class="form-label">HUF váltott</div>
+        <input class="form-input" id="f-huf-converted" type="text" inputmode="numeric" placeholder="39 999" oninput="formatNumberInput(this);recalcETFModal()">
+      </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><div class="form-label">össz. vételár (Ft)</div><input class="form-input" id="f-huf" type="number" oninput="recalcETFModalFromHuf()"></div>
-      <div class="form-group"><div class="form-label">díj (HUF)</div><input class="form-input" id="f-fee" type="number" value="0" oninput="recalcETFModal()"></div>
+      <div class="form-group"><div class="form-label">konverziós fee</div>
+        <div style="display:flex;gap:6px">
+          <input class="form-input" id="f-conv-fee" type="text" inputmode="numeric" value="0" oninput="formatNumberInput(this);recalcETFModal()" style="flex:1">
+          <select class="form-select" id="f-conv-fee-ccy" onchange="recalcETFModal()" style="width:auto;flex:0 0 70px">
+            <option value="HUF" selected>HUF</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><div class="form-label">váltott EUR</div>
+        <input class="form-input" id="f-eur-converted" type="number" step="0.01" placeholder="108.71" oninput="onEurConvertedChange()">
+      </div>
     </div>
-    <div style="background:var(--bg3);border-radius:7px;padding:10px;font-size:11px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between">
-      <span>EUR/HUF: <input id="f-fx" type="number" step="0.01" value="${Math.round(liveFx||395)}" oninput="recalcETFModal()" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;padding:0 2px"></span>
-      <span>Befektetett: <strong id="calcHuf" style="color:var(--text)">–</strong></span>
+    <div class="form-row full"><div class="form-group">
+      <div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:11px;color:var(--text2);display:flex;justify-content:space-between">
+        <span>EUR/HUF árfolyam (számolt): <strong id="fx-result" style="color:var(--text);font-family:var(--font-mono)">${fx.toFixed(2)}</strong></span>
+        <span>maradó HUF: <strong id="huf-remain" style="color:var(--text)">0 Ft</strong></span>
+      </div>
+    </div></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">ETF darabszám</div>
+        <input class="form-input" id="f-shares" type="number" step="0.0001" oninput="recalcETFModal()">
+      </div>
+      <div class="form-group"><div class="form-label">árfolyam (EUR/db)</div>
+        <input class="form-input" id="f-price" type="number" step="0.0001" placeholder="${lp?lp.toFixed(2):'148.50'}" oninput="recalcETFModal()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">vételi fee</div>
+        <div style="display:flex;gap:6px">
+          <input class="form-input" id="f-fee" type="number" step="0.01" value="0" oninput="recalcETFModal()" style="flex:1">
+          <select class="form-select" id="f-fee-ccy" onchange="recalcETFModal()" style="width:auto;flex:0 0 70px">
+            <option value="HUF">HUF</option>
+            <option value="EUR" selected>EUR</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><div class="form-label">EUR vételár (összesen)</div>
+        <input class="form-input" id="f-buy-eur-total" type="number" step="0.01" placeholder="108.66" oninput="onBuyEurTotalChange()">
+      </div>
     </div>
     <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
     <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitLyBuy()">mentés</button></div>`;
   document.getElementById('modalBackdrop').classList.add('open');
+  recalcETFModal();
+}
+
+// Ha a HUF befizetett változik és a HUF váltott még üres, automatikusan azzal töltjük fel.
+// Ha a HUF befizetett változik, csak újraszámolunk. A HUF váltott mezőt
+// nem írjuk át automatikusan (az korábbi verziójú behaviour bugolt).
+// Ha a HUF váltott üres, a recalc maga használja a HUF befizetett értékét.
+function onHufChange(){
+  recalcETFModal();
+}
+
+// Ha a felhasználó a "váltott EUR"-t szerkeszti, az árfolyam számolódik újra:
+// fx = (HUF váltott - konverziós fee HUF-ban) / EUR
+function onEurConvertedChange(){
+  recalcETFModal();
+}
+
+// Ha a felhasználó az EUR vételárat (összesen) szerkeszti, a price/db újraszámolódik:
+// price = (eur_total - fee_eur) / shares
+function onBuyEurTotalChange(){
+  const total=parseFloat(document.getElementById('f-buy-eur-total')?.value)||0;
+  const shares=parseFloat(document.getElementById('f-shares')?.value)||0;
+  const feeCcy=document.getElementById('f-fee-ccy')?.value||'EUR';
+  const feeRaw=parseFloat(document.getElementById('f-fee')?.value)||0;
+  // a fee-t EUR-ban kell kifejezni a price számoláshoz
+  const fxNum=parseFloat(document.getElementById('fx-result')?.textContent)||(liveFx||395);
+  const feeEur = feeCcy==='EUR' ? feeRaw : feeRaw/fxNum;
+  const priceEl=document.getElementById('f-price');
+  if(priceEl && shares>0 && total>0){
+    const newPrice=(total-feeEur)/shares;
+    priceEl.value=newPrice.toFixed(4);
+  }
+  recalcETFModal(true); // skip recalc of buy total since user just edited it
 }
 
 function submitLyBuy() {
@@ -3010,19 +3130,54 @@ function submitLyBuy() {
   const date=document.getElementById('f-date').value;
   const shares=parseFloat(document.getElementById('f-shares').value);
   const priceEur=parseFloat(document.getElementById('f-price').value);
-  const hufInput=parseFloat(document.getElementById('f-huf')?.value)||0;
-  const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
+  const hufPaid=parseNumberInput(document.getElementById('f-huf'));               // befizetett HUF (mehet a feltöltésbe)
+  let hufConverted=parseNumberInput(document.getElementById('f-huf-converted')); // ténylegesen átváltott HUF
+  if(!hufConverted) hufConverted = hufPaid;
+  const convFee=parseNumberInput(document.getElementById('f-conv-fee'));
+  const convFeeCcy=document.getElementById('f-conv-fee-ccy')?.value||'HUF';
+  const eurConverted=parseFloat(document.getElementById('f-eur-converted')?.value)||0;
+  const feeRaw=parseFloat(document.getElementById('f-fee')?.value)||0;
+  const feeCcy=document.getElementById('f-fee-ccy')?.value||'EUR';
+  const buyTotalEur=parseFloat(document.getElementById('f-buy-eur-total')?.value)||0;
+  const depositFirst=document.getElementById('f-deposit-first')?.checked;
   const note=document.getElementById('f-note').value;
-  if(!date||!shares||!priceEur) return toast('Töltsd ki a kötelező mezőket!');
-  const fxBase=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
-  const fxRate=hufInput&&shares&&priceEur?(hufInput-fee)/(shares*priceEur):fxBase;
-  if(!data.lyTx) data.lyTx=[];
-  data.lyTx.push({id:uid(),accountId,date,ticker,type:'buy',shares,priceEur,fxRate,fee,feeCurrency:'HUF',note});
+  if(!date||!shares||!priceEur||!hufConverted||!eurConverted) return toast('Töltsd ki a kötelező mezőket!');
+  const fx = eurConverted>0 ? hufConverted/eurConverted : 0;
+  // A fee EUR-ban a vételhez
+  const feeEur = feeCcy==='EUR' ? feeRaw : (fx>0 ? feeRaw/fx : 0);
+  const acc='ly:'+accountId;
+  const baseRef='manual:'+uid();
+  const baseNote=ticker+' vétel'+(note?' – '+note:'');
+
+  // 0. Ha pipa: HUF befizetés a befizetett összegnek megfelelően (a teljes hufPaid)
+  if(depositFirst && hufPaid>0){
+    const did=baseRef+':d';
+    data.ledger.push({ date, account:acc, type:'cash_in', asset:'HUF', qty:hufPaid, huf:hufPaid, subtype:'external_in', ref:did, src:did, note:'HUF feltöltés '+ticker+' vételhez' });
+  }
+
+  // 1. HUF konverzió-láb: CSAK a ténylegesen váltott HUF megy ki — a maradék (hufPaid-hufConverted) a számlán marad
+  const c1=baseRef+':conv-huf';
+  data.ledger.push({ date, account:acc, type:'cash_out', asset:'HUF', qty:hufConverted, huf:hufConverted, feeHuf:(convFeeCcy==='HUF'?convFee:0), subtype:'conversion', ref:c1, src:c1, note:'HUF→EUR konverzió' });
+
+  // 2. EUR konverzió-láb: a ténylegesen kapott EUR (eurConverted)
+  const c2=baseRef+':conv-eur';
+  data.ledger.push({ date, account:acc, type:'cash_in', asset:'EUR', qty:eurConverted, huf:hufConverted-(convFeeCcy==='HUF'?convFee:0), fx, feeEur:(convFeeCcy==='EUR'?convFee:0), subtype:'conversion', ref:c2, src:c2, note:'HUF→EUR konverzió' });
+
+  // 3. EUR kiáramlik a vételhez (a fee szerepe már ide be van számolva a buyTotalEur-ban)
+  const eurOut = buyTotalEur>0 ? buyTotalEur : (shares*priceEur + feeEur);
+  const c3=baseRef+':buy-pay';
+  data.ledger.push({ date, account:acc, type:'cash_out', asset:'EUR', qty:eurOut, fx, feeEur, subtype:'buy_pay', ref:c3, src:c3, note:baseNote });
+
+  // 4. ETF vétel: shares db az adott EUR áron
+  const c4=baseRef+':buy-asset';
+  data.ledger.push({ date, account:acc, type:'buy', asset:ticker, qty:shares, priceEur, fx, feeEur, subtype:'buy_asset', ref:c4, src:c4, note:baseNote });
+
+  rebuildDerivedViews();
   closeModal();
   renderLyAccount(accountId);
   renderDashboard();
   saveData();
-  toast(ticker+' vétel rögzítve');
+  toast(ticker+' vétel rögzítve'+(depositFirst?' (feltöltéssel együtt)':''));
 }
 
 function openLySellModal(ticker, accountId) {
@@ -3309,45 +3464,49 @@ function renderTranzakciok(){
 }
 
 function deleteTx(kind, id){
-  if(!confirm('Biztosan törlöd ezt a tranzakciót? A kapcsolódó pozíció is visszaáll.'))return;
+  if(!confirm('Biztosan törlöd ezt a tranzakciót? A kapcsolódó események is törlődnek.'))return;
+  // A ledger-szintű csoportos törlés a ref-előtag alapján. Minden manuális rögzítés
+  // 'manual:<uid>' előtagú ref-et használ. Az import-ból származó események ref-je
+  // 'mk:<txId>' (kincstár) vagy 'ly:<rowId>' (Lightyear) — ezek is a ref alapján csoportosíthatók.
+  let baseRef=null;
 
   if(kind==='cash'){
-    // Just remove the cash transaction
-    data.cashTx=data.cashTx.filter(t=>t.id!==id);
+    const ev=(data.ledger||[]).find(e=>e.src===id);
+    if(!ev) return toast('Nem található a ledgerben');
+    baseRef=(ev.ref||'').split(':').slice(0,2).join(':');
   }
   else if(kind==='fixmap'){
-    const f=data.fixmap.find(f=>f.id===id);
-    if(!f)return;
-    // Remove linked cash buy transaction (same date, amount = faceValue, note = FixMáP vétel)
-    const cashIdx=data.cashTx.findIndex(t=>t.type==='buy'&&t.amount===f.faceValue&&t.note==='FixMáP vétel'&&t.date===f.date);
-    if(cashIdx>=0)data.cashTx.splice(cashIdx,1);
-    // If was sold (inactive), also remove the sell cash tx
-    if(!f.active){
-      const sellIdx=data.cashTx.findIndex(t=>t.type==='sell'&&t.note&&t.note.includes('FixMáP eladás'));
-      if(sellIdx>=0)data.cashTx.splice(sellIdx,1);
-    }
-    data.fixmap=data.fixmap.filter(f=>f.id!==id);
+    // A data.fixmap[].id 'fm:<key>:<idx>' formátumú — a key és date alapján visszakeressük a ledger vételt
+    const f=data.fixmap.find(x=>x.id===id);
+    if(!f) return toast('Nem található');
+    const key=f.id.split(':')[1];
+    const buyEv=(data.ledger||[]).find(e=>e.asset==='FIXMAP:'+key && e.type==='buy' && e.date===f.date && Math.abs(e.qty-(f.originalFaceValue||f.faceValue))<1);
+    if(!buyEv) return toast('Ledger esemény nem található');
+    baseRef=(buyEv.ref||'').split(':').slice(0,2).join(':');
   }
   else if(kind==='dkj'){
-    const d=data.dkj.find(d=>d.id===id);
-    if(!d)return;
-    // Remove linked cash buy tx
-    const cashIdx=data.cashTx.findIndex(t=>t.type==='buy'&&t.amount===d.buyPrice&&t.note==='DKJ vétel'&&t.date===d.date);
-    if(cashIdx>=0)data.cashTx.splice(cashIdx,1);
-    // If expired/sold, remove linked cash tx
-    if(!d.active){
-      const seriesName='DKJ'+(!d.active?'':'')+' lejárat D'+d.maturity.replace(/-/g,'').slice(2);
-      const expIdx=data.cashTx.findIndex(t=>['expire','sell'].includes(t.type)&&t.note&&t.note.includes('D'+d.maturity.replace(/-/g,'').slice(2)));
-      if(expIdx>=0)data.cashTx.splice(expIdx,1);
-    }
-    data.dkj=data.dkj.filter(d=>d.id!==id);
+    const d=data.dkj.find(x=>x.id===id);
+    if(!d) return toast('Nem található');
+    const matKey=d.maturity.replace(/-/g,'').slice(2);
+    const buyEv=(data.ledger||[]).find(e=>e.asset==='DKJ:'+matKey && e.type==='buy' && e.date===d.date && Math.abs(e.qty-(d.originalFaceValue||d.faceValue))<1);
+    if(!buyEv) return toast('Ledger esemény nem található');
+    baseRef=(buyEv.ref||'').split(':').slice(0,2).join(':');
   }
   else if(kind==='etf'){
+    // Lightyear ETF vétel — a régi lyTx formátum már nem használt; ha mégis maradt, csak abból töröljük
     data.lyTx=(data.lyTx||[]).filter(t=>t.id!==id);
+    renderAll(); saveData(); toast('Tranzakció törölve');
+    return;
   }
 
+  if(!baseRef) return toast('Nem sikerült azonosítani a ref-csoportot');
+  const before=data.ledger.length;
+  data.ledger = data.ledger.filter(e=>!(e.ref||'').startsWith(baseRef));
+  const removed=before-data.ledger.length;
+  rebuildDerivedViews();
   renderAll();
-  toast('Tranzakció törölve');
+  saveData();
+  toast('Tranzakció törölve ('+removed+' ledger-esemény)');
 }
 
 // ═══════════════════════════════════════════════
@@ -3435,6 +3594,9 @@ function openModal(type, param, param2){
       <div class="form-row"><div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
       <div class="form-group"><div class="form-label">összeg (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="1000000"></div></div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="pl. munkabér"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label" style="color:var(--text3)">kincstári tranzakció ID (opcionális)</div>
+        <input class="form-input" id="f-tx-id" type="text" placeholder="ha kitöltöd, a későbbi import nem duplikálja">
+      </div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDeposit()">mentés</button></div>`;
   }
   else if(type==='edit-fi-goal'){
@@ -3476,6 +3638,9 @@ function openModal(type, param, param2){
       <div class="form-row"><div class="form-group"><div class="form-label">dátum</div><input class="form-input" id="f-date" type="date" value="${today()}"></div>
       <div class="form-group"><div class="form-label">összeg (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="500000"></div></div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label" style="color:var(--text3)">kincstári tranzakció ID (opcionális)</div>
+        <input class="form-input" id="f-tx-id" type="text" placeholder="ha kitöltöd, a későbbi import nem duplikálja">
+      </div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitWithdraw()">mentés</button></div>`;
   }
   else if(type==='coupon'){    title.textContent='Kamatfizetés';
@@ -3488,6 +3653,9 @@ function openModal(type, param, param2){
       </div></div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div>
         <input class="form-input" id="f-note" placeholder="pl. FixMáP 2031/I kamat">
+      </div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label" style="color:var(--text3)">kincstári tranzakció ID (opcionális)</div>
+        <input class="form-input" id="f-tx-id" type="text" placeholder="ha kitöltöd, a későbbi import nem duplikálja">
       </div></div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:10px;background:var(--bg3);border-radius:7px;font-size:12px">
         <input type="checkbox" id="f-withdraw" style="width:14px;height:14px;accent-color:var(--green);cursor:pointer">
@@ -3535,6 +3703,9 @@ function openModal(type, param, param2){
       <div class="form-group"><div class="form-label">névérték (Ft)</div><input class="form-input" id="f-face" type="number" placeholder="1000000" oninput="updateFixmapBuyCalc()"></div></div>
       <div class="form-row"><div class="form-group"><div class="form-label">vételi árfolyam (%)</div><input class="form-input" id="f-rate-pct" type="number" step="0.01" placeholder="100.00" value="100" oninput="updateFixmapBuyCalc()"></div>
       <div class="form-group"><div class="form-label">tényleges vételár</div><div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px" id="fixmap-buy-preview">–</div></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label" style="color:var(--text3)">kincstári tranzakció ID (opcionális)</div>
+        <input class="form-input" id="f-tx-id" type="text" placeholder="ha kitöltöd, a későbbi import nem duplikálja">
+      </div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmap()">mentés</button></div>`;
     if(data.fixmapSeries.length>0) updateFixmapBuyInfo(data.fixmapSeries[0].id);
   }
@@ -3586,27 +3757,31 @@ function openModal(type, param, param2){
           ${dkjSeriesOpts||'<option value="">– nincs sorozat –</option>'}
         </select>
       </div></div>
-      <div class="form-row"><div class="form-group"><div class="form-label">vétel dátuma</div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">vétel dátuma</div>
         <input class="form-input" id="f-date" type="date" value="${today()}">
-      </div>
-      <div class="form-group"><div class="form-label">névérték (Ft)</div>
-        <input class="form-input" id="f-face" type="number" placeholder="120000">
+      </div></div>
+      <div class="form-row full"><div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+          <input type="checkbox" id="f-deposit-first" style="margin:0" checked>
+          <span>Pénzszámla feltöltése a vételárral (először befizetés, utána vétel)</span>
+        </label>
       </div></div>
       <div class="form-row"><div class="form-group"><div class="form-label">vétel ár (Ft)</div>
-        <input class="form-input" id="f-buy" type="number" placeholder="115865">
+        <input class="form-input" id="f-buy" type="text" inputmode="numeric" placeholder="115 865" oninput="formatNumberInput(this);estimateDkjFace()">
       </div>
-      <div class="form-group"><div class="form-label">várható hozam</div>
+      <div class="form-group"><div class="form-label">névérték (Ft)</div>
+        <input class="form-input" id="f-face" type="text" inputmode="numeric" placeholder="120 000" oninput="formatNumberInput(this);updateDkjYield()">
+      </div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label">várható hozam</div>
         <div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px" id="dkj-buy-yield">–</div>
       </div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label" style="color:var(--text3)">kincstári tranzakció ID (opcionális)</div>
+        <input class="form-input" id="f-tx-id" type="text" placeholder="ha kitöltöd, a későbbi import nem duplikálja">
+      </div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDKJ()">mentés</button></div>`;
-    ['f-face','f-buy'].forEach(id=>{
-      document.getElementById(id)?.addEventListener('input',()=>{
-        const face=parseFloat(document.getElementById('f-face')?.value)||0;
-        const buy=parseFloat(document.getElementById('f-buy')?.value)||0;
-        const el=document.getElementById('dkj-buy-yield');
-        if(el&&face&&buy)el.textContent='+'+fmt(Math.round(face-buy))+' ('+(((face-buy)/buy)*100).toFixed(2)+'%)';
-      });
-    });
+    // A sorozat / dátum változásakor is újraszámolja a becslést
+    document.getElementById('f-dkj-series')?.addEventListener('change',estimateDkjFace);
+    document.getElementById('f-date')?.addEventListener('change',estimateDkjFace);
   }
   else if(type==='buy-etf'){
     const livePrice=param==='WBIT'?liveWbit:liveVwce;
@@ -3683,6 +3858,9 @@ function openModal(type, param, param2){
       <div class="form-row"><div class="form-group"><div class="form-label">eladási ár (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="piaci ár" oninput="updateFixmapSellCalc()"></div>
       <div class="form-group"><div class="form-label">nyereség / veszteség</div><div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px" id="fixmap-pl-preview">–</div></div></div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label" style="color:var(--text3)">kincstári tranzakció ID (opcionális)</div>
+        <input class="form-input" id="f-tx-id" type="text" placeholder="ha kitöltöd, a későbbi import nem duplikálja">
+      </div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitFixmapSeriesSell()">mentés</button></div>`;
   }
   else if(type==='sell-dkj-series'){
@@ -3710,11 +3888,23 @@ function openModal(type, param, param2){
       <div class="form-row"><div class="form-group"><div class="form-label">eladási ár (Ft)</div><input class="form-input" id="f-amount" type="number" placeholder="piaci ár" oninput="updateDKJSellCalc()"></div>
       <div class="form-group"><div class="form-label">várható hozam / veszteség</div><div style="padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px" id="dkj-pl-preview">–</div></div></div>
       <div class="form-row full"><div class="form-group"><div class="form-label">megjegyzés</div><input class="form-input" id="f-note" placeholder="opcionális"></div></div>
+      <div class="form-row full"><div class="form-group"><div class="form-label" style="color:var(--text3)">kincstári tranzakció ID (opcionális)</div>
+        <input class="form-input" id="f-tx-id" type="text" placeholder="ha kitöltöd, a későbbi import nem duplikálja">
+      </div></div>
       <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">mégse</button><button class="btn btn-primary" onclick="submitDKJSeriesSell()">mentés</button></div>`;
   }
 }
 
 function closeModal(){document.getElementById('modalBackdrop').classList.remove('open');}
+// Csak akkor zárja be a modalt, ha a kattintás KEZDETE ÉS VÉGE is a backdropon volt.
+// Így a szövegkijelölés (mousedown az inputon, mouseup a backdropon) nem zárja be véletlenül.
+let _modalDownTarget=null;
+function modalMouseDown(e){ _modalDownTarget = e.target; }
+function modalMouseUp(e){
+  const backdrop = document.getElementById('modalBackdrop');
+  if(e.target===backdrop && _modalDownTarget===backdrop) closeModal();
+  _modalDownTarget=null;
+}
 function closeModalOutside(e){if(e.target===document.getElementById('modalBackdrop'))closeModal();}
 
 function submitCoupon(){
@@ -3722,10 +3912,12 @@ function submitCoupon(){
   const amount=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
   const withdraw=document.getElementById('f-withdraw')?.checked;
+  const txId=document.getElementById('f-tx-id')?.value?.trim();
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
+  if(txId && (data.ledger||[]).some(e=>e.ref===txId)) return toast('Ez a tranzakció ID már szerepel a ledgerben');
   // Kamat a ledgerbe: cash_in HUF subtype:'coupon'
-  const cid=uid();
-  data.ledger.push({ date, account:'kincstar', type:'cash_in', asset:'HUF', qty:amount, huf:amount, subtype:'coupon', ref:'manual:'+cid, src:'manual:'+cid, note:note||'Kamatfizetés' });
+  const ref = txId || ('manual:'+uid());
+  data.ledger.push({ date, account:'kincstar', type:'cash_in', asset:'HUF', qty:amount, huf:amount, subtype:'coupon', ref, src:(txId?'mk:'+txId:ref), note:note||'Kamatfizetés' });
   if(withdraw){
     const wid=uid();
     data.ledger.push({ date, account:'kincstar', type:'cash_out', asset:'HUF', qty:amount, huf:amount, subtype:'external_out', ref:'manual:'+wid, src:'manual:'+wid, note:(note||'Kamatfizetés')+' – kiutalás' });
@@ -3748,11 +3940,13 @@ function submitDeposit(){
   const date=document.getElementById('f-date').value;
   const amount=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
+  const txId=document.getElementById('f-tx-id')?.value?.trim();
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
+  if(txId && (data.ledger||[]).some(e=>e.ref===txId)) return toast('Ez a tranzakció ID már szerepel a ledgerben');
   // FONTOS: a ledgerbe írunk (single source of truth), nem a derived view-ba — máskülönben
   // a rebuildDerivedViews törölné. A subtype:'external_in' jelzi: külső pénzbeáramlás.
-  const id=uid();
-  data.ledger.push({ date, account:'kincstar', type:'cash_in', asset:'HUF', qty:amount, huf:amount, subtype:'external_in', ref:'manual:'+id, src:'manual:'+id, note:note||'Befizetés' });
+  const ref = txId || ('manual:'+uid());
+  data.ledger.push({ date, account:'kincstar', type:'cash_in', asset:'HUF', qty:amount, huf:amount, subtype:'external_in', ref, src:(txId?'mk:'+txId:ref), note:note||'Befizetés' });
   rebuildDerivedViews();
   closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); saveData(); toast('Befizetés rögzítve');
 }
@@ -3760,9 +3954,11 @@ function submitWithdraw(){
   const date=document.getElementById('f-date').value;
   const amount=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
+  const txId=document.getElementById('f-tx-id')?.value?.trim();
   if(!date||!amount)return toast('Töltsd ki a kötelező mezőket!');
-  const id=uid();
-  data.ledger.push({ date, account:'kincstar', type:'cash_out', asset:'HUF', qty:amount, huf:amount, subtype:'external_out', ref:'manual:'+id, src:'manual:'+id, note:note||'Kiutalás' });
+  if(txId && (data.ledger||[]).some(e=>e.ref===txId)) return toast('Ez a tranzakció ID már szerepel a ledgerben');
+  const ref = txId || ('manual:'+uid());
+  data.ledger.push({ date, account:'kincstar', type:'cash_out', asset:'HUF', qty:amount, huf:amount, subtype:'external_out', ref, src:(txId?'mk:'+txId:ref), note:note||'Kiutalás' });
   rebuildDerivedViews();
   closeModal(); renderCash(); renderDashboard(); renderTranzakciok(); saveData(); toast('Kiutalás rögzítve');
 }
@@ -3984,12 +4180,13 @@ function submitFixmapSeriesSell(){
   const faceSell=parseFloat(document.getElementById('f-face-sell')?.value)||0;
   const sellPrice=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
+  const txId=document.getElementById('f-tx-id')?.value?.trim();
   if(!sid||!date||!faceSell||!sellPrice)return toast('Töltsd ki a kötelező mezőket!');
+  if(txId && (data.ledger||[]).some(e=>e.ref===txId)) return toast('Ez a tranzakció ID már szerepel a ledgerben');
   const sr=data.fixmapSeries.find(x=>x.id===sid);
   const key=sr?.key||sid;
-  // Ledger eseménypár: cash_in (pénz beérkezik) + sell (állampapír kikerül)
-  const id=uid();
-  const base={ date, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'FixMáP eladás'+(sr?' '+sr.name:'')+(note?' – '+note:'') };
+  const ref = txId || ('manual:'+uid());
+  const base={ date, account:'kincstar', ref, src:(txId?'mk:'+txId:ref), note:'FixMáP eladás'+(sr?' '+sr.name:'')+(note?' – '+note:'') };
   data.ledger.push({ ...base, type:'cash_in', asset:'HUF', qty:sellPrice, huf:sellPrice, subtype:'sell_proceed' });
   data.ledger.push({ ...base, type:'sell', asset:'FIXMAP:'+key, qty:faceSell, huf:sellPrice, subtype:'sell_asset' });
   rebuildDerivedViews();
@@ -4002,6 +4199,7 @@ function submitFixmap(){
   const faceValue=parseFloat(document.getElementById('f-face')?.value);
   const ratePctRaw=document.getElementById('f-rate-pct')?.value;
   const ratePct=ratePctRaw?parseFloat(ratePctRaw):100;
+  const txId=document.getElementById('f-tx-id')?.value?.trim();
 
   if(!sid||sid===''||!date||isNaN(faceValue)||faceValue<=0)
     return toast('Töltsd ki az összes kötelező mezőt!');
@@ -4009,6 +4207,7 @@ function submitFixmap(){
     return toast('Adj meg érvényes vételi árfolyamot!');
   if(data.fixmapSeries.length===0)
     return toast('Először hozz létre sorozatot!');
+  if(txId && (data.ledger||[]).some(e=>e.ref===txId)) return toast('Ez a tranzakció ID már szerepel a ledgerben');
 
   const buyPrice=Math.round(faceValue*ratePct/100);
   if(isNaN(buyPrice)||buyPrice<=0)
@@ -4020,8 +4219,8 @@ function submitFixmap(){
 
   const sr=data.fixmapSeries.find(x=>x.id===sid);
   const key=sr?.key||sid;
-  const id=uid();
-  const base={ date, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'FixMáP vétel'+(sr?' '+sr.name:'') };
+  const ref = txId || ('manual:'+uid());
+  const base={ date, account:'kincstar', ref, src:(txId?'mk:'+txId:ref), note:'FixMáP vétel'+(sr?' '+sr.name:'') };
   data.ledger.push({ ...base, type:'cash_out', asset:'HUF', qty:buyPrice, huf:buyPrice, subtype:'buy_pay' });
   data.ledger.push({ ...base, type:'buy', asset:'FIXMAP:'+key, qty:faceValue, huf:buyPrice, subtype:'buy_asset' });
   rebuildDerivedViews();
@@ -4061,10 +4260,12 @@ function submitDKJSeriesSell(){
   const faceSell=parseFloat(document.getElementById('f-face-sell')?.value)||0;
   const sellPrice=parseFloat(document.getElementById('f-amount').value);
   const note=document.getElementById('f-note').value;
+  const txId=document.getElementById('f-tx-id')?.value?.trim();
   if(!maturity||!date||!faceSell||!sellPrice)return toast('Töltsd ki a kötelező mezőket!');
+  if(txId && (data.ledger||[]).some(e=>e.ref===txId)) return toast('Ez a tranzakció ID már szerepel a ledgerben');
   const matKey=maturity.replace(/-/g,'').slice(2);
-  const id=uid();
-  const base={ date, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'DKJ eladás D'+matKey+(note?' – '+note:'') };
+  const ref = txId || ('manual:'+uid());
+  const base={ date, account:'kincstar', ref, src:(txId?'mk:'+txId:ref), note:'DKJ eladás D'+matKey+(note?' – '+note:'') };
   data.ledger.push({ ...base, type:'cash_in', asset:'HUF', qty:sellPrice, huf:sellPrice, subtype:'sell_proceed' });
   data.ledger.push({ ...base, type:'sell', asset:'DKJ:'+matKey, qty:faceSell, huf:sellPrice, subtype:'sell_asset' });
   rebuildDerivedViews();
@@ -4149,25 +4350,83 @@ function saveEditDKJSeries(id){
   closeModal(); renderAll(); saveData(); toast('Sorozat mentve');
 }
 
+// DKJ névérték becslése: vételár + ~5.5% évesített hozam a hátralévő futamidőre,
+// 10 000 Ft-ra (alapcímlet) kerekítve. A felhasználó felülírhatja.
+function estimateDkjFace(){
+  const sid=document.getElementById('f-dkj-series')?.value;
+  const date=document.getElementById('f-date')?.value;
+  const buy=parseNumberInput(document.getElementById('f-buy'));
+  const faceEl=document.getElementById('f-face');
+  if(!sid||!date||!buy||!faceEl) return;
+  const ds=data.dkjSeries.find(x=>x.id===sid);
+  if(!ds||!ds.maturity) return;
+  const days=Math.max(1,Math.round((new Date(ds.maturity)-new Date(date))/(1000*60*60*24)));
+  const ANNUAL_YIELD = 0.055; // 5.5% — DKJ tipikus tartomány közepe
+  const raw = buy * (1 + ANNUAL_YIELD*days/365);
+  // 10 000-re kerekítjük (alapcímlet)
+  const estimated = Math.round(raw/10000)*10000;
+  faceEl.value = new Intl.NumberFormat('hu-HU').format(estimated);
+  updateDkjYield();
+}
+
+function updateDkjYield(){
+  const face=parseNumberInput(document.getElementById('f-face'));
+  const buy=parseNumberInput(document.getElementById('f-buy'));
+  const el=document.getElementById('dkj-buy-yield');
+  if(!el) return;
+  if(face&&buy){
+    const sid=document.getElementById('f-dkj-series')?.value;
+    const date=document.getElementById('f-date')?.value;
+    const ds=data.dkjSeries.find(x=>x.id===sid);
+    let annualText='';
+    if(ds&&ds.maturity&&date){
+      const days=Math.max(1,Math.round((new Date(ds.maturity)-new Date(date))/(1000*60*60*24)));
+      const annual=(face/buy-1)*(365/days)*100;
+      annualText=' • '+annual.toFixed(2)+'%/év';
+    }
+    el.textContent='+'+fmt(Math.round(face-buy))+' ('+(((face-buy)/buy)*100).toFixed(2)+'%)'+annualText;
+  } else {
+    el.textContent='–';
+  }
+}
+
 function submitDKJ(){
   const sid=document.getElementById('f-dkj-series')?.value;
   const date=document.getElementById('f-date').value;
-  const faceValue=parseFloat(document.getElementById('f-face').value);
-  const buyPrice=parseFloat(document.getElementById('f-buy').value)||faceValue;
+  const faceValue=parseNumberInput(document.getElementById('f-face'));
+  const buyPriceInput=parseNumberInput(document.getElementById('f-buy'));
+  const buyPrice=buyPriceInput||faceValue;
+  const depositFirst=document.getElementById('f-deposit-first')?.checked;
+  const txId=document.getElementById('f-tx-id')?.value?.trim();
   if(!sid||!date||!faceValue)return toast('Töltsd ki a kötelező mezőket!');
   if(data.dkjSeries.length===0)return toast('Először hozz létre sorozatot!');
   const ds=data.dkjSeries.find(x=>x.id===sid);
   if(!ds)return toast('Érvénytelen sorozat!');
-  const bal=cashBalance();
-  if(Math.round(bal)<Math.round(buyPrice))return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
-  // DKJ asset key = maturity YYMMDD (YYYY-MM-DD → YYMMDD)
+  // Ha kapott txId, ellenőrizzük hogy nincs-e már a ledgerben
+  if(txId && (data.ledger||[]).some(e=>e.ref===txId)){
+    return toast('Ez a tranzakció ID már szerepel a ledgerben');
+  }
+  // Egyenleg-ellenőrzés CSAK akkor ha NEM töltjük fel a számlát a vétellel
+  if(!depositFirst){
+    const bal=cashBalance();
+    if(Math.round(bal)<Math.round(buyPrice))return toast('Nincs elég egyenleg! Szükséges: '+fmt(buyPrice)+', jelenlegi: '+fmt(bal));
+  }
   const matKey=ds.maturity.replace(/-/g,'').slice(2);
-  const id=uid();
-  const base={ date, account:'kincstar', ref:'manual:'+id, src:'manual:'+id, note:'DKJ vétel – '+ds.name };
+  // Ha van txId, azt használjuk ref-ként (egyezni fog a későbbi importtal → dup-szűrés).
+  // A feltöltés (külön ledger esemény) viszont mindig 'manual:' prefix-szel megy, mert annak
+  // nincs kincstári tranzakciója (ez egy "fiktív" rögzítés a kényelem kedvéért).
+  const ref = txId || ('manual:'+uid());
+  // Ha a pipa be van pipálva: először befizetés a vételárral, utána vétel
+  if(depositFirst){
+    const did=uid();
+    data.ledger.push({ date, account:'kincstar', type:'cash_in', asset:'HUF', qty:buyPrice, huf:buyPrice, subtype:'external_in', ref:'manual:'+did, src:'manual:'+did, note:'DKJ vételhez feltöltés – '+ds.name });
+  }
+  const base={ date, account:'kincstar', ref, src:'mk:'+ref, note:'DKJ vétel – '+ds.name };
   data.ledger.push({ ...base, type:'cash_out', asset:'HUF', qty:buyPrice, huf:buyPrice, subtype:'buy_pay' });
   data.ledger.push({ ...base, type:'buy', asset:'DKJ:'+matKey, qty:faceValue, huf:buyPrice, subtype:'buy_asset' });
   rebuildDerivedViews();
-  closeModal(); renderAll(); saveData(); toast('DKJ vétel rögzítve');
+  closeModal(); renderAll(); saveData();
+  toast(depositFirst?'Befizetés + DKJ vétel rögzítve':'DKJ vétel rögzítve');
 }
 function onFeeChange(isEdit){
   const prefix=isEdit?'e':'f';
@@ -4179,45 +4438,47 @@ function onFeeChange(isEdit){
   }
 }
 
-function recalcETFModal(){
-  const s=parseFloat(document.getElementById('f-shares')?.value)||0;
-  const p=parseFloat(document.getElementById('f-price')?.value)||0;
-  const fx=parseFloat(document.getElementById('f-fx')?.value)||(liveFx||395);
-  const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
-  const hufEl=document.getElementById('f-huf');
-  const hufManual=parseFloat(hufEl?.value)||0;
-  const calcEl=document.getElementById('calcHuf');
-  const fxRealEl=document.getElementById('calcFxReal');
-  if(s&&p&&fx){
-    // Teljes kifizetés = ETF ár + díj
-    const totalHuf=Math.round(s*p*fx)+fee;
-    // Ha nincs kézzel megadott összeg, frissítjük
-    if(!hufManual&&hufEl)hufEl.value=totalHuf;
-    if(calcEl)calcEl.textContent=fmt(hufManual||totalHuf);
-    // Tényleges fx = (kézzel megadott - díj) / (db × EUR), vagy alap fx
-    const fxReal=hufManual?((hufManual-fee)/(s*p)):fx;
-    if(fxRealEl)fxRealEl.textContent=fxReal.toFixed(2);
-  } else {
-    if(calcEl)calcEl.textContent='–';
-    if(fxRealEl)fxRealEl.textContent='–';
+function recalcETFModal(skipBuyTotalUpdate){
+  const hufPaid=parseNumberInput(document.getElementById('f-huf'));
+  let hufConverted=parseNumberInput(document.getElementById('f-huf-converted'));
+  // Ha a "váltott" mező üres, használjuk a "befizetett" összeget (alapeset)
+  if(!hufConverted) hufConverted = hufPaid;
+  const convFee=parseNumberInput(document.getElementById('f-conv-fee'));
+  const convFeeCcy=document.getElementById('f-conv-fee-ccy')?.value||'HUF';
+  const eurConverted=parseFloat(document.getElementById('f-eur-converted')?.value)||0;
+  const shares=parseFloat(document.getElementById('f-shares')?.value)||0;
+  const price=parseFloat(document.getElementById('f-price')?.value)||0;
+  const feeRaw=parseFloat(document.getElementById('f-fee')?.value)||0;
+  const feeCcy=document.getElementById('f-fee-ccy')?.value||'EUR';
+
+  // Az árfolyam: fx = HUF váltott / EUR váltott  (a fee NEM része az árfolyamnak,
+  // az egy külön bankdíj — az árfolyam tisztán a két devizamozgás aránya)
+  let fx=0;
+  if(hufConverted>0 && eurConverted>0){
+    fx = hufConverted / eurConverted;
+  }
+  const fxEl=document.getElementById('fx-result');
+  if(fxEl) fxEl.textContent = fx>0 ? fx.toFixed(2) : '–';
+
+  // Maradó HUF: befizetett - váltott (a maradék a számlán marad)
+  const remain = Math.max(0, hufPaid - hufConverted);
+  const remainEl=document.getElementById('huf-remain');
+  if(remainEl) remainEl.textContent = fmt(remain);
+
+  // Vétel EUR összege: shares × price + feeEur (a fee EUR-osítva)
+  const feeEur = feeCcy==='EUR' ? feeRaw : (fx>0 ? feeRaw/fx : 0);
+  const buyTotal = shares*price + feeEur;
+  // Ha NEM a felhasználó éppen szerkesztette a buy-total mezőt, akkor frissítjük
+  if(!skipBuyTotalUpdate){
+    const btEl=document.getElementById('f-buy-eur-total');
+    if(btEl && !btEl.matches(':focus') && buyTotal>0){
+      btEl.value = buyTotal.toFixed(2);
+    }
   }
 }
 
 function recalcETFModalFromHuf(){
-  const s=parseFloat(document.getElementById('f-shares')?.value)||0;
-  const p=parseFloat(document.getElementById('f-price')?.value)||0;
-  const huf=parseFloat(document.getElementById('f-huf')?.value)||0;
-  const fee=parseFloat(document.getElementById('f-fee')?.value)||0;
-  const fxEl=document.getElementById('f-fx');
-  const calcEl=document.getElementById('calcHuf');
-  const fxRealEl=document.getElementById('calcFxReal');
-  if(huf&&s&&p){
-    const fxReal=(huf-fee)/(s*p); // tényleges fx díj nélkül
-    const fxBase=(huf-fee)/(s*p); // alap fx díj nélkül
-    if(fxEl&&!fxEl.matches(':focus'))fxEl.value=fxBase.toFixed(2);
-    if(fxRealEl)fxRealEl.textContent=fxReal.toFixed(2);
-  }
-  if(calcEl&&huf)calcEl.textContent=fmt(Math.round(huf));
+  recalcETFModal();
 }
 
 function submitETFBuy(ticker){
