@@ -1049,15 +1049,24 @@ function ledgerRealizedPL(){
   (data.ledger||[]).forEach(e=>{ if(e.subtype==='coupon') coupons += (e.huf ?? e.qty); });
 
   let salesPL = 0;
-  const sellAssets = [...new Set((data.ledger||[]).filter(e=>e.type==='sell').map(e=>e.asset))];
-  sellAssets.forEach(asset=>{
+  // FIFO SZÁMLÁNKÉNT külön — különben a TBSZ átsorolások (régi → új TBSZ számla átvezetése)
+  // hibásan jelentenek meg eladásként a közös pool-ban, és óriási hamis profit/veszteség jön ki.
+  // Az ETF-átsorolás (sell+buy ugyanazon a napon, azonos qty, eltérő számlán) így egy adott
+  // számlán önmagában 0 nettó P&L-t ad, mert ott külön történik a sell és külön a buy.
+  const sellEvents = (data.ledger||[]).filter(e=>e.type==='sell');
+  // Csoportosítás: (asset, account) pár
+  const groups = {};
+  sellEvents.forEach(e=>{
+    const key = (e.account||'')+'|'+e.asset;
+    if(!groups[key]) groups[key] = { asset:e.asset, account:e.account };
+  });
+  Object.values(groups).forEach(g=>{
+    const asset = g.asset, account = g.account;
     const isEtf = (asset==='VWCE'||asset==='WBIT');
-    const events = (data.ledger||[]).filter(e=>e.asset===asset && (e.type==='buy'||e.type==='sell'))
+    const events = (data.ledger||[]).filter(e=>e.account===account && e.asset===asset && (e.type==='buy'||e.type==='sell'))
       .sort((a,b)=>a.date.localeCompare(b.date));
     const lots = []; // FIFO: {qty, unit}  (ETF: unit EUR/db, állampapír: unit HUF/névérték)
     events.forEach(e=>{
-      // ETF-nél EUR-ban számolunk (az eladás Sell sorának nincs fx-e, a vételé igen → fx-keveredés elkerülése).
-      // Állampapírnál HUF-ban (eleve HUF).
       const total = isEtf ? (e.eur||0) : (e.huf||0);
       const unit = e.qty>0 ? total/e.qty : 0;
       if(e.type==='buy'){
@@ -1073,7 +1082,6 @@ function ledgerRealizedPL(){
         }
         const proceeds = total;
         const plRaw = proceeds - costBasis; // ETF: EUR, állampapír: HUF
-        // ETF P&L EUR→HUF az eladáskori árfolyammal (a hozzá tartozó conversion fx, vagy fallback)
         const plHuf = isEtf ? plRaw * etfSellFx(e) : plRaw;
         salesPL += plHuf;
       }
