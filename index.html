@@ -1051,8 +1051,6 @@ function ledgerRealizedPL(){
   let salesPL = 0;
   // FIFO SZÁMLÁNKÉNT külön — különben a TBSZ átsorolások (régi → új TBSZ számla átvezetése)
   // hibásan jelentenek meg eladásként a közös pool-ban, és óriási hamis profit/veszteség jön ki.
-  // Az ETF-átsorolás (sell+buy ugyanazon a napon, azonos qty, eltérő számlán) így egy adott
-  // számlán önmagában 0 nettó P&L-t ad, mert ott külön történik a sell és külön a buy.
   const sellEvents = (data.ledger||[]).filter(e=>e.type==='sell');
   // Csoportosítás: (asset, account) pár
   const groups = {};
@@ -1064,14 +1062,34 @@ function ledgerRealizedPL(){
     const asset = g.asset, account = g.account;
     const isEtf = (asset==='VWCE'||asset==='WBIT');
     const events = (data.ledger||[]).filter(e=>e.account===account && e.asset===asset && (e.type==='buy'||e.type==='sell'))
-      .sort((a,b)=>a.date.localeCompare(b.date));
+      .sort((a,b)=>{
+        // FONTOS: azonos dátumon a BUY-t soroljuk előre, hogy a FIFO-pool már fel legyen töltve
+        // mire a sell jön. Különben egy TBSZ rolldown (sell+buy ugyanaznap) hibásan a teljes
+        // eladási bevételt profitnak látja (üres pool, costBasis=0).
+        const d = a.date.localeCompare(b.date);
+        if(d!==0) return d;
+        if(a.type===b.type) return 0;
+        return a.type==='buy' ? -1 : 1;
+      });
+    // Felismerjük a TBSZ rolldown-okat: sell + buy ugyanazon a napon, ugyanazzal a qty-vel
+    // → ezek átsorolások, nem valós eladás, kihagyjuk a P&L számolásból.
+    const rolldownDates = new Set();
+    events.forEach(e=>{
+      if(e.type!=='sell') return;
+      const matchingBuy = events.find(b=>b.type==='buy' && b.date===e.date && Math.abs(b.qty-e.qty)<1e-6);
+      if(matchingBuy) rolldownDates.add(e.date);
+    });
     const lots = []; // FIFO: {qty, unit}  (ETF: unit EUR/db, állampapír: unit HUF/névérték)
     events.forEach(e=>{
       const total = isEtf ? (e.eur||0) : (e.huf||0);
       const unit = e.qty>0 ? total/e.qty : 0;
       if(e.type==='buy'){
+        // A rolldown buy-t is figyelmen kívül hagyjuk a lots-on (egy másik számlán amúgy is bekerül)
+        if(rolldownDates.has(e.date)) return;
         lots.push({qty:e.qty, unit});
       } else { // sell
+        // Rolldown sell: nem realizáció, kihagyjuk
+        if(rolldownDates.has(e.date)) return;
         let toSell = e.qty, costBasis = 0;
         while(toSell>0 && lots.length){
           const lot = lots[0];
