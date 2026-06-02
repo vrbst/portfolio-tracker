@@ -6189,20 +6189,28 @@ ${periodLabel} változás:
 - EUR/HUF: ${prevFx.toFixed(2)} → ${fx.toFixed(2)} (${fxPct>=0?'+':''}${fxPct.toFixed(2)}%) → a forintban kifejezett VWCE értékre ez kb. ${fmtK(fxDeltaOnVwceFt)} hatás
 - TELJES NAPI DELTA a Te portfóliódon: kb. ${fmtK(totalDailyDeltaFt)} (csak a VWCE mozog napon belül, az állampapírok nem)${bondCtx}`;
 
-    const prompt = `Te egy személyes pénzügyi asszisztens vagy. Adj egy rövid, 2-3 mondatos magyar nyelvű kommentárt arról, hogy ${periodDesc}, és mi a konkrét hatása ennek a portfólióra. NE az abszolút árszintet írd le, hanem a változást és annak Ft-ban kifejezett hatását.
+    const prompt = `Te egy személyes pénzügyi asszisztens vagy. Adj egy rövid, tömör magyar nyelvű elemzést a következő szerkezetben:
+
+**1. RÉSZ — Napi portfólió-hatás (2-3 mondat):**
+Mit hozott ${periodDesc} a Te portfóliódra, Ft-ban kifejezve. A változás okát KIZÁRÓLAG a lentebb található friss hírekből magyarázd. NE találj ki Fed-döntést vagy MNB-bejelentést ami nincs a hírek között. Ha az "Állampapír figyelő" 1-2 héten belüli eseményt mutat, egy fél mondatban említsd. Ha nincs releváns hír, mondd ki: "ma nem volt jelentős hír, a mozgás technikai/zaj jellegű".
+
+**2. RÉSZ — VWCE driver-elemzés (rövid, strukturált):**
+A friss hírekből keresd ki, mi hat most a VWCE (FTSE All-World) EUR-árfolyamára. Hosszú távú HUF-os TBSZ-tartó vagyok, az ETF EUR-NAV-ja a mérvadó.
+Add meg ebben a formában, TÖMÖREN (max 1 sor / tényező, max 6-8 szó):
+- ↑ FELFELÉ HÚZ: 1-3 tényező (pl. kulcsrészvények, olaj, kamatvárakozás stb.)
+- ↓ LEFELÉ HÚZ: 1-3 tényező
+- NETTÓ KÉP: egy egysoros összegzés (max 10 szó)
+
+Ha valamelyik irányba nincs konkrét hír, hagyd ki azt a sort (NE találj ki tényezőket).
 
 ${portfolioCtx}${newsBlock}
 
 Dátum: ${todayStr}.
 
-Szabályok:
-- Az első mondat mondja meg: mit hozott ez az időszak a Te portfóliódra (összegszerűen, Ft-ban).
-- A második mondat magyarázza meg RÖVIDEN, mi volt mögötte — KIZÁRÓLAG a fenti FRISS HÍREK alapján, ha vannak. NE találj ki Fed-döntést, MNB-bejelentést, makro-adatot, ami nem szerepel a hírek között.
-- HA az "Állampapír figyelő" sorban szerepel közelgő kamatfizetés vagy lejárat (1-2 héten belül), egy fél mondatban említsd meg. Egyébként NE foglalkozz az állampapírral (napon belül úgyse mozog).
-- Opcionális: érdemes-e bármit tenni vagy figyelni.
-- NE általánoskodj. NE mondj "a piac vegyes képet mutat" típusú semmitmondó dolgokat.
-- Ha nincs releváns hír a mozgás magyarázatára, mondd ki: "ma nem volt jelentős hír, a mozgás technikai/zaj jellegű".
-- Csak a kommentárt írd, semmi bevezető.`;
+További szabályok:
+- NE általánoskodj. NE mondj "vegyes kép" típusú semmitmondó dolgokat.
+- A 2. részben konkrét szektort/eseményt/számot említs, ne csak hangulatot.
+- Csak az elemzést írd, semmi bevezető.`;
 
     const apiUrl = 'https://api.anthropic.com/v1/messages';
     const workerUrl = 'https://cold-truth-4d27.vrbst405.workers.dev/?url='+encodeURIComponent(apiUrl)+'&apikey='+encodeURIComponent(anthropicKey);
@@ -6211,8 +6219,8 @@ Szabályok:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 350,
-        system: 'Rövid, tömör pénzügyi kommentátor vagy. Mindig magyarul válaszolsz. Maximum 3 mondat. A tegnap → ma változásra fókuszálsz, nem az abszolút árszintekre.',
+        max_tokens: 500,
+        system: 'Rövid, tömör pénzügyi kommentátor vagy. Mindig magyarul válaszolsz. Strukturált, csak a kért bontásban válaszolsz. Konkrét számokat és tényezőket említesz, nem általánoskodsz.',
         messages: [{ role: 'user', content: prompt }]
       })
     });
