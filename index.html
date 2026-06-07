@@ -2657,18 +2657,13 @@ function renderLyAccountsPages() {
             </div>
             <div id="ly-realized-${acc.id}" style="margin-top:12px;display:none"></div>
           </div>
-          <!-- Tranzakciók -->
+          <!-- Tranzakciók (Growy-stílusú lista) -->
           <div class="panel" style="margin-top:12px;display:flex;flex-direction:column" id="ly-tx-panel-${acc.id}">
             <div class="panel-header">
-              <div class="panel-title">pénzmozgások</div>
+              <div class="panel-title">tranzakciók</div>
               <button class="btn btn-ghost btn-sm" onclick="openLyCashModal('deposit','${acc.id}')">+ befizetés</button>
             </div>
-            <div class="tbl-wrap" style="flex:1;min-height:120px;max-height:calc((100vh - 360px) * 0.7);overflow-y:auto;overflow-x:auto"><table style="min-width:480px">
-              <thead style="position:sticky;top:0;background:var(--bg2)"><tr>
-                <th>dátum</th><th>típus</th><th>pénznem</th><th class="r">összeg</th><th>megjegyzés</th><th></th>
-              </tr></thead>
-              <tbody id="ly-cashtx-${acc.id}"></tbody>
-            </table></div>
+            <div style="flex:1;min-height:120px;max-height:calc((100vh - 360px) * 0.7 - 65px);overflow-y:auto" id="ly-cashtx-${acc.id}"></div>
           </div>
         </div><!-- /.ap-main -->
 
@@ -2830,6 +2825,27 @@ function renderLyInstrumentList(accountId) {
       <td style="padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text3);font-size:16px">›</td>
     </tr>`;
   }).join('');
+
+  // --- Összesítő sor (HUF) a pozíciók alá ---
+  const totCost = instruments.reduce((s,i)=>s+i.cost,0);
+  const totVal = instruments.reduce((s,i)=>s+(i.val||0),0);
+  const totEurCost = instruments.reduce((s,i)=>{
+    const b=lyAccountCostBasis(accountId,i.ticker);
+    return s+b.reduce((a,x)=>a+x.shares*x.priceEur,0);
+  },0);
+  const totEurVal = instruments.reduce((s,i)=>s+(i.lp?i.shares*i.lp:0),0);
+  const totPl = totVal-totCost, totPlPct = totCost>0?totPl/totCost*100:0;
+  const totPlCol = totPl>=0?'var(--green)':'var(--red)';
+  const hasLiveVal = instruments.some(i=>i.lp);
+  el.innerHTML += `<tr style="background:var(--bg3)">
+    <td style="padding:14px 16px;font-weight:700;font-size:13px">Összesen (HUF)</td>
+    <td style="padding:14px 16px"></td>
+    <td class="r blurable" style="padding:14px 16px;font-weight:600"><div style="white-space:nowrap">${fmtM(totCost)}</div><div style="font-size:10px;color:var(--text3);white-space:nowrap">${fmtEur(totEurCost)}</div></td>
+    <td class="r blurable" style="padding:14px 16px;font-weight:600"><div style="white-space:nowrap">${hasLiveVal?fmtM(totVal):'–'}</div><div style="font-size:10px;color:var(--text3);white-space:nowrap">${hasLiveVal?fmtEur(totEurVal):'–'}</div></td>
+    <td class="r blurable" style="padding:14px 16px;font-weight:700;color:${totPlCol}">${(hasLiveVal&&totCost>0)?'<div style="white-space:nowrap">'+(totPl>=0?'+':'')+fmtM(totPl)+' <span style="font-size:10px">('+(totPlPct>=0?'+':'')+totPlPct.toFixed(2)+'%)</span></div>':'–'}</td>
+    <td style="padding:14px 16px"></td>
+    <td style="padding:14px 16px"></td>
+  </tr>`;
 }
 
 function selectLyInstrument(accountId, ticker) {
@@ -2961,17 +2977,119 @@ function renderLyDetailTable(accountId, ticker) {
 function renderLyCashTx(accountId) {
   const el=document.getElementById('ly-cashtx-'+accountId);
   if(!el) return;
-  const txs=(data.lyCashTx||[]).filter(t=>t.accountId===accountId).sort((a,b)=>b.date.localeCompare(a.date));
-  const typeLabel={deposit:'befizetés',withdraw:'kifizetés',transfer_in:'átutalás be',transfer_out:'átutalás ki'};
-  const typeCol={deposit:'var(--green)',withdraw:'var(--red)',transfer_in:'var(--blue)',transfer_out:'var(--amber)'};
-  el.innerHTML=txs.map(t=>`<tr>
-    <td style="white-space:nowrap">${t.date}</td>
-    <td style="color:${typeCol[t.type]||'var(--text2)'};white-space:nowrap">${typeLabel[t.type]||t.type}</td>
-    <td>${t.currency}</td>
-    <td class="r blurable" style="white-space:nowrap">${t.currency==='HUF'?fmt(t.amount):fmtEur(t.amount)}</td>
-    <td style="color:var(--text3);font-size:11px;white-space:nowrap">${t.note||'–'}</td>
-    <td></td>
-  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">Nincs mozgás.</td></tr>';
+  const acc='ly:'+accountId;
+  const L=(data.ledger||[]).filter(e=>e.account===acc);
+
+  // --- Tranzakciók egységekbe csoportosítása a ref-előtag alapján ---
+  // Egy "vétel" több ledger eseményből áll (konverzió-lánc + buy), közös ref-előtaggal.
+  // Egységenként egy SOR: ikon + eszköz/típus + db·ár (alul) + Ft összeg + EUR (jobbra).
+  const groups={};
+  L.forEach(e=>{
+    const baseRef=(e.ref||e.src||'').split(':').slice(0,2).join(':') || e.src || 'x';
+    if(!groups[baseRef]) groups[baseRef]={ref:baseRef, date:e.date, events:[]};
+    groups[baseRef].events.push(e);
+    if(e.date < groups[baseRef].date) groups[baseRef].date=e.date;
+  });
+
+  // Egy csoportból kinyerjük a megjelenítendő "tranzakciót"
+  const txs=[];
+  Object.values(groups).forEach(g=>{
+    const evs=g.events;
+    const buy=evs.find(e=>e.type==='buy');
+    const sell=evs.find(e=>e.type==='sell');
+    const ext=evs.find(e=>e.subtype==='external_in'||e.subtype==='external_out');
+    const coupon=evs.find(e=>e.subtype==='coupon');
+
+    if(buy){
+      // ETF vétel: a HUF amit elköltöttünk (a conversion HUF cash_out), és az EUR vételár
+      const hufOut=evs.filter(e=>e.asset==='HUF'&&e.type==='cash_out').reduce((s,e)=>s+e.qty,0);
+      const eurBuy=buy.qty*(buy.priceEur||0)+(buy.feeEur||0);
+      txs.push({date:g.date, kind:'buy', ticker:buy.asset, shares:buy.qty, priceEur:buy.priceEur||0,
+        huf:hufOut||(eurBuy*(buy.fx||liveFx||395)), eur:eurBuy});
+    } else if(sell){
+      const hufIn=evs.filter(e=>e.asset==='HUF'&&e.type==='cash_in').reduce((s,e)=>s+e.qty,0);
+      const eurSell=sell.qty*(sell.priceEur||0)-(sell.feeEur||0);
+      txs.push({date:g.date, kind:'sell', ticker:sell.asset, shares:sell.qty, priceEur:sell.priceEur||0,
+        huf:hufIn||(eurSell*(sell.fx||liveFx||395)), eur:eurSell});
+    } else if(coupon){
+      txs.push({date:g.date, kind:'coupon', huf:coupon.huf??coupon.qty, eur:0});
+    } else if(ext){
+      const isIn=ext.subtype==='external_in';
+      txs.push({date:g.date, kind:isIn?'deposit':'withdraw',
+        huf:ext.asset==='HUF'?ext.qty:0, eur:ext.asset==='EUR'?ext.qty:0});
+    } else {
+      // Maradék (pl. önálló konverzió, belső átutalás) — csak ha van értelmes összeg
+      const hufEv=evs.find(e=>e.asset==='HUF');
+      if(hufEv){
+        const isIn=hufEv.type==='cash_in';
+        txs.push({date:g.date, kind:'transfer', huf:hufEv.qty, eur:0, dir:isIn?'in':'out'});
+      }
+    }
+  });
+  txs.sort((a,b)=>b.date.localeCompare(a.date));
+
+  if(!txs.length){ el.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">Nincs tranzakció.</div>'; return; }
+
+  // --- Hónapokra csoportosítás ---
+  const months=['január','február','március','április','május','június','július','augusztus','szeptember','október','november','december'];
+  const byMonth={};
+  txs.forEach(t=>{
+    const d=new Date(t.date);
+    const mkey=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    if(!byMonth[mkey]) byMonth[mkey]={year:d.getFullYear(), month:d.getMonth(), items:[]};
+    byMonth[mkey].items.push(t);
+  });
+
+  const meta={
+    buy:{av:'VW', avClass:'', label:t=>t.ticker, col:'var(--text)'},
+    sell:{label:t=>t.ticker, col:'var(--text)'},
+    deposit:{label:()=>'Befizetés', col:'var(--green)'},
+    withdraw:{label:()=>'Kiutalás', col:'var(--red)'},
+    coupon:{label:()=>'Kamat', col:'var(--green)'},
+    transfer:{label:t=>t.dir==='in'?'Átutalás be':'Átutalás ki', col:'var(--blue)'},
+  };
+  const tickerName=tk=>tk==='VWCE'?'Vanguard FTSE All-World UCITS ETF':tk==='WBIT'?'WisdomTree Bitcoin':tk;
+  const avatarFor=t=>{
+    if(t.kind==='buy'||t.kind==='sell'){
+      const cls=t.ticker==='VWCE'?'ins-avatar-vwce':'ins-avatar-wbit';
+      return `<div class="ins-avatar ${cls}" style="width:34px;height:34px;font-size:11px">${t.ticker.slice(0,2)}</div>`;
+    }
+    const sym={deposit:'+',withdraw:'−',coupon:'★',transfer:'⇄'}[t.kind]||'•';
+    const c={deposit:'var(--green)',withdraw:'var(--red)',coupon:'var(--amber)',transfer:'var(--blue)'}[t.kind]||'var(--text3)';
+    return `<div style="width:34px;height:34px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;color:${c};font-size:15px;flex-shrink:0">${sym}</div>`;
+  };
+
+  let html='';
+  Object.keys(byMonth).sort((a,b)=>b.localeCompare(a)).forEach(mkey=>{
+    const m=byMonth[mkey];
+    html+=`<div style="padding:10px 4px 6px;font-size:10px;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">${m.year}. ${months[m.month]}</div>`;
+    m.items.forEach(t=>{
+      const mt=meta[t.kind]||{label:()=>t.kind,col:'var(--text)'};
+      const isAsset=(t.kind==='buy'||t.kind==='sell');
+      const title=isAsset?tickerName(t.ticker):mt.label(t);
+      const sub=isAsset
+        ? `${t.kind==='buy'?'Vétel':'Eladás'} ×${t.shares.toFixed(t.shares<1?4:3)} · ${fmtEur(t.priceEur)}/db`
+        : '';
+      const d=new Date(t.date);
+      const dayStr=String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');
+      // Ft összeg színe: vétel/kiutalás semleges, befizetés/kamat/eladás zöld-ish (de tartsuk visszafogottan)
+      const amtHuf=t.huf?fmt(t.huf):(t.eur?fmtEur(t.eur):'–');
+      const amtEur=t.eur?('≈ '+fmtEur(t.eur)):'';
+      html+=`<div style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border)">
+        <div style="font-size:12px;color:var(--text2);width:38px;flex-shrink:0;text-align:left">${dayStr}<div style="color:var(--text3);font-size:11px">→</div></div>
+        ${avatarFor(t)}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>
+          ${sub?`<div style="font-size:11px;color:var(--text3);white-space:nowrap">${sub}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="blurable" style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap">${amtHuf}</div>
+          ${amtEur?`<div class="blurable" style="font-size:11px;color:var(--text3);white-space:nowrap">${amtEur}</div>`:''}
+        </div>
+      </div>`;
+    });
+  });
+  el.innerHTML=html;
 }
 
 function addLyAccount() {
